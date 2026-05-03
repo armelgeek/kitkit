@@ -714,6 +714,37 @@ MIT
 
 ---
 
+## Sponsor this project
+
+FlowKit is built and maintained as a personal local-only tool. If it
+saves you a few hours of clicking through the Flow web UI, a coffee
+goes a long way toward keeping the roadmap moving — bug fixes, new
+scene-template features, and the next round of multi-scene / TTS
+improvements all live in the same single-developer queue.
+
+<p align="center">
+  <a href="docs/images/sponsor-qr-vn.jpg">
+    <img src="docs/images/sponsor-qr-vn.jpg" alt="Buy me a coffee — Vietnam QR (MoMo · VietQR · napas247)" width="320" />
+  </a><br/>
+  <sub>📱 <b>Vietnam:</b> scan to send via MoMo · VietQR · napas247.<br/>
+  Click the QR to open it full-size if your scanner needs more pixels.</sub>
+</p>
+
+International sponsors can also support via:
+
+<p align="center">
+  <a href="https://ko-fi.com/crisnguyen95">
+    <img src="https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=kofi&logoColor=white&style=for-the-badge" alt="Ko-fi" />
+  </a>
+</p>
+
+Every contribution goes directly toward Google Flow Pro/Ultra
+subscription costs (the testing footprint of this project), Claude /
+Gemini API time for prompt-synth quality work, and the occasional
+bowl of phở. Thank you 🙏
+
+---
+
 ## Community & Support
 
 <p align="center">
