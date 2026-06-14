@@ -50,6 +50,7 @@ ENDPOINTS = {
     "check_video_status": "/v1/video:batchCheckAsyncVideoGenerationStatus",
     "get_credits": "/v1/credits",
     "get_media": "/v1/media/{media_id}",
+    "changeDisplayname_media": "/v1/flowWorkflows/{media_id}",
 }
 
 # ─── Output Directories ─────────────────────────────────────

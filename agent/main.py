@@ -90,9 +90,12 @@ async def lifespan(app: FastAPI):
 
     controller = get_worker_controller()
 
-    # SIGTERM handler for graceful shutdown
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, controller.request_shutdown)
+    # SIGTERM handler for graceful shutdown (add_signal_handler is Unix-only)
+    try:
+        loop = asyncio.get_event_loop()
+        loop.add_signal_handler(signal.SIGTERM, controller.request_shutdown)
+    except NotImplementedError:
+        signal.signal(signal.SIGTERM, lambda *_: controller.request_shutdown())
 
     # Start background tasks
     ws_task = asyncio.create_task(run_ws_server())

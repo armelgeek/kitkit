@@ -10,6 +10,7 @@ import logging
 import time
 import uuid
 from typing import Optional
+from urllib.parse import quote
 
 from agent.config import (
     GOOGLE_FLOW_API, GOOGLE_API_KEY, ENDPOINTS,
@@ -273,6 +274,24 @@ class FlowClient:
             "body": body,
         }, timeout=30)
 
+
+    async def get_project(self, project_id: str) -> dict:
+        """Create a project on Google Flow via tRPC endpoint.
+
+        Returns the full response including projectId.
+        """
+        input_data = json.dumps({"json": {"projectId": project_id}})
+        url = f"https://labs.google/fx/api/trpc/project.getProjectContents?input={quote(input_data)}"
+
+        return await self._send("trpc_request", {
+            "url": url,
+            "method": "GET",
+            "headers": {
+                "content-type": "application/json",
+                "accept": "*/*",
+            },
+        }, timeout=30)
+
     async def generate_images(self, prompt: str, project_id: str,
                                aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT",
                                user_paygate_tier: str = "PAYGATE_TIER_TWO",
@@ -363,6 +382,30 @@ class FlowClient:
         return await self._send("api_request", {
             "url": url,
             "method": "POST",
+            "headers": random_headers(),
+            "body": body,
+            "captchaAction": "IMAGE_GENERATION",
+        })
+
+    async def change_display_name(self, media_id: str, project_id: str, display_name: str) -> dict:
+        """
+        Rename a media item.
+        Uses the same endpoint as generate_images but with a different payload.
+        """
+        url = self._build_url("changeDisplayname_media", media_id=media_id)
+        body = {
+            "updateMask": "metadata.displayName",
+            "workflow": {
+                "name": media_id,
+                "projectId": project_id,
+                "metadata": {
+                    "displayName": display_name
+                }
+            }
+        }
+        return await self._send("api_request", {
+            "url": url,
+            "method": "PATCH",
             "headers": random_headers(),
             "body": body,
             "captchaAction": "IMAGE_GENERATION",

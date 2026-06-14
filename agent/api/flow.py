@@ -59,6 +59,12 @@ class EditImageRequest(BaseModel):
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
 
 
+class ChangeDisplaynameMediaRequest(BaseModel):
+    media_id: str
+    project_id: str
+    display_name: str
+
+
 @router.get("/status")
 async def extension_status():
     """Check if extension is connected."""
@@ -207,3 +213,29 @@ async def upload_image(body: UploadImageRequest):
         raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
     media_id = result.get("_mediaId")
     return {"media_id": media_id, "raw": result.get("data", result)}
+
+
+@router.patch("/change-displayname")
+async def change_displayname(body: ChangeDisplaynameMediaRequest):
+    """change displayname (bypasses queue)."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.change_display_name(
+        body.media_id, body.project_id, body.display_name,
+    )
+    if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
+        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+    return result.get("data", result)
+
+
+@router.get("/project/{project_id}")
+async def get_project(project_id: str):
+    """Bulk refresh all media URLs for a project via per-media get_media calls."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.get_project(project_id)
+    if result.get("error"):
+        raise HTTPException(502, result["error"])
+    return result
