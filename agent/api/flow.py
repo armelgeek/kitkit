@@ -65,6 +65,11 @@ class ChangeDisplaynameMediaRequest(BaseModel):
     display_name: str
 
 
+class CreateProjectRequest(BaseModel):
+    project_title: str
+    tool_name: str = "PINHOLE"
+
+
 @router.get("/status")
 async def extension_status():
     """Check if extension is connected."""
@@ -84,6 +89,18 @@ async def get_credits():
     result = await client.get_credits()
     if result.get("error"):
         raise HTTPException(502, result["error"])
+    return result.get("data", result)
+
+
+@router.post("/create-project")
+async def create_project(body: CreateProjectRequest):
+    """Create a Google Flow project via tRPC (does not use GOOGLE_API_KEY)."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.create_project(body.project_title, tool_name=body.tool_name)
+    if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
+        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
     return result.get("data", result)
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 
 # ─── Paths ───────────────────────────────────────────────────
 BASE_DIR = Path(os.environ.get("FLOW_AGENT_DIR", Path(__file__).parent.parent))
-DB_PATH = BASE_DIR / "flow_agent.db"
 
 # ─── API Server ──────────────────────────────────────────────
 API_HOST = os.environ.get("API_HOST", "127.0.0.1")
@@ -17,17 +16,13 @@ WS_PORT = int(os.environ.get("WS_PORT", "9222"))
 
 # ─── Google Flow API ────────────────────────────────────────
 GOOGLE_FLOW_API = "https://aisandbox-pa.googleapis.com"
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY")
+# Optional — auth tới aisandbox-pa do extension lo bằng Bearer token (ya29.*).
+# Để rỗng thì _build_url bỏ hẳn ?key= (đã verify project + ảnh vẫn chạy bình thường).
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 RECAPTCHA_SITE_KEY = os.environ.get("RECAPTCHA_SITE_KEY", "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV")
 
-# ─── Worker ──────────────────────────────────────────────────
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "5"))
-VIDEO_POLL_INTERVAL = int(os.environ.get("VIDEO_POLL_INTERVAL", "10"))  # polling interval for video/upscale status
-MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
+# polling timeout for video/upscale status (used by flow_client)
 VIDEO_POLL_TIMEOUT = int(os.environ.get("VIDEO_POLL_TIMEOUT", "420"))
-API_COOLDOWN = int(os.environ.get("API_COOLDOWN", "10"))  # seconds between API calls (anti-spam)
-MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", "5"))  # Google Flow max parallel requests
-STALE_PROCESSING_TIMEOUT = int(os.environ.get("STALE_PROCESSING_TIMEOUT", "600"))  # 10 min
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"
@@ -52,49 +47,6 @@ ENDPOINTS = {
     "get_media": "/v1/media/{media_id}",
     "changeDisplayname_media": "/v1/flowWorkflows/{media_id}",
 }
-
-# ─── Output Directories ─────────────────────────────────────
-OUTPUT_DIR = BASE_DIR / "output"
-SHARED_OUTPUT_DIR = OUTPUT_DIR / "_shared"
-TTS_TEMPLATES_DIR = SHARED_OUTPUT_DIR / "tts_templates"
-MUSIC_OUTPUT_DIR = SHARED_OUTPUT_DIR / "music"
-
-# ─── TTS (OmniVoice) ─────────────────────────────────────────
-TTS_MODEL = os.environ.get("TTS_MODEL", "k2-fsa/OmniVoice")
-TTS_DEVICE = os.environ.get("TTS_DEVICE", "cpu")  # MPS produces gibberish; CPU+fp32 works
-TTS_SAMPLE_RATE = int(os.environ.get("TTS_SAMPLE_RATE", "24000"))
-
-# ─── Review / Claude Vision ──────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "claude-haiku-4-5-20251001")
-REVIEW_FPS_LIGHT = float(os.environ.get("REVIEW_FPS_LIGHT", "4"))
-REVIEW_FPS_DEEP = float(os.environ.get("REVIEW_FPS_DEEP", "8"))
-REVIEW_MAX_FRAMES = int(os.environ.get("REVIEW_MAX_FRAMES", "64"))
-
-# ─── Suno (Music Generation) — sunoapi.org ──────────────────
-def _load_suno_key() -> str:
-    """Load Suno API key: env var first, then channel_rules.json fallback."""
-    key = os.environ.get("SUNO_API_KEY", "")
-    if key:
-        return key
-    channels_dir = BASE_DIR / "youtube" / "channels"
-    if channels_dir.exists():
-        for rules_file in channels_dir.glob("*/channel_rules.json"):
-            try:
-                rules = json.loads(rules_file.read_text())
-                key = rules.get("api_keys", {}).get("suno", "")
-                if key:
-                    return key
-            except (json.JSONDecodeError, OSError):
-                continue
-    return ""
-
-SUNO_API_KEY = _load_suno_key()
-SUNO_BASE_URL = os.environ.get("SUNO_BASE_URL", "https://api.sunoapi.org")
-SUNO_MODEL = os.environ.get("SUNO_MODEL", "V4")
-SUNO_CALLBACK_URL = os.environ.get("SUNO_CALLBACK_URL", f"http://{API_HOST}:{API_PORT}/api/music/callback")
-SUNO_POLL_INTERVAL = int(os.environ.get("SUNO_POLL_INTERVAL", "5"))
-SUNO_POLL_TIMEOUT = int(os.environ.get("SUNO_POLL_TIMEOUT", "600"))
 
 # ─── Header Randomization Pools ─────────────────────────────
 USER_AGENTS = [

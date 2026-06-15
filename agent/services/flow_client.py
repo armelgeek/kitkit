@@ -79,16 +79,10 @@ class FlowClient:
         if data.get("type") == "token_captured":
             self._flow_key = data.get("flowKey")
             logger.info("Flow key captured from extension")
-            asyncio.create_task(self._sync_tier())
             return
 
         if data.get("type") == "extension_ready":
             logger.info("Extension ready, flowKey=%s", "yes" if data.get("flowKeyPresent") else "no")
-            asyncio.create_task(self._sync_tier())
-            return
-
-        if data.get("type") == "media_urls_refresh":
-            asyncio.create_task(self._refresh_media_urls(data.get("urls", [])))
             return
 
         if data.get("type") == "pong":
@@ -106,91 +100,6 @@ class FlowClient:
             if not self._pending[req_id].done():
                 self._pending[req_id].set_result(data)
             return
-
-    async def _sync_tier(self):
-        """Detect current tier from credits API and update all active projects."""
-        if getattr(self, '_sync_in_progress', False):
-            return
-        self._sync_in_progress = True
-        try:
-            result = await self.get_credits()
-            data = result.get("data", result)
-            tier = data.get("userPaygateTier", "PAYGATE_TIER_ONE")
-            logger.info("Syncing tier: %s", tier)
-
-            from agent.db import crud
-            projects = await crud.list_projects(status="ACTIVE")
-            for p in projects:
-                if p.get("user_paygate_tier") != tier:
-                    await crud.update_project(p["id"], user_paygate_tier=tier)
-                    logger.info("Updated project %s tier: %s -> %s",
-                                p["id"][:12], p.get("user_paygate_tier"), tier)
-        except Exception as e:
-            logger.warning("Failed to sync tier: %s", e)
-        finally:
-            self._sync_in_progress = False
-
-    _UUID_RE = __import__("re").compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
-    _SAFE_URL_RE = __import__("re").compile(r'^https://(storage\.googleapis\.com|lh3\.googleusercontent\.com)/')
-
-    async def _refresh_media_urls(self, urls: list[dict]):
-        """Update scene/character URLs in DB from fresh TRPC-captured signed URLs.
-
-        Each entry: {mediaId: str, mediaType: 'image'|'video', url: str}
-        """
-        from agent.db import crud
-        from agent.services.event_bus import event_bus
-
-        updated = 0
-        for entry in urls:
-            media_id = entry.get("mediaId", "")
-            media_type = entry.get("mediaType", "")
-            url = entry.get("url", "")
-            if not media_id or not url:
-                continue
-            # Validate media_id is UUID and url is from trusted domains
-            if not self._UUID_RE.match(media_id):
-                logger.warning("Rejected invalid media_id: %s", media_id[:20])
-                continue
-            if not self._SAFE_URL_RE.match(url):
-                logger.warning("Rejected untrusted URL domain for media %s", media_id[:12])
-                continue
-            if media_type not in ("image", "video"):
-                continue
-
-            # Try matching against scenes (check both orientations)
-            scenes = await crud.list_scenes_by_media_id(media_id)
-            for scene in scenes:
-                updates = {}
-                if media_type == "image":
-                    # Update whichever orientation matches
-                    if scene.get("vertical_image_media_id") == media_id:
-                        updates["vertical_image_url"] = url
-                    if scene.get("horizontal_image_media_id") == media_id:
-                        updates["horizontal_image_url"] = url
-                elif media_type == "video":
-                    if scene.get("vertical_video_media_id") == media_id:
-                        updates["vertical_video_url"] = url
-                    if scene.get("horizontal_video_media_id") == media_id:
-                        updates["horizontal_video_url"] = url
-                    if scene.get("vertical_upscale_media_id") == media_id:
-                        updates["vertical_upscale_url"] = url
-                    if scene.get("horizontal_upscale_media_id") == media_id:
-                        updates["horizontal_upscale_url"] = url
-                if updates:
-                    await crud.update_scene(scene["id"], **updates)
-                    updated += 1
-
-            # Try matching against characters
-            chars = await crud.list_characters_by_media_id(media_id)
-            for char in chars:
-                if media_type == "image" and char.get("media_id") == media_id:
-                    await crud.update_character(char["id"], reference_image_url=url)
-                    updated += 1
-
-        if updated:
-            logger.info("Refreshed %d media URLs from TRPC intercept", updated)
-            await event_bus.emit("urls_refreshed", {"count": updated})
 
     async def refresh_project_urls(self, project_id: str) -> dict:
         """Refresh media URLs for a project.
@@ -236,10 +145,18 @@ class FlowClient:
             self._pending.pop(req_id, None)
 
     def _build_url(self, endpoint_key: str, **kwargs) -> str:
-        """Build full API URL."""
+        """Build full API URL.
+
+        The ?key= param is only appended when GOOGLE_API_KEY is set. Auth to
+        aisandbox-pa.googleapis.com is carried by the extension's Bearer token,
+        so the API key is optional — leave GOOGLE_API_KEY empty to omit it.
+        """
         path = ENDPOINTS[endpoint_key].format(**kwargs)
-        sep = "&" if "?" in path else "?"
-        return f"{GOOGLE_FLOW_API}{path}{sep}key={GOOGLE_API_KEY}"
+        url = f"{GOOGLE_FLOW_API}{path}"
+        if GOOGLE_API_KEY:
+            sep = "&" if "?" in path else "?"
+            url = f"{url}{sep}key={GOOGLE_API_KEY}"
+        return url
 
     def _client_context(self, project_id: str, user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
         """Build clientContext with recaptcha placeholder."""

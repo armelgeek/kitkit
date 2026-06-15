@@ -1,58 +1,36 @@
 # Flow Kit
 
+Minimal Google Flow API proxy: FastAPI + WebSocket server (`agent/`) + Chrome
+extension (`extension/`). No local DB, no queue, no skills — a pure relay to the
+Google Flow API via the extension.
+
 Base URL: `http://127.0.0.1:8100`
 
 ## Pre-flight
 
 ```bash
 curl -s http://127.0.0.1:8100/health
-# Must return: {"extension_connected": true}
+# Must return: {"status":"ok", "extension_connected": true, ...}
 ```
 
-## How to work
+## Run
 
-- Always use `/fk:*` skills — all rules and workflows live inside each skill
-- Never write scripts to loop API calls — use `POST /api/requests/batch`
-- `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...` strings
-- **On any pipeline error** (request `FAILED`, stuck `PROCESSING`, `extension_connected: false`, HTTP 4xx/5xx from `:8100`, YouTube `HttpError`, error strings like `UNSAFE_GENERATION` / `not found` / `CAPTCHA` / `NO_FLOW_KEY`): invoke `/fk-doctor` before guessing a fix
+```bash
+python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
+```
 
-## Skills
+## Layout
 
-| Skill | When to use |
-|-------|-------------|
-| `/fk-create-project` | New project with entities + scenes |
-| `/fk-research` | Fact-check before scripting |
-| `/fk-gen-refs` | Generate reference images for entities |
-| `/fk-gen-images` | Generate scene images |
-| `/fk-gen-videos` | Generate scene videos |
-| `/fk-gen-chain-videos` | Videos with scene chaining transitions |
-| `/fk-review-video` | Review video quality before upscale |
-| `/fk-review-board` | Visual scene review board for feedback |
-| `/fk-concat` | Download + concat final video |
-| `/fk-concat-fit-narrator` | Concat trimmed to narrator duration |
-| `/fk-gen-narrator` | Generate narrator text + TTS |
-| `/fk-gen-text-overlays` | Generate text overlays from narrator text |
-| `/fk-gen-tts-template` | Create voice template for narration |
-| `/fk-gen-music` | Generate music via Suno |
-| `/fk-creative-mix` | Creative video mixing techniques |
-| `/fk-pipeline` | Full pipeline orchestration |
-| `/fk-monitor` | Monitor running pipeline |
-| `/fk-status` | Project status dashboard |
-| `/fk-switch-project` | Switch active project |
-| `/fk-fix-uuids` | Fix non-UUID media_ids |
-| `/fk-refresh-urls` | Refresh expired GCS URLs |
-| `/fk-doctor` | Diagnose errors + prescribe fixes (Flow/extension/worker/YT) |
-| `/fk-add-material` | Set image material style |
-| `/fk-change-model` | Change video/image model |
-| `/fk-insert-scene` | Insert scenes into chain |
-| `/fk-upload-image` | Upload local image to get media_id |
-| `/fk-thumbnail` | Generate YouTube thumbnails |
-| `/fk-brand-logo` | Apply channel logo watermark |
-| `/fk-youtube-seo` | Generate YouTube metadata |
-| `/fk-youtube-upload` | Upload to YouTube |
-| `/fk-camera-guide` | Cinematic camera reference |
-| `/fk-thumbnail-guide` | Thumbnail design reference |
-| `/fk-import-voice` | Import existing voice template |
-| `/fk-dashboard` | Live statusline setup |
-| `/fk-timeline-resolve` | Export DaVinci Resolve XML timeline from scene images |
-| `/sp-create-story` | Convert story chapter to reading video (location-based scenes, Colab TTS) |
+- `agent/main.py` — app entry, extension WebSocket, `/health`, `/api/ext/callback`
+- `agent/api/flow.py` — all `/api/flow/*` endpoints
+- `agent/services/flow_client.py` — relays requests to the extension over WS
+- `agent/services/headers.py` — randomized headers
+- `agent/config.py`, `agent/models.json` — endpoints + model keys
+- `extension/` — Chrome MV3 extension (token capture, reCAPTCHA, Flow calls)
+
+## Notes
+
+- `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
+- The agent holds no state; all generation goes through the connected extension.
+  If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.
+- See [README.md](README.md) for the full endpoint table.
