@@ -140,7 +140,7 @@ async def generate_video_refs(body: GenerateVideoRefsRequest):
     return result.get("data", result)
 
 
-@router.post("/upscale-video")
+@router.post("/upscale/video")
 async def upscale_video(body: UpscaleVideoRequest):
     """Submit video upscale (returns operations for polling)."""
     client = get_flow_client()
@@ -164,38 +164,38 @@ async def check_status(body: CheckStatusRequest):
     return result.get("data", result)
 
 
-@router.post("/refresh-urls/{project_id}")
-async def refresh_project_urls(project_id: str):
-    """Bulk refresh all media URLs for a project via per-media get_media calls."""
-    client = get_flow_client()
-    if not client.connected:
-        raise HTTPException(503, "Extension not connected")
-    result = await client.refresh_project_urls(project_id)
-    if result.get("error"):
-        raise HTTPException(502, result["error"])
-    return result
+# @router.post("/refresh-urls/{project_id}")
+# async def refresh_project_urls(project_id: str):
+#     """Bulk refresh all media URLs for a project via per-media get_media calls."""
+#     client = get_flow_client()
+#     if not client.connected:
+#         raise HTTPException(503, "Extension not connected")
+#     result = await client.refresh_project_urls(project_id)
+#     if result.get("error"):
+#         raise HTTPException(502, result["error"])
+#     return result
 
 
-@router.get("/media/{media_id}")
-async def get_media(media_id: str):
-    """Get media metadata + fresh signed URL from Google Flow.
+# @router.get("/media/{media_id}")
+# async def get_media(media_id: str):
+#     """Get media metadata + fresh signed URL from Google Flow.
 
-    Returns the raw response which should contain a fresh fifeUrl/servingUri.
-    Use this to refresh expired GCS signed URLs.
-    """
-    client = get_flow_client()
-    if not client.connected:
-        raise HTTPException(503, "Extension not connected")
-    result = await client.get_media(media_id)
-    if result.get("error"):
-        raise HTTPException(502, result["error"])
-    status = result.get("status", 200)
-    if isinstance(status, int) and status >= 400:
-        raise HTTPException(status, result.get("data", "Media not found"))
-    return result.get("data", result)
+#     Returns the raw response which should contain a fresh fifeUrl/servingUri.
+#     Use this to refresh expired GCS signed URLs.
+#     """
+#     client = get_flow_client()
+#     if not client.connected:
+#         raise HTTPException(503, "Extension not connected")
+#     result = await client.get_media(media_id)
+#     if result.get("error"):
+#         raise HTTPException(502, result["error"])
+#     status = result.get("status", 200)
+#     if isinstance(status, int) and status >= 400:
+#         raise HTTPException(status, result.get("data", "Media not found"))
+#     return result.get("data", result)
 
 
-@router.get("/direct-media/{primary_media_id}")
+@router.get("/media/{primary_media_id}")
 async def get_direct_media(primary_media_id: str):
     """Get media metadata + fresh signed URL from Google Flow.
 
@@ -286,3 +286,27 @@ async def get_projects():
     if result.get("error"):
         raise HTTPException(502, result["error"])
     return result
+
+
+@router.get("/delete-project/{project_id}")
+async def delete_project(project_id: str):
+    """Delete a project on Google Flow via tRPC endpoint."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.delete_project(project_id)
+    if result.get("error"):
+        raise HTTPException(502, result["error"])
+    return result
+
+
+# @router.get("/upscale/image/{project_id}/{media_id}")
+# async def upscale_image(project_id: str, media_id: str, resolution: str = "UPSAMPLE_IMAGE_RESOLUTION_2K"):
+#     """Upscale an image on Google Flow via API endpoint."""
+#     client = get_flow_client()
+#     if not client.connected:
+#         raise HTTPException(503, "Extension not connected")
+#     result = await client.upscale_image(media_id, project_id, resolution)
+#     if result.get("error"):
+#         raise HTTPException(502, result["error"])
+#     return result

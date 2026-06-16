@@ -192,6 +192,25 @@ class FlowClient:
         }, timeout=30)
 
 
+    async def delete_project(self, project_id: str) -> dict:
+        """Create a project on Google Flow via tRPC endpoint.
+
+        Returns the full response including projectId.
+        """
+        url = "https://labs.google/fx/api/trpc/project.deleteProject"
+        body = {"json": {"projectToDeleteId": project_id}}
+
+        return await self._send("trpc_request", {
+            "url": url,
+            "method": "POST",
+            "headers": {
+                "content-type": "application/json",
+                "accept": "*/*",
+            },
+            "body": body,
+        }, timeout=30)
+
+
     async def get_project(self, project_id: str) -> dict:
         """Create a project on Google Flow via tRPC endpoint.
 
@@ -336,16 +355,16 @@ class FlowClient:
             "captchaAction": "IMAGE_GENERATION",
         })
 
-    async def change_display_name(self, media_id: str, project_id: str, display_name: str) -> dict:
+    async def change_display_name(self, media_name_id: str, project_id: str, display_name: str) -> dict:
         """
         Rename a media item.
         Uses the same endpoint as generate_images but with a different payload.
         """
-        url = self._build_url("changeDisplayname_media", media_id=media_id)
+        url = self._build_url("changeDisplayname_media", media_id=media_name_id)
         body = {
             "updateMask": "metadata.displayName",
             "workflow": {
-                "name": media_id,
+                "name": media_name_id,
                 "projectId": project_id,
                 "metadata": {
                     "displayName": display_name
@@ -485,6 +504,35 @@ class FlowClient:
             "captchaAction": "VIDEO_GENERATION",
         }, timeout=60)
 
+    async def upscale_image(self, 
+        media_id: str, 
+        project_id: str,
+        target_resolution: str = "UPSAMPLE_IMAGE_RESOLUTION_2K") -> dict:
+
+        body = {
+            "clientContext": {
+                "projectId": project_id,
+                "recaptchaContext": {
+                    "applicationType": "RECAPTCHA_APPLICATION_TYPE_WEB",
+                    "token": "",
+                },
+                "sessionId": f";{int(time.time() * 1000)}",
+                "tool": "PINHOLE",
+                "userPaygateTier": "PAYGATE_TIER_ONE",
+            },
+            "mediaId": media_id,
+            "targetResolution": target_resolution,
+        }
+
+        url = self._build_url("upscale_image")
+        return await self._send("api_request", {
+            "url": url,
+            "method": "POST",
+            "headers": random_headers(),
+            "body": body,
+            "captchaAction": "IMAGE_GENERATION",
+        }, timeout=60)
+
     async def check_video_status(self, operations: list[dict]) -> dict:
         """Check status of video generation operations."""
         body = {"operations": operations}
@@ -511,9 +559,11 @@ class FlowClient:
         Production calls: GET /v1/media/{mediaId}?key=...&clientContext.tool=PINHOLE
         Returns True on 200, False otherwise.
         """
-        result = await self.get_media(media_id)
-        status = result.get("status", 500)
-        return isinstance(status, int) and status == 200
+        # result = await self.get_media(media_id)
+        # status = result.get("status", 500)
+        # return isinstance(status, int) and status == 200
+        result = await self.get_direct_media(media_id)
+        return result.get("redirected", False)
 
     async def get_media(self, media_id: str) -> dict:
         """Fetch media metadata from Google Flow.
