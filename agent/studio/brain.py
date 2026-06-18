@@ -172,6 +172,27 @@ def ref_image_prompt(entity_type: str, name: str, description: str, style: str) 
     return f"Establishing shot of {name}: {base}. {style}, cinematic, no people."
 
 
+def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
+                               entities: list[dict], style: str,
+                               n_frames: int | None = None) -> str:
+    roster = "\n".join(
+        f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
+    ) or "(none)"
+    count = f"about {n_frames} frames" if n_frames else "as many frames as the action needs (2–6)"
+    return (
+        "Break this scene into storyboard FRAMES (still shots). For each frame write a "
+        "`title` and a vivid `description` for an image generator.\n"
+        "IMPORTANT: when a known entity appears, wrap its name in curly braces exactly as "
+        "listed (e.g. {Mai}) so it can be bound to its reference image. List the entities "
+        "used per frame in `ref_entity_names` (names without braces).\n"
+        f"Visual style: {style}. Produce {count}.\n\n"
+        f"AVAILABLE ENTITIES:\n{roster}\n\n"
+        f"SCENE: {scene_heading}\n{scene_body}\n\n"
+        "Return ONLY JSON array: [{\"title\":\"...\",\"description\":\"... {Entity} ...\","
+        "\"ref_entity_names\":[\"Entity\"]}]"
+    )
+
+
 def edit_script_prompt(script: str, instruction: str, style: str) -> str:
     return (
         "You are editing a FOUNTAIN screenplay. Apply the user's instruction and return "

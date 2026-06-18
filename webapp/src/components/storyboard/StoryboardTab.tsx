@@ -1,0 +1,306 @@
+import { useEffect, useState } from "react";
+import { api, storyboard, type Entity, type Project, type Scene, type Shot } from "../../api/client";
+import MediaCard from "../common/MediaCard";
+import Lightbox from "../common/Lightbox";
+
+export default function StoryboardTab({ project }: { project: Project }) {
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [shotsByScene, setShotsByScene] = useState<Record<string, Shot[]>>({});
+  const [sel, setSel] = useState<Shot | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [gening, setGening] = useState<Set<string>>(new Set());
+  const [lightbox, setLightbox] = useState<Shot | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const loadShots = async (sid: string) => {
+    const r = await storyboard.sceneShots(sid);
+    setShotsByScene((m) => ({ ...m, [sid]: r.shots }));
+  };
+
+  useEffect(() => {
+    (async () => {
+      const sc = (await api.listScenes(project.id)).scenes;
+      setScenes(sc);
+      setEntities((await api.listEntities(project.id)).entities);
+      for (const s of sc) await loadShots(s.id);
+    })().catch((e) => setErr(e.message));
+  }, [project.id]);
+
+  const setShot = (updated: Shot) => {
+    setShotsByScene((m) => ({
+      ...m,
+      [updated.scene_id]: (m[updated.scene_id] || []).map((x) =>
+        x.id === updated.id ? updated : x
+      ),
+    }));
+    if (sel?.id === updated.id) setSel(updated);
+  };
+
+  const genImage = async (shot: Shot) => {
+    setGening((s) => new Set(s).add(shot.id));
+    setErr(null);
+    try {
+      setShot(await storyboard.genImage(shot.id));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setGening((s) => {
+        const n = new Set(s);
+        n.delete(shot.id);
+        return n;
+      });
+    }
+  };
+
+  const autofill = async (sid: string) => {
+    setBusy("autofill:" + sid);
+    setErr(null);
+    try {
+      const r = await storyboard.autofill(sid);
+      setShotsByScene((m) => ({ ...m, [sid]: r.shots }));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sceneAll = async (sid: string) => {
+    setBusy("all:" + sid);
+    setErr(null);
+    try {
+      await storyboard.genSceneAll(sid);
+      await loadShots(sid);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex h-full">
+      <div className="min-w-0 flex-1 overflow-auto px-6 py-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Storyboard</h2>
+          <span className="text-sm text-neutral-500">Ảnh từng frame theo scene</span>
+        </div>
+        {err && (
+          <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
+            {err}
+          </div>
+        )}
+        {!scenes.length && (
+          <div className="rounded-xl border border-dashed border-neutral-800 py-12 text-center text-sm text-neutral-500">
+            Chưa có scene — tạo kịch bản ở tab Script trước.
+          </div>
+        )}
+        {scenes.map((sc) => {
+          const shots = shotsByScene[sc.id] || [];
+          return (
+            <section key={sc.id} className="mb-8">
+              <div className="mb-3 flex items-center gap-3">
+                <h3 className="text-sm font-medium text-neutral-200">
+                  <span className="mr-1.5 text-neutral-500">{String(sc.idx + 1).padStart(2, "0")}</span>
+                  {sc.heading}
+                </h3>
+                <div className="ml-auto flex gap-2">
+                  <button
+                    disabled={!!busy}
+                    onClick={() => autofill(sc.id)}
+                    className="rounded-md border border-neutral-700 px-2.5 py-1 text-xs hover:bg-neutral-800 disabled:opacity-40"
+                  >
+                    {busy === "autofill:" + sc.id ? "…" : "✨ Autofill"}
+                  </button>
+                  <button
+                    disabled={!!busy || !shots.length}
+                    onClick={() => sceneAll(sc.id)}
+                    className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+                  >
+                    {busy === "all:" + sc.id ? "…" : "✦ Auto gen"}
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {shots.map((sh) => (
+                  <MediaCard
+                    key={sh.id}
+                    imageSrc={sh.image_path}
+                    title={sh.title}
+                    index={sh.idx}
+                    subtitle={sh.description}
+                    selected={sel?.id === sh.id}
+                    busy={gening.has(sh.id)}
+                    busyLabel="Đang tạo ảnh…"
+                    onClick={() => setSel(sh)}
+                    onPreview={sh.image_path ? () => setLightbox(sh) : undefined}
+                    actions={
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            genImage(sh);
+                          }}
+                          title="Gen nhanh"
+                          className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
+                        >
+                          ⚡
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await storyboard.deleteShot(sh.id);
+                            loadShots(sc.id);
+                          }}
+                          title="Xóa"
+                          className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-rose-600"
+                        >
+                          🗑
+                        </button>
+                      </>
+                    }
+                  />
+                ))}
+                <button
+                  onClick={async () => {
+                    await storyboard.addShot(sc.id);
+                    loadShots(sc.id);
+                  }}
+                  className="aspect-video rounded-xl border border-dashed border-neutral-700 text-2xl text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
+                >
+                  +
+                </button>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {sel && (
+        <FramePanel
+          shot={sel}
+          entities={entities}
+          onClose={() => setSel(null)}
+          onChange={setShot}
+          onGenerate={() => genImage(sel)}
+          generating={gening.has(sel.id)}
+        />
+      )}
+
+      {lightbox && (
+        <Lightbox imageSrc={lightbox.image_path} title={lightbox.title} onClose={() => setLightbox(null)} />
+      )}
+    </div>
+  );
+}
+
+function FramePanel({
+  shot,
+  entities,
+  onClose,
+  onChange,
+  onGenerate,
+  generating,
+}: {
+  shot: Shot;
+  entities: Entity[];
+  onClose: () => void;
+  onChange: (s: Shot) => void;
+  onGenerate: () => void;
+  generating: boolean;
+}) {
+  const [title, setTitle] = useState(shot.title);
+  const [desc, setDesc] = useState(shot.description ?? "");
+  const refIds: string[] = (() => {
+    try {
+      return JSON.parse(shot.ref_entity_ids || "[]");
+    } catch {
+      return [];
+    }
+  })();
+  const [refs, setRefs] = useState<string[]>(refIds);
+
+  useEffect(() => {
+    setTitle(shot.title);
+    setDesc(shot.description ?? "");
+    try {
+      setRefs(JSON.parse(shot.ref_entity_ids || "[]"));
+    } catch {
+      setRefs([]);
+    }
+  }, [shot.id]);
+
+  const save = async () => {
+    onChange(
+      await storyboard.updateShot(shot.id, { title, description: desc, ref_entity_ids: refs })
+    );
+  };
+
+  const toggleRef = (id: string) =>
+    setRefs((r) => (r.includes(id) ? r.filter((x) => x !== id) : [...r, id]));
+
+  return (
+    <aside className="flex w-80 shrink-0 flex-col border-l border-neutral-800 bg-neutral-950/50">
+      <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2.5">
+        <span className="text-sm font-medium">Frame</span>
+        <button onClick={onClose} className="text-neutral-500 hover:text-neutral-300">✕</button>
+      </div>
+      <div className="flex-1 space-y-4 overflow-auto p-4">
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Tiêu đề</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={save}
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Mô tả (dùng {"{Tên}"} để gắn ref)</label>
+          <textarea
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            onBlur={save}
+            className="h-28 w-full resize-none rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs text-neutral-400">Reference Assets (≤10)</label>
+          <div className="space-y-1">
+            {entities.map((e) => (
+              <label
+                key={e.id}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-neutral-800"
+              >
+                <input
+                  type="checkbox"
+                  checked={refs.includes(e.id)}
+                  onChange={() => toggleRef(e.id)}
+                  onBlur={save}
+                  className="h-3.5 w-3.5 accent-indigo-500"
+                />
+                <span className={`h-1.5 w-1.5 rounded-full ${e.media_id ? "bg-emerald-400" : "bg-neutral-600"}`} />
+                <span className="truncate text-neutral-300">{e.name}</span>
+                <span className="ml-auto text-xs text-neutral-600">{e.type}</span>
+              </label>
+            ))}
+            {!entities.length && <p className="text-xs text-neutral-600">Chưa có asset.</p>}
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-neutral-800 p-3">
+        <button
+          onClick={async () => {
+            await save();
+            onGenerate();
+          }}
+          disabled={generating}
+          className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+        >
+          {generating ? "Đang tạo ảnh…" : "Create image"}
+        </button>
+      </div>
+    </aside>
+  );
+}

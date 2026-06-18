@@ -113,6 +113,41 @@ export interface Entity {
   image_path: string | null;
 }
 
+export interface Shot {
+  id: string;
+  scene_id: string;
+  idx: number;
+  title: string;
+  description: string | null;
+  ref_entity_ids: string | null;
+  image_path: string | null;
+  video_path: string | null;
+  visual_prompt: string | null;
+  motion_prompt: string | null;
+  video_model: string | null;
+  duration: number;
+  status: string;
+}
+
+export const storyboard = {
+  sceneShots: (sid: string) => req<{ shots: Shot[] }>(`/scenes/${sid}/shots`),
+  autofill: (sid: string, n_frames?: number) =>
+    req<{ shots: Shot[] }>(`/scenes/${sid}/storyboard/autofill`, {
+      method: "POST",
+      body: JSON.stringify({ n_frames: n_frames ?? null }),
+    }),
+  addShot: (sid: string) => req<Shot>(`/scenes/${sid}/shots`, { method: "POST" }),
+  insertShot: (sid: string) => req<Shot>(`/shots/${sid}/insert`, { method: "POST" }),
+  updateShot: (sid: string, body: Partial<Shot> & { ref_entity_ids?: string[] }) =>
+    req<Shot>(`/shots/${sid}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteShot: (sid: string) => req<{ ok: boolean }>(`/shots/${sid}`, { method: "DELETE" }),
+  genImage: (sid: string) => req<Shot>(`/shots/${sid}/image`, { method: "POST" }),
+  genSceneAll: (sid: string) =>
+    req<any>(`/scenes/${sid}/storyboard/generate-all`, { method: "POST" }),
+  genProjectAll: (pid: string) =>
+    req<any>(`/projects/${pid}/storyboard/generate-all`, { method: "POST" }),
+};
+
 export interface Scene {
   id: string;
   idx: number;

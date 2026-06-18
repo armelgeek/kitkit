@@ -4,6 +4,7 @@ Phase 0: project CRUD (DB + Flow), Flow project import with thumbnails, options,
 settings, health. Heavier pipeline endpoints land in later phases.
 """
 import asyncio
+import json
 import logging
 import random
 import shutil
@@ -515,6 +516,265 @@ async def generate_all_assets(pid: str, force: bool = False):
             errors.append({"entity": e["name"], "error": str(ex)[:200]})
         if i < len(todo) - 1:
             await asyncio.sleep(random.uniform(2, 6))  # rate-limit
+    return {"requested": len(todo), "done": done, "errors": errors}
+
+
+# ─── Storyboard (shots = frames) ────────────────────────────
+
+class AutofillRequest(BaseModel):
+    n_frames: Optional[int] = None
+
+
+class UpdateShotRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    ref_entity_ids: Optional[list[str]] = None
+    visual_prompt: Optional[str] = None
+    motion_prompt: Optional[str] = None
+    duration: Optional[int] = None
+    video_model: Optional[str] = None
+
+
+async def _scene_or_404(sid: str) -> dict:
+    row = await db.query_one("SELECT * FROM scene WHERE id=?", (sid,))
+    if not row:
+        raise HTTPException(404, "Scene không tồn tại")
+    return row
+
+
+async def _shot_or_404(sid: str) -> dict:
+    row = await db.query_one("SELECT * FROM shot WHERE id=?", (sid,))
+    if not row:
+        raise HTTPException(404, "Shot không tồn tại")
+    return row
+
+
+async def _scene_project(scene: dict) -> dict:
+    return await _project_or_404(scene["project_id"])
+
+
+async def _next_shot_idx(scene_id: str) -> int:
+    row = await db.query_one(
+        "SELECT MAX(idx) AS m FROM shot WHERE scene_id=?", (scene_id,))
+    return (row["m"] + 1) if row and row["m"] is not None else 0
+
+
+async def _build_frame_references(shot: dict, scene: dict) -> list[dict]:
+    """Resolve shot ref entities (+ scene location) → references list (≤10, location first)."""
+    try:
+        ids = json.loads(shot.get("ref_entity_ids") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        ids = []
+    if scene.get("location_entity_id"):
+        ids = [scene["location_entity_id"]] + [i for i in ids if i != scene["location_entity_id"]]
+    refs = []
+    seen = set()
+    rows = await db.query_all(
+        "SELECT * FROM entity WHERE project_id=?", (scene["project_id"],))
+    by_id = {r["id"]: r for r in rows}
+    # location-type first
+    ordered = sorted(ids, key=lambda i: 0 if by_id.get(i, {}).get("type") == "location" else 1)
+    for i in ordered:
+        e = by_id.get(i)
+        if e and e.get("media_id") and e["media_id"] not in seen:
+            refs.append({"handle": e["name"], "media_id": e["media_id"]})
+            seen.add(e["media_id"])
+        if len(refs) >= 10:
+            break
+    return refs
+
+
+async def _store_media_on_shot(shot: dict, project: dict, info: dict,
+                               kind: str, label: str):
+    """Rename on Flow + download + persist image_*/video_* on the shot."""
+    client = get_flow_client()
+    if info.get("workflow_id") and project.get("flow_project_id"):
+        try:
+            await client.change_display_name(
+                info["workflow_id"], project["flow_project_id"], label[:60])
+        except Exception:
+            pass
+    ext = "png" if kind == "image" else "mp4"
+    web = await media_store.ensure_local(info["media_id"], project["id"], ext) \
+        if info.get("media_id") else None
+    fields = {
+        f"{kind}_media_id": info.get("media_id"),
+        f"{kind}_primary_id": info.get("primary_media_id"),
+        f"{kind}_workflow_id": info.get("workflow_id"),
+        f"{kind}_path": web, "updated_at": db.now(),
+    }
+    await db.update("shot", shot["id"], fields)
+    return await _shot_or_404(shot["id"])
+
+
+async def _generate_frame_image(shot: dict) -> dict:
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    client = _require_extension()
+    refs = await _build_frame_references(shot, scene)
+    prompt = f"{shot.get('description') or shot.get('title') or ''}. Art style: {project['style']}."
+    aspect = _to_image_aspect(project["aspect_ratio"])
+    model = await _resolve_image_model(project)
+    res = await client.generate_images(
+        prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
+        user_paygate_tier=project["paygate_tier"],
+        references=refs or None, image_model=model)
+    if res.get("error"):
+        raise HTTPException(502, str(res["error"]))
+    info = _extract_image_result(res.get("data", res))
+    if not info["media_id"]:
+        raise HTTPException(502, "Flow không trả media")
+    return await _store_media_on_shot(
+        shot, project, info, "image", f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_img")
+
+
+@router.get("/scenes/{sid}/shots")
+async def list_scene_shots(sid: str):
+    await _scene_or_404(sid)
+    return {"shots": await db.query_all(
+        "SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))}
+
+
+@router.get("/projects/{pid}/shots")
+async def list_project_shots(pid: str):
+    await _project_or_404(pid)
+    return {"shots": await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))}
+
+
+@router.post("/scenes/{sid}/storyboard/autofill")
+async def autofill_storyboard(sid: str, body: AutofillRequest):
+    scene = await _scene_or_404(sid)
+    project = await _project_or_404(scene["project_id"])
+    entities = await db.query_all(
+        "SELECT name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    frames = await brain.run_json(brain.storyboard_autofill_prompt(
+        scene["heading"], scene.get("action") or "", entities, project["style"], body.n_frames))
+    if not isinstance(frames, list):
+        raise HTTPException(502, "AI không trả về danh sách frame")
+    erows = await db.query_all(
+        "SELECT id, name, type FROM entity WHERE project_id=?", (scene["project_id"],))
+    name_to_id = {r["name"].lower(): r["id"] for r in erows}
+    # scene location = first location-type entity referenced by any frame
+    used_names = {n.lower() for f in frames for n in f.get("ref_entity_names", [])}
+    loc_id = next((r["id"] for r in erows
+                   if r["type"] == "location" and r["name"].lower() in used_names), None)
+    await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
+    ts = db.now()
+    for i, f in enumerate(frames):
+        ref_ids = [name_to_id[n.lower()] for n in f.get("ref_entity_names", [])
+                   if n.lower() in name_to_id]
+        await db.insert("shot", {
+            "id": db.new_id(), "scene_id": sid, "idx": i,
+            "title": f.get("title", f"Shot {i+1}"),
+            "description": f.get("description", ""),
+            "ref_entity_ids": json.dumps(ref_ids),
+            "duration": project["shot_duration"] or 8,
+            "status": "pending", "created_at": ts, "updated_at": ts})
+    if loc_id:
+        await db.update("scene", sid, {"location_entity_id": loc_id})
+    return {"shots": await db.query_all(
+        "SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))}
+
+
+@router.post("/scenes/{sid}/shots")
+async def add_shot(sid: str):
+    await _scene_or_404(sid)
+    ts = db.now()
+    sidx = await _next_shot_idx(sid)
+    shot_id = db.new_id()
+    await db.insert("shot", {
+        "id": shot_id, "scene_id": sid, "idx": sidx, "title": f"Shot {sidx+1}",
+        "description": "", "ref_entity_ids": "[]", "duration": 8,
+        "status": "pending", "created_at": ts, "updated_at": ts})
+    return await _shot_or_404(shot_id)
+
+
+@router.post("/shots/{sid}/insert")
+async def insert_shot(sid: str):
+    cur = await _shot_or_404(sid)
+    ts = db.now()
+    # đẩy idx các shot sau lên 1
+    await db.execute("UPDATE shot SET idx = idx + 1 WHERE scene_id=? AND idx > ?",
+                     (cur["scene_id"], cur["idx"]))
+    shot_id = db.new_id()
+    await db.insert("shot", {
+        "id": shot_id, "scene_id": cur["scene_id"], "idx": cur["idx"] + 1,
+        "title": "Shot", "description": "", "ref_entity_ids": "[]", "duration": 8,
+        "status": "pending", "created_at": ts, "updated_at": ts})
+    return await _shot_or_404(shot_id)
+
+
+@router.patch("/shots/{sid}")
+async def update_shot(sid: str, body: UpdateShotRequest):
+    await _shot_or_404(sid)
+    data = body.model_dump(exclude_none=True)
+    if "ref_entity_ids" in data:
+        data["ref_entity_ids"] = json.dumps(data["ref_entity_ids"])
+    data["updated_at"] = db.now()
+    await db.update("shot", sid, data)
+    return await _shot_or_404(sid)
+
+
+@router.delete("/shots/{sid}")
+async def delete_shot(sid: str):
+    row = await _shot_or_404(sid)
+    await db.delete("shot", sid)
+    for p in (row.get("image_path"), row.get("video_path")):
+        if p:
+            f = media_store.MEDIA_DIR / p.replace("/media/", "", 1)
+            if f.exists():
+                f.unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@router.post("/shots/{sid}/image")
+async def generate_shot_image(sid: str):
+    shot = await _shot_or_404(sid)
+    return await _generate_frame_image(shot)
+
+
+@router.put("/shots/{sid}/image-from-media")
+async def set_shot_image(sid: str, body: SetMediaRequest):
+    shot = await _shot_or_404(sid)
+    scene = await _scene_or_404(shot["scene_id"])
+    web = await media_store.ensure_local(body.media_id, scene["project_id"])
+    if not web:
+        raise HTTPException(404, "media_id không hợp lệ hoặc không tồn tại trên Flow")
+    await db.update("shot", sid, {
+        "image_media_id": body.media_id, "image_primary_id": body.media_id,
+        "image_path": web, "updated_at": db.now()})
+    return await _shot_or_404(sid)
+
+
+@router.post("/scenes/{sid}/storyboard/generate-all")
+async def generate_scene_images(sid: str, force: bool = False):
+    await _scene_or_404(sid)
+    shots = await db.query_all("SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))
+    return await _batch_generate_images(shots, force)
+
+
+@router.post("/projects/{pid}/storyboard/generate-all")
+async def generate_project_images(pid: str, force: bool = False):
+    await _project_or_404(pid)
+    shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
+    return await _batch_generate_images(shots, force)
+
+
+async def _batch_generate_images(shots: list[dict], force: bool) -> dict:
+    todo = [s for s in shots if force or not s.get("image_path")]
+    done, errors = 0, []
+    for i, s in enumerate(todo):
+        try:
+            await _generate_frame_image(s)
+            done += 1
+        except Exception as ex:
+            errors.append({"shot": s["id"], "error": str(ex)[:200]})
+        if i < len(todo) - 1:
+            await asyncio.sleep(random.uniform(2, 6))
     return {"requested": len(todo), "done": done, "errors": errors}
 
 
