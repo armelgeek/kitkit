@@ -299,6 +299,18 @@ async def change_displayname(body: ChangeDisplaynameMediaRequest):
     return result.get("data", result)
 
 
+@router.get("/change-project-cover/{project_id}/{media_id}")
+async def change_project_cover(project_id: str, media_id: str):
+    """change project cover (bypasses queue)."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.change_project_cover(project_id, media_id)
+    if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
+        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+    return result.get("data", result)
+
+
 @router.get("/project/{project_id}")
 async def get_project(project_id: str):
     """Bulk refresh all media URLs for a project via per-media get_media calls."""

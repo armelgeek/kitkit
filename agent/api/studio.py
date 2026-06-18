@@ -279,6 +279,21 @@ async def update_project(pid: str, body: UpdateProjectRequest):
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
 
 
+@router.put("/projects/{pid}/cover")
+async def set_project_cover(pid: str, body: SetMediaRequest):
+    """Đặt ảnh đại diện project. Cập nhật thumb của studio (luôn) + thử set trên Flow (best-effort)."""
+    p = await _project_or_404(pid)
+    flow_ok = False
+    try:
+        res = await get_flow_client().change_project_cover(p["flow_project_id"], body.media_id)
+        flow_ok = not (isinstance(res, dict) and res.get("error"))
+    except Exception as e:
+        logger.warning("set cover (flow) failed: %s", e)
+    await db.update("project", pid, {"thumb_media_key": body.media_id, "updated_at": db.now()})
+    return {"project": await db.query_one("SELECT * FROM project WHERE id=?", (pid,)),
+            "flow_updated": flow_ok}
+
+
 @router.delete("/projects/{pid}")
 async def delete_project(pid: str):
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
@@ -395,6 +410,20 @@ async def _entity_or_404(eid: str) -> dict:
     return row
 
 
+async def _maybe_set_cover(project_id: str, flow_project_id: str, media_id: str):
+    """Set the Flow project cover (thumbnail) from the first generated image."""
+    if not (media_id and flow_project_id):
+        return
+    row = await db.query_one("SELECT thumb_media_key FROM project WHERE id=?", (project_id,))
+    if row and row.get("thumb_media_key"):
+        return
+    try:
+        await get_flow_client().change_project_cover(flow_project_id, media_id)
+    except Exception as e:
+        logger.warning("set project cover failed: %s", e)
+    await db.update("project", project_id, {"thumb_media_key": media_id})
+
+
 async def _store_media_on_entity(entity: dict, project: dict, info: dict, label: str):
     """Rename on Flow + download local + persist media fields onto the entity."""
     client = get_flow_client()
@@ -413,6 +442,7 @@ async def _store_media_on_entity(entity: dict, project: dict, info: dict, label:
         "workflow_id": info.get("workflow_id"),
         "image_path": web, "updated_at": db.now(),
     })
+    await _maybe_set_cover(project["id"], project.get("flow_project_id"), info.get("media_id"))
     return await _entity_or_404(entity["id"])
 
 
@@ -627,6 +657,8 @@ async def _store_media_on_shot(shot: dict, project: dict, info: dict,
         f"{kind}_path": web, "updated_at": db.now(),
     }
     await db.update("shot", shot["id"], fields)
+    if kind == "image":
+        await _maybe_set_cover(project["id"], project.get("flow_project_id"), info.get("media_id"))
     return await _shot_or_404(shot["id"])
 
 

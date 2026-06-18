@@ -402,6 +402,23 @@ class FlowClient:
             "captchaAction": "IMAGE_GENERATION",
         })
 
+    async def change_project_cover(self, project_id: str, media_name_id: str) -> dict:
+        """
+        Rename a media item.
+        Uses the same endpoint as generate_images but with a different payload.
+        """
+        url = self._build_url("changeProject_cover_image", project_id=project_id)
+        body = {
+            "thumbnailMediaKey": media_name_id,
+        }
+        return await self._send("api_request", {
+            "url": url,
+            "method": "PATCH",
+            "headers": random_headers(),
+            "body": body,
+            "captchaAction": "IMAGE_GENERATION",
+        })
+
     async def generate_video(self, start_image_media_id: str, prompt: str,
                               project_id: str, scene_id: str,
                               aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
