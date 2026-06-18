@@ -205,3 +205,14 @@ export interface ScriptResult {
 
 // Thumbnail URL for a Flow media key (backend caches locally).
 export const thumbUrl = (key: string) => `/api/studio/thumb/${key}`;
+
+// OmniVoice base URL config lives on the tts router (not /studio).
+export async function setTtsConfig(base_url: string): Promise<any> {
+  const res = await fetch("/api/tts/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url }),
+  });
+  if (!res.ok) throw new Error("Không đặt được OmniVoice URL");
+  return res.json();
+}

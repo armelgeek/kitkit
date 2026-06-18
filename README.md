@@ -136,6 +136,30 @@ override được hết qua env (`AGENT_CLAUDE_BIN`, `AGENT_ANTIGRAVITY_BIN`,
 `AGENT_ANTIGRAVITY_ARGS`, `AGENT_CLI_TIMEOUT`, `AGENT_SKIP_PERMISSIONS`, ...) nếu
 binary/cờ của CLI thay đổi.
 
+## Flow Studio (webapp)
+
+A modern web UI that turns an idea into a finished video on top of these APIs:
+Script → Assets → Storyboard → Shots → Assemble, with an AI agent as the brain,
+a Node Editor for custom pipelines, and DaVinci Resolve XML export. Design doc:
+[video-app.md](video-app.md).
+
+```bash
+# 1. build the SPA (served by the agent)
+cd webapp && npm install && npm run build && cd ..
+# 2. run the agent (serves the app at http://127.0.0.1:8100)
+python -m agent.main
+```
+
+Open <http://127.0.0.1:8100>. Dev mode with hot reload: `cd webapp && npm run dev`
+(proxies `/api` + `/media` to `:8100`). Studio state lives in `agent/studio.db`;
+generated media is cached under `./media/` and final renders under `./studio_media/`.
+
+Requirements: the Chrome extension connected (Flow), `ffmpeg` on PATH (assemble),
+`claude`/`agy` logged in (AI agent), and an OmniVoice URL set for TTS.
+
+Studio endpoints live under `/api/studio/*` (projects, script, entities, storyboard,
+shots, assemble, export, node graphs). See [agent/api/studio.py](agent/api/studio.py).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
