@@ -729,7 +729,7 @@ hàng đợi đầy.
 | Phase | Nội dung | Kết quả kiểm chứng |
 |-------|----------|--------------------|
 | **0. Scaffolding** ✅ | `studio/db.py`+schema, `studio/media_store.py`, `api/studio.py` (project CRUD + flow-projects import + thumbnail cache + `/settings`,`/options`,`/health`), `webapp/` React+Vite+Tailwind (ProjectGrid có thumbnail, CreateModal, Workspace 5 tab, StatusPills), mount `/media` + SPA | **ĐÃ XONG & verify thật:** tạo/list/xóa project; thumbnail tải-cache-serve (200/png); SPA serve tại `/`; health xanh |
-| **1. Script** | ScriptEditor + Toolbar + ChatBox; `/script`, `/script/chat`; parse scenes | Chat sửa được kịch bản; scenes xuất hiện |
+| **1. Script** ✅ | `studio/brain.py` (agent JSON + scene parser + prompt templates); `/script/generate`, `/script`, `/script/chat`, `/scenes`; ScriptTab (GeneratePanel idea+duration, Courier editor, ChatBox, scenes sidebar) | **ĐÃ XONG & verify thật:** claude sinh script từ idea (est 24s, 2 scene); chat thêm scene 3; parse + lưu scenes OK |
 | **2. Assets** | AssetLibrary; `/entities/extract`, `/entities/{id}/generate|upload` | Trích + sinh/upload ảnh ref nhân vật |
 | **3. Storyboard** | FrameGrid + FramePanel + RefPicker; `/storyboard/autofill`, `/shots/{id}/image`; Auto generate | Sinh ảnh frame có reference đúng |
 | **4. Shots** | ShotCard + ShotPanel; `/shots/{id}/prompts|video|upscale`; poll + WS | Sinh + poll video; preview; upscale 4K |

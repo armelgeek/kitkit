@@ -8,6 +8,9 @@ export interface Project {
   aspect_ratio: string;
   storytelling: number;
   thumb_media_key: string | null;
+  idea: string | null;
+  target_duration: number | null;
+  script_raw: string | null;
   status: string;
   updated_at: number;
 }
@@ -58,7 +61,38 @@ export const api = {
   getSettings: () => req<Record<string, any>>("/settings"),
   putSettings: (body: Record<string, any>) =>
     req<Record<string, any>>("/settings", { method: "PUT", body: JSON.stringify(body) }),
+
+  getProject: (id: string) => req<Project>(`/projects/${id}`),
+  listScenes: (id: string) => req<{ scenes: Scene[] }>(`/projects/${id}/scenes`),
+  generateScript: (id: string, idea: string, target_duration: number | null) =>
+    req<ScriptResult>(`/projects/${id}/script/generate`, {
+      method: "POST",
+      body: JSON.stringify({ idea, target_duration }),
+    }),
+  saveScript: (id: string, script: string) =>
+    req<ScriptResult>(`/projects/${id}/script`, {
+      method: "PUT",
+      body: JSON.stringify({ script }),
+    }),
+  scriptChat: (id: string, instruction: string) =>
+    req<ScriptResult>(`/projects/${id}/script/chat`, {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    }),
 };
+
+export interface Scene {
+  id: string;
+  idx: number;
+  heading: string;
+  action: string;
+}
+
+export interface ScriptResult {
+  script: string;
+  scenes: Scene[];
+  estimated_duration?: number;
+}
 
 // Thumbnail URL for a Flow media key (backend caches locally).
 export const thumbUrl = (key: string) => `/api/studio/thumb/${key}`;

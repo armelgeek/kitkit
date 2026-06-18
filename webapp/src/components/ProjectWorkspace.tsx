@@ -1,18 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type Project } from "../api/client";
+import ScriptTab from "./script/ScriptTab";
 
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ProjectWorkspace({
-  project,
+  project: initial,
   onBack,
 }: {
   project: Project;
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("Script");
-  const [style, setStyle] = useState(project.style);
+  const [project, setProject] = useState(initial);
+  const [style, setStyle] = useState(initial.style);
+
+  // Fetch the full project (with script_raw) on open.
+  useEffect(() => {
+    api.getProject(initial.id).then(setProject).catch(() => {});
+  }, [initial.id]);
 
   const saveStyle = async () => {
     if (style !== project.style) {
@@ -63,8 +70,12 @@ export default function ProjectWorkspace({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <Placeholder tab={tab} project={project} />
+      <div className="flex-1 overflow-hidden">
+        {tab === "Script" ? (
+          <ScriptTab key={project.id} project={project} />
+        ) : (
+          <Placeholder tab={tab} project={project} />
+        )}
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
 )
 from agent.services.flow_client import get_flow_client
-from agent.studio import db, media_store
+from agent.studio import db, media_store, brain
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/studio", tags=["studio"])
@@ -46,6 +46,19 @@ class UpdateProjectRequest(BaseModel):
     target_duration: Optional[int] = None
     shot_duration: Optional[int] = None
     storytelling: Optional[bool] = None
+
+
+class GenerateScriptRequest(BaseModel):
+    idea: str
+    target_duration: Optional[int] = None   # giây
+
+
+class SaveScriptRequest(BaseModel):
+    script: str
+
+
+class ScriptChatRequest(BaseModel):
+    instruction: str
 
 
 # ─── Helpers ─────────────────────────────────────────────────
@@ -234,6 +247,77 @@ async def delete_project(pid: str):
     if folder.exists():
         shutil.rmtree(folder, ignore_errors=True)
     return {"ok": True}
+
+
+# ─── Script + scenes ────────────────────────────────────────
+
+async def _project_or_404(pid: str) -> dict:
+    row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+    if not row:
+        raise HTTPException(404, "Project không tồn tại")
+    return row
+
+
+async def _save_scenes(pid: str, script: str) -> list[dict]:
+    """Re-parse script → replace project's scenes in DB. Returns scene rows."""
+    await db.execute("DELETE FROM scene WHERE project_id=?", (pid,))
+    parsed = brain.parse_scenes(script)
+    ts = db.now()
+    for s in parsed:
+        await db.insert("scene", {
+            "id": db.new_id(), "project_id": pid, "idx": s["idx"],
+            "heading": s["heading"], "slug": s["slug"],
+            "action": s["body"].strip(), "dialog": None,
+            "location_entity_id": None, "source_segment": None,
+            "source_start": None, "source_end": None, "created_at": ts,
+        })
+    return await db.query_all(
+        "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
+
+
+@router.get("/projects/{pid}/scenes")
+async def list_scenes(pid: str):
+    await _project_or_404(pid)
+    return {"scenes": await db.query_all(
+        "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))}
+
+
+@router.post("/projects/{pid}/script/generate")
+async def generate_script(pid: str, body: GenerateScriptRequest):
+    p = await _project_or_404(pid)
+    result = await brain.run_json(brain.script_from_idea_prompt(
+        body.idea, body.target_duration, bool(p["storytelling"]),
+        p["style"], p["shot_duration"] or 8))
+    script = result.get("script", "")
+    if not script:
+        raise HTTPException(502, "AI không trả về script")
+    await db.update("project", pid, {
+        "idea": body.idea, "target_duration": body.target_duration,
+        "script_raw": script, "updated_at": db.now()})
+    scenes = await _save_scenes(pid, script)
+    return {"script": script, "scenes": scenes,
+            "estimated_duration": result.get("estimated_duration")}
+
+
+@router.put("/projects/{pid}/script")
+async def save_script(pid: str, body: SaveScriptRequest):
+    await _project_or_404(pid)
+    await db.update("project", pid, {"script_raw": body.script, "updated_at": db.now()})
+    scenes = await _save_scenes(pid, body.script)
+    return {"script": body.script, "scenes": scenes}
+
+
+@router.post("/projects/{pid}/script/chat")
+async def script_chat(pid: str, body: ScriptChatRequest):
+    p = await _project_or_404(pid)
+    result = await brain.run_json(brain.edit_script_prompt(
+        p["script_raw"] or "", body.instruction, p["style"]))
+    script = result.get("script", "")
+    if not script:
+        raise HTTPException(502, "AI không trả về script")
+    await db.update("project", pid, {"script_raw": script, "updated_at": db.now()})
+    scenes = await _save_scenes(pid, script)
+    return {"script": script, "scenes": scenes}
 
 
 # ─── Thumbnail / media resolve ──────────────────────────────
