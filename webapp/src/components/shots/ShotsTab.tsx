@@ -3,7 +3,13 @@ import { api, storyboard, shots as shotsApi, type Project, type Scene, type Shot
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 
-export default function ShotsTab({ project }: { project: Project }) {
+export default function ShotsTab({
+  project,
+  onEdit,
+}: {
+  project: Project;
+  onEdit?: (t: { kind: "shot"; id: string; title: string }) => void;
+}) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [byScene, setByScene] = useState<Record<string, Shot[]>>({});
   const [sel, setSel] = useState<Shot | null>(null);
@@ -112,6 +118,7 @@ export default function ShotsTab({ project }: { project: Project }) {
                     busyLabel="Đang render…"
                     onClick={() => setSel(sh)}
                     onPreview={sh.video_path || sh.image_path ? () => setLightbox(sh) : undefined}
+                    onEdit={onEdit ? () => onEdit({ kind: "shot", id: sh.id, title: sh.title }) : undefined}
                     actions={
                       <button
                         onClick={(e) => {

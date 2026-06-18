@@ -8,7 +8,13 @@ const GROUPS: { type: Entity["type"]; label: string }[] = [
   { type: "prop", label: "Đạo cụ" },
 ];
 
-export default function AssetsTab({ project }: { project: Project }) {
+export default function AssetsTab({
+  project,
+  onEdit,
+}: {
+  project: Project;
+  onEdit?: (t: { kind: "entity"; id: string; title: string }) => void;
+}) {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [gening, setGening] = useState<Set<string>>(new Set());
@@ -113,6 +119,7 @@ export default function AssetsTab({ project }: { project: Project }) {
                   generating={gening.has(e.id)}
                   onGenerate={() => genOne(e)}
                   onDelete={() => wrap("del", () => api.deleteEntity(e.id))}
+                  onEdit={onEdit ? () => onEdit({ kind: "entity", id: e.id, title: e.name }) : undefined}
                 />
               ))}
               {!items.length && (
@@ -133,11 +140,13 @@ function AssetCard({
   generating,
   onGenerate,
   onDelete,
+  onEdit,
 }: {
   entity: Entity;
   generating: boolean;
   onGenerate: () => void;
   onDelete: () => void;
+  onEdit?: () => void;
 }) {
   return (
     <div className="group overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50">
@@ -162,6 +171,15 @@ function AssetCard({
           >
             ⚡
           </button>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              title="Edit (node editor)"
+              className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
+            >
+              ✎
+            </button>
+          )}
           <button
             onClick={onDelete}
             title="Xóa"

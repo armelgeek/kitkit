@@ -18,7 +18,7 @@ from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
 )
 from agent.services.flow_client import get_flow_client
-from agent.studio import db, media_store, brain, assembler, davinci_xml
+from agent.studio import db, media_store, brain, assembler, davinci_xml, graph as graph_mod
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/studio", tags=["studio"])
@@ -903,6 +903,63 @@ async def generate_all_videos(pid: str, force: bool = False):
         if i < len(todo) - 1:
             await asyncio.sleep(random.uniform(15, 30))
     return {"requested": len(todo), "done": done, "errors": errors}
+
+
+# ─── Node Editor graphs ─────────────────────────────────────
+
+class SaveGraphRequest(BaseModel):
+    graph: dict
+
+
+@router.get("/shots/{sid}/graph")
+async def get_shot_graph(sid: str):
+    row = await _shot_or_404(sid)
+    return {"graph": json.loads(row["graph_json"]) if row.get("graph_json") else None}
+
+
+@router.put("/shots/{sid}/graph")
+async def put_shot_graph(sid: str, body: SaveGraphRequest):
+    await _shot_or_404(sid)
+    await db.update("shot", sid, {"graph_json": json.dumps(body.graph), "updated_at": db.now()})
+    return {"ok": True}
+
+
+@router.post("/shots/{sid}/graph/run")
+async def run_shot_graph(sid: str, body: SaveGraphRequest):
+    shot = await _shot_or_404(sid)
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    await db.update("shot", sid, {"graph_json": json.dumps(body.graph)})
+    try:
+        out = await graph_mod.run_graph(body.graph, shot, project, "shot")
+    except graph_mod.GraphError as e:
+        raise HTTPException(400, str(e))
+    return {**out, "shot": await _shot_or_404(sid)}
+
+
+@router.get("/entities/{eid}/graph")
+async def get_entity_graph(eid: str):
+    row = await _entity_or_404(eid)
+    return {"graph": json.loads(row["graph_json"]) if row.get("graph_json") else None}
+
+
+@router.put("/entities/{eid}/graph")
+async def put_entity_graph(eid: str, body: SaveGraphRequest):
+    await _entity_or_404(eid)
+    await db.update("entity", eid, {"graph_json": json.dumps(body.graph), "updated_at": db.now()})
+    return {"ok": True}
+
+
+@router.post("/entities/{eid}/graph/run")
+async def run_entity_graph(eid: str, body: SaveGraphRequest):
+    entity = await _entity_or_404(eid)
+    project = await _project_or_404(entity["project_id"])
+    await db.update("entity", eid, {"graph_json": json.dumps(body.graph)})
+    try:
+        out = await graph_mod.run_graph(body.graph, entity, project, "entity")
+    except graph_mod.GraphError as e:
+        raise HTTPException(400, str(e))
+    return {**out, "entity": await _entity_or_404(eid)}
 
 
 # ─── Assemble / narration / export ──────────────────────────

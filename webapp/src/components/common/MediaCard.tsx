@@ -13,6 +13,7 @@ interface Props {
   actions?: ReactNode;
   onClick?: () => void;
   onPreview?: () => void;
+  onEdit?: () => void;
 }
 
 // Shared image/video card: media on top, title + description below, hover actions.
@@ -28,6 +29,7 @@ export default function MediaCard({
   actions,
   onClick,
   onPreview,
+  onEdit,
 }: Props) {
   return (
     <div
@@ -71,6 +73,18 @@ export default function MediaCard({
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
             >
               ⤢
+            </button>
+          )}
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              title="Edit (node editor)"
+              className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
+            >
+              ✎
             </button>
           )}
           {actions}

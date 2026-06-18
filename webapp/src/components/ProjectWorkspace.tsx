@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type Project } from "../api/client";
+import { api, type Entity, type Project } from "../api/client";
 import ScriptTab from "./script/ScriptTab";
 import AssetsTab from "./assets/AssetsTab";
 import StoryboardTab from "./storyboard/StoryboardTab";
 import ShotsTab from "./shots/ShotsTab";
 import AssembleTab from "./assemble/AssembleTab";
+import NodeEditor, { type EditorTarget } from "./nodeeditor/NodeEditor";
 
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble"] as const;
 type Tab = (typeof TABS)[number];
@@ -19,11 +20,17 @@ export default function ProjectWorkspace({
   const [tab, setTab] = useState<Tab>("Script");
   const [project, setProject] = useState(initial);
   const [style, setStyle] = useState(initial.style);
+  const [editor, setEditor] = useState<EditorTarget | null>(null);
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [reload, setReload] = useState(0);
 
-  // Fetch the full project (with script_raw) on open.
+  // Fetch the full project (with script_raw) + entities on open.
   useEffect(() => {
     api.getProject(initial.id).then(setProject).catch(() => {});
+    api.listEntities(initial.id).then((r) => setEntities(r.entities)).catch(() => {});
   }, [initial.id]);
+
+  const openEditor = (t: EditorTarget) => setEditor(t);
 
   const saveStyle = async () => {
     if (style !== project.style) {
@@ -78,15 +85,24 @@ export default function ProjectWorkspace({
         {tab === "Script" ? (
           <ScriptTab key={project.id} project={project} />
         ) : tab === "Assets" ? (
-          <AssetsTab key={project.id} project={project} />
+          <AssetsTab key={project.id + reload} project={project} onEdit={openEditor} />
         ) : tab === "Storyboard" ? (
-          <StoryboardTab key={project.id} project={project} />
+          <StoryboardTab key={project.id + reload} project={project} onEdit={openEditor} />
         ) : tab === "Shots" ? (
-          <ShotsTab key={project.id} project={project} />
+          <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />
         ) : (
-          <AssembleTab key={project.id} project={project} />
+          <AssembleTab key={project.id + reload} project={project} />
         )}
       </div>
+
+      {editor && (
+        <NodeEditor
+          target={editor}
+          entities={entities}
+          onClose={() => setEditor(null)}
+          onApplied={() => setReload((r) => r + 1)}
+        />
+      )}
     </div>
   );
 }

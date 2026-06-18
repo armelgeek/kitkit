@@ -3,7 +3,13 @@ import { api, storyboard, type Entity, type Project, type Scene, type Shot } fro
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 
-export default function StoryboardTab({ project }: { project: Project }) {
+export default function StoryboardTab({
+  project,
+  onEdit,
+}: {
+  project: Project;
+  onEdit?: (t: { kind: "shot"; id: string; title: string }) => void;
+}) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [shotsByScene, setShotsByScene] = useState<Record<string, Shot[]>>({});
@@ -135,6 +141,7 @@ export default function StoryboardTab({ project }: { project: Project }) {
                     busyLabel="Đang tạo ảnh…"
                     onClick={() => setSel(sh)}
                     onPreview={sh.image_path ? () => setLightbox(sh) : undefined}
+                    onEdit={onEdit ? () => onEdit({ kind: "shot", id: sh.id, title: sh.title }) : undefined}
                     actions={
                       <>
                         <button

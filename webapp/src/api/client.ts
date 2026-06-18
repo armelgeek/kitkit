@@ -158,6 +158,21 @@ export const shots = {
     req<Shot>(`/shots/${sid}/narration`, { method: "POST", body: JSON.stringify({ language }) }),
 };
 
+export const graphApi = {
+  get: (kind: "shot" | "entity", id: string) =>
+    req<{ graph: any }>(`/${kind === "shot" ? "shots" : "entities"}/${id}/graph`),
+  run: (kind: "shot" | "entity", id: string, graph: any) =>
+    req<any>(`/${kind === "shot" ? "shots" : "entities"}/${id}/graph/run`, {
+      method: "POST",
+      body: JSON.stringify({ graph }),
+    }),
+  save: (kind: "shot" | "entity", id: string, graph: any) =>
+    req<any>(`/${kind === "shot" ? "shots" : "entities"}/${id}/graph`, {
+      method: "PUT",
+      body: JSON.stringify({ graph }),
+    }),
+};
+
 export const assemble = {
   build: (pid: string) =>
     req<{ web_path: string; clips: number; duration: number }>(
