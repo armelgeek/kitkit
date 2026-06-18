@@ -18,6 +18,7 @@ function Pill({ ok, label }: { ok: boolean; label: string }) {
 export default function StatusPills() {
   const [health, setHealth] = useState<Health | null>(null);
   const [credits, setCredits] = useState<number | null>(null);
+  const [tier, setTier] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -28,7 +29,10 @@ export default function StatusPills() {
         if (h.extension_connected) {
           try {
             const c = await api.credits();
-            if (alive) setCredits(c.credits ?? null);
+            if (alive) {
+              setCredits(c.credits ?? null);
+              setTier(c.userPaygateTier ?? null);
+            }
           } catch {
             /* ignore */
           }
@@ -47,6 +51,11 @@ export default function StatusPills() {
 
   return (
     <div className="flex items-center gap-2">
+      {tier && (
+        <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300" title="Paygate tier (từ Flow credits)">
+          {tier.replace("PAYGATE_TIER_", "Tier ")}
+        </span>
+      )}
       {credits != null && (
         <span className="rounded-full bg-indigo-500/15 px-2.5 py-1 text-xs font-medium text-indigo-300">
           {credits.toLocaleString()} credits

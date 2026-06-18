@@ -103,6 +103,7 @@ ENDPOINTS = {
     "get_credits": "/v1/credits",
     "get_media": "/v1/media/{media_id}",
     "changeDisplayname_media": "/v1/flowWorkflows/{media_id}",
+    "changeProject_cover_image": "/v1/projects/{project_id}?clientContext.tool=PINHOLE&updateMask=thumbnailMediaKey",
 }
 
 # ─── Header Randomization Pools ─────────────────────────────

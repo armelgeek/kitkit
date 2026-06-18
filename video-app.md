@@ -179,7 +179,7 @@ Màn hình **Settings** (icon ⚙ trên TopNav, mở dạng trang/drawer) gồm 
 | **Video model** | Veo i2v (theo tier+aspect) · **Omni Flash** (r2v đa-độ-dài `abra_r2v_{4,6,8,10}s`, cần ≥1 ref) · upscale 4K/1080p |
 | **Style** | **Textbox tự do** (nhập style-prompt tùy ý, vd *"gritty cinematic, teal-orange, 35mm film grain"*) + vài **preset gợi ý** điền nhanh (Realistic/Cinematic/Anime…). **Áp vào MỌI prompt ảnh & video** (xem dưới) |
 | **Aspect ratio** | Landscape / Portrait (16:9 / 9:16) |
-| **Paygate tier** | `PAYGATE_TIER_ONE` / `TWO` |
+| **Paygate tier** | **Tự nhận từ `/api/flow/credits`** (`userPaygateTier`) — KHÔNG do người dùng chọn; hiển thị ở StatusPills |
 | **TTS** | OmniVoice base URL (`PUT /api/tts/config`), giọng mặc định (`voice_id`, từ `/api/tts/voices`), speed, từ/giây |
 | **Shot** | `shot_duration` mặc định (≤8s), auto-download, throttle batch |
 | **Storytelling** | Bật mặc định, ngôn ngữ giọng đọc |

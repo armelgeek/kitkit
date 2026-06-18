@@ -123,6 +123,28 @@ def _require_extension():
     return client
 
 
+_tier_cache = {"value": None, "ts": 0.0}
+
+
+async def _current_tier() -> str:
+    """User's paygate tier from /api/flow/credits (không do người dùng chọn). Cache 60s."""
+    import time as _t
+    if _tier_cache["value"] and _t.monotonic() - _tier_cache["ts"] < 60:
+        return _tier_cache["value"]
+    client = get_flow_client()
+    if client.connected:
+        try:
+            res = await client.get_credits()
+            data = res.get("data", res)
+            tier = data.get("userPaygateTier") if isinstance(data, dict) else None
+            if tier:
+                _tier_cache.update(value=tier, ts=_t.monotonic())
+                return tier
+        except Exception:
+            pass
+    return _tier_cache["value"] or "PAYGATE_TIER_ONE"
+
+
 # ─── Health / options / settings ────────────────────────────
 
 @router.get("/health")
@@ -228,6 +250,7 @@ async def create_project(body: CreateProjectRequest):
     await db.insert("project", {
         "id": pid, "title": body.title, "flow_project_id": flow_id,
         "style": body.style, "aspect_ratio": body.aspect_ratio,
+        "paygate_tier": await _current_tier(),   # từ /api/flow/credits, không do user chọn
         "storytelling": 1 if body.storytelling else 0,
         "thumb_media_key": thumb,
         "status": "draft", "created_at": ts, "updated_at": ts,
@@ -403,7 +426,7 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
     model = await _resolve_image_model(project)
     res = await client.generate_images(
         prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
-        user_paygate_tier=project["paygate_tier"], image_model=model)
+        user_paygate_tier=await _current_tier(), image_model=model)
     if res.get("error"):
         raise HTTPException(502, str(res["error"]))
     info = _extract_image_result(res.get("data", res))
@@ -617,7 +640,7 @@ async def _generate_frame_image(shot: dict) -> dict:
     model = await _resolve_image_model(project)
     res = await client.generate_images(
         prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
-        user_paygate_tier=project["paygate_tier"],
+        user_paygate_tier=await _current_tier(),
         references=refs or None, image_model=model)
     if res.get("error"):
         raise HTTPException(502, str(res["error"]))
@@ -817,7 +840,7 @@ async def _generate_shot_video(shot: dict) -> dict:
     res = await client.generate_video(
         start_image_media_id=shot["image_media_id"], prompt=motion,
         project_id=project["flow_project_id"], scene_id=shot["id"],
-        aspect_ratio=project["aspect_ratio"], user_paygate_tier=project["paygate_tier"])
+        aspect_ratio=project["aspect_ratio"], user_paygate_tier=await _current_tier())
     if res.get("error"):
         await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
         raise HTTPException(502, str(res["error"]))
@@ -930,6 +953,7 @@ async def run_shot_graph(sid: str, body: SaveGraphRequest):
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
     await db.update("shot", sid, {"graph_json": json.dumps(body.graph)})
+    project = {**project, "paygate_tier": await _current_tier()}
     try:
         out = await graph_mod.run_graph(body.graph, shot, project, "shot")
     except graph_mod.GraphError as e:
@@ -955,6 +979,7 @@ async def run_entity_graph(eid: str, body: SaveGraphRequest):
     entity = await _entity_or_404(eid)
     project = await _project_or_404(entity["project_id"])
     await db.update("entity", eid, {"graph_json": json.dumps(body.graph)})
+    project = {**project, "paygate_tier": await _current_tier()}
     try:
         out = await graph_mod.run_graph(body.graph, entity, project, "entity")
     except graph_mod.GraphError as e:
@@ -1053,7 +1078,7 @@ async def export_project(pid: str):
                 prompt=f"{meta['thumbnail_prompt']}. {p['style']}",
                 project_id=p["flow_project_id"],
                 aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE",
-                user_paygate_tier=p["paygate_tier"],
+                user_paygate_tier=await _current_tier(),
                 image_model=await _resolve_image_model(p))
             info = _extract_image_result(res.get("data", res))
             if info.get("media_id"):

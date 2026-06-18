@@ -75,14 +75,6 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
             </div>
           </Field>
 
-          <Field label="Paygate tier">
-            <select value={s.paygate_tier || "PAYGATE_TIER_ONE"} onChange={(e) => set("paygate_tier", e.target.value)} className={inp}>
-              {(opts?.paygate_tiers || ["PAYGATE_TIER_ONE", "PAYGATE_TIER_TWO"]).map((t: string) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
-
           <Field label="OmniVoice base URL (TTS)">
             <input value={ttsUrl} onChange={(e) => setTtsUrl(e.target.value)}
               placeholder="https://xxxx.ngrok-free.app" className={inp} />
