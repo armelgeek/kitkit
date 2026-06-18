@@ -5,14 +5,19 @@ import logging
 import secrets as _secrets
 from contextlib import asynccontextmanager
 
+import os
+from pathlib import Path
+
 import websockets
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from agent.config import API_HOST, API_PORT, WS_HOST, WS_PORT
 from agent.api.flow import router as flow_router
 from agent.api.tts import router as tts_router
 from agent.api.ai_agent import router as agent_router
+from agent.api.studio import router as studio_router
 from agent.services.flow_client import get_flow_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -81,6 +86,7 @@ app.add_middleware(
 app.include_router(flow_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(agent_router, prefix="/api")
+app.include_router(studio_router, prefix="/api")
 
 
 @app.post("/api/ext/callback")
@@ -116,6 +122,19 @@ async def health():
         "extension_connected": client.connected,
         "ws": client.ws_stats,
     }
+
+
+# ─── Static: local media cache + built SPA (mount last) ─────
+_REPO_ROOT = Path(__file__).parent.parent
+_MEDIA_DIR = Path(os.environ.get("STUDIO_MEDIA_DIR", _REPO_ROOT / "media"))
+_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(_MEDIA_DIR)), name="media")
+
+_SPA_DIST = _REPO_ROOT / "webapp" / "dist"
+if _SPA_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=str(_SPA_DIST), html=True), name="spa")
+else:
+    logger.info("SPA dist not built yet (%s) — run `npm run build` in webapp/", _SPA_DIST)
 
 
 if __name__ == "__main__":

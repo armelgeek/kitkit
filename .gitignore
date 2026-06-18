@@ -16,3 +16,8 @@ AGENTS.md
 GEMINI.md
 .fk-setup.json
 node_modules/
+
+# Flow Studio webapp
+webapp/dist/
+media/
+studio_media/

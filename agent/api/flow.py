@@ -8,7 +8,7 @@ router = APIRouter(prefix="/flow", tags=["flow"])
 
 
 class EntityReference(BaseModel):
-    handle: str        # tên entity dùng trong prompt: "[handle]"
+    handle: str        # tên entity dùng trong prompt: "{handle}"
     media_id: str      # UUID ảnh ref trên Flow
 
 
@@ -18,7 +18,7 @@ class GenerateImageRequest(BaseModel):
     aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT"
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
     character_media_ids: Optional[list[str]] = None
-    # Tham chiếu có handle: prompt nhúng "[handle]" → structuredPrompt tách thành part riêng
+    # Tham chiếu có handle: prompt nhúng "{handle}" → structuredPrompt tách thành part riêng
     references: Optional[list[EntityReference]] = None
     image_model: Optional[str] = None   # override model key (vd "GEM_PIX_2", "NARWHAL")
 
@@ -40,7 +40,7 @@ class GenerateVideoRefsRequest(BaseModel):
     scene_id: str
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
-    # prompt nhúng "[handle]" → structuredPrompt tách part riêng cho từng reference
+    # prompt nhúng "{handle}" → structuredPrompt tách part riêng cho từng reference
     references: Optional[list[EntityReference]] = None
     video_model: Optional[str] = None   # override model key (vd "veo_3_1_r2v_lite")
 
@@ -52,7 +52,7 @@ class GenerateVideoOmniRequest(BaseModel):
     duration_s: int = 8                 # 4 | 6 | 8 | 10
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"  # chỉ PORTRAIT/LANDSCAPE
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
-    # prompt nhúng "[handle]" → structuredPrompt tách part riêng cho từng reference
+    # prompt nhúng "{handle}" → structuredPrompt tách part riêng cho từng reference
     references: Optional[list[EntityReference]] = None
 
 

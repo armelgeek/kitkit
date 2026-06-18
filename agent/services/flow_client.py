@@ -272,8 +272,8 @@ class FlowClient:
 
         Two ways to attach character/entity references:
         - `references` (preferred): list of {"handle": <name>, "media_id": <uuid>}. The
-          prompt may embed entity names in square brackets, e.g. "[Thao] dắt tay [Luong]".
-          Each `[handle]` matching a reference is turned into a dedicated
+          prompt may embed entity names in curly braces, e.g. "{Thao} dắt tay {Luong}".
+          Each `{handle}` matching a reference is turned into a dedicated
           `{"reference": {"media": {handle, mediaId}}}` part in `structuredPrompt`, so the
           model binds each mention to the right image instead of guessing (avoids mixing up
           entities when several references are passed).
@@ -468,7 +468,7 @@ class FlowClient:
         if not model_key:
             return {"error": f"No model for tier={user_paygate_tier} type={gen_type} ratio={aspect_ratio}"}
 
-        # Like generate_images: prompt may embed entity names as "[handle]" so each mention
+        # Like generate_images: prompt may embed entity names as "{handle}" so each mention
         # binds to its own reference image instead of being mixed up. referenceImages follow
         # the reference order, de-duplicated.
         if references:
@@ -520,7 +520,7 @@ class FlowClient:
         Same r2v endpoint/body as generate_video_from_references, but the model key
         varies by duration (`abra_r2v_{4,6,8,10}s`). Omni is reference-conditioned, so
         at least one reference image is required; aspect must be PORTRAIT or LANDSCAPE.
-        Supports `[handle]` references in the prompt (structuredPrompt parts).
+        Supports `{handle}` references in the prompt (structuredPrompt parts).
         """
         if aspect_ratio not in OMNI_FLASH_VALID_ASPECTS:
             return {"error": f"Omni Flash không hỗ trợ aspect {aspect_ratio} "
@@ -694,17 +694,18 @@ def _is_ws_error(result: dict) -> bool:
     return bool(result.get("error")) or (isinstance(result.get("status"), int) and result["status"] >= 400)
 
 
-_REF_TOKEN_RE = re.compile(r"\[([^\[\]]+)\]")
+_REF_TOKEN_RE = re.compile(r"\{([^{}]+)\}")
 
 
 def _build_structured_parts(prompt: str, references: list[dict]) -> list[dict]:
-    """Build Google Flow `structuredPrompt.parts` by splitting `[handle]` tokens.
+    """Build Google Flow `structuredPrompt.parts` by splitting `{handle}` tokens.
 
-    Each `[handle]` in `prompt` that matches a reference's `handle` becomes a dedicated
+    Each `{handle}` in `prompt` that matches a reference's `handle` becomes a dedicated
     reference part `{"reference": {"media": {"handle", "mediaId"}}}`; surrounding text
     becomes `{"text": ...}` parts. This binds each entity mention to its own image so the
-    model doesn't mix up references. Unknown `[tokens]` are kept as literal text (brackets
-    stripped). Falls back to a single text part when no token matches.
+    model doesn't mix up references. Curly braces are used (not square brackets) to avoid
+    clashing with control tokens like timestamps `[00:05]`. Unknown `{tokens}` are kept as
+    literal text (braces stripped). Falls back to a single text part when no token matches.
     """
     handle_to_id = {r["handle"]: r["media_id"] for r in (references or [])}
     parts: list[dict] = []
