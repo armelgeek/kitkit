@@ -31,6 +31,52 @@ OMNIVOICE_BASE_URL = os.environ.get("OMNIVOICE_BASE_URL", "http://localhost:8000
 # Timeout (giây) cho call tổng hợp giọng — model inference có thể chậm.
 OMNIVOICE_TTS_TIMEOUT = float(os.environ.get("OMNIVOICE_TTS_TIMEOUT", "300"))
 
+# ─── AI Agent CLIs (headless subprocess runners) ────────────
+# Chạy các agent CLI (Claude Code, Antigravity, ...) như subprocess headless.
+# Timeout (giây) cho mỗi lần chạy — agent có thể chạy lâu.
+AGENT_CLI_TIMEOUT = float(os.environ.get("AGENT_CLI_TIMEOUT", "600"))
+# Mặc định bypass permission để chạy không cần người xác nhận (automation).
+AGENT_SKIP_PERMISSIONS = os.environ.get("AGENT_SKIP_PERMISSIONS", "1") == "1"
+# Kích thước PTY giả cho agent dạng TUI (vd Antigravity).
+AGENT_PTY_COLS = int(os.environ.get("AGENT_PTY_COLS", "120"))
+AGENT_PTY_ROWS = int(os.environ.get("AGENT_PTY_ROWS", "40"))
+
+# Registry các agent hỗ trợ. Mỗi field đều override được qua env để linh hoạt
+# khi binary/cờ của CLI thay đổi.
+#   bin           — tên/đường dẫn binary (PATH-resolved)
+#   prompt_mode   — "stdin" (an toàn, tránh escaping) | "arg" (nối prompt cuối)
+#   base_args     — args luôn kèm theo (chế độ headless/print)
+#   model_flag    — cờ chọn model (None nếu CLI không hỗ trợ)
+#   skip_perm     — args thêm khi bypass permission
+def _env_args(name: str, default: list[str]) -> list[str]:
+    raw = os.environ.get(name)
+    return json.loads(raw) if raw else default
+
+
+AI_AGENTS = {
+    "claude": {
+        "bin": os.environ.get("AGENT_CLAUDE_BIN", "claude"),
+        "prompt_mode": "stdin",
+        "base_args": _env_args("AGENT_CLAUDE_ARGS", ["-p", "--output-format", "text"]),
+        "model_flag": os.environ.get("AGENT_CLAUDE_MODEL_FLAG", "--model"),
+        "skip_perm": _env_args("AGENT_CLAUDE_SKIP_ARGS", ["--dangerously-skip-permissions"]),
+        # claude -p ghi thẳng stdout — không cần PTY.
+        "pty": os.environ.get("AGENT_CLAUDE_PTY", "0") == "1",
+    },
+    "antigravity": {
+        # Antigravity CLI = binary `agy`. Cú pháp giống Claude Code:
+        # `agy -p "<prompt>" [--model X] [--dangerously-skip-permissions]`.
+        # `-p` nhận prompt làm giá trị đi kèm → prompt_mode "arg" (nối ngay sau).
+        "bin": os.environ.get("AGENT_ANTIGRAVITY_BIN", "agy"),
+        "prompt_mode": os.environ.get("AGENT_ANTIGRAVITY_PROMPT_MODE", "arg"),
+        "base_args": _env_args("AGENT_ANTIGRAVITY_ARGS", ["-p"]),
+        "model_flag": os.environ.get("AGENT_ANTIGRAVITY_MODEL_FLAG", "--model") or None,
+        "skip_perm": _env_args("AGENT_ANTIGRAVITY_SKIP_ARGS", ["--dangerously-skip-permissions"]),
+        # agy là TUI — print mode chỉ render ra terminal, phải chạy dưới PTY.
+        "pty": os.environ.get("AGENT_ANTIGRAVITY_PTY", "1") == "1",
+    },
+}
+
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"
 with open(_MODELS_FILE) as _f:

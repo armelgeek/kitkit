@@ -85,6 +85,57 @@ curl -X POST http://127.0.0.1:8100/api/tts/synthesize \
   -H 'Content-Type: application/json' -d '{"text":"Xin chào","voice_id":0}'
 ```
 
+## AI Agent endpoints (`/api/agent/*`)
+
+Chạy các coding-agent CLI (Claude Code, Antigravity, ...) headless như subprocess
+để tự động hóa: viết script, sinh prompt, sửa file trong một thư mục làm việc.
+Agent chạy non-interactive, **mặc định bypass permission** (ghi file / chạy lệnh
+tự do) — chỉ expose trên `127.0.0.1`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET  | `/agents` | Liệt kê agent đã cấu hình + binary có sẵn trên máy hay không |
+| POST | `/run` | Chạy agent headless → `{ok, exit_code, stdout, stderr, duration}` |
+
+`POST /run` body:
+
+| Field | Default | Mô tả |
+|-------|---------|-------|
+| `agent` | — | Key trong registry (`claude`, `antigravity`) |
+| `prompt` | — | Nội dung giao cho agent |
+| `cwd` | thư mục hiện tại | Thư mục làm việc của agent |
+| `model` | CLI default | Override model key |
+| `timeout` | `AGENT_CLI_TIMEOUT` (600s) | Giới hạn thời gian; quá thì kill + 504 |
+| `extra_args` | `[]` | Cờ thêm truyền thẳng cho CLI |
+| `skip_permissions` | `AGENT_SKIP_PERMISSIONS` (true) | Override bypass permission |
+| `env` | `{}` | Biến môi trường thêm cho tiến trình |
+
+```bash
+# Xem agent nào đã cài
+curl -s http://127.0.0.1:8100/api/agent/agents
+
+# Giao việc cho Claude Code trong một thư mục
+curl -X POST http://127.0.0.1:8100/api/agent/run \
+  -H 'Content-Type: application/json' \
+  -d '{"agent":"claude","prompt":"Tóm tắt README.md trong 3 gạch đầu dòng","cwd":"D:/youtube/editor/flowkit"}'
+```
+
+Agent có sẵn: `claude` (Claude Code, prompt qua stdin) và `antigravity` (binary
+`agy`, cú pháp `agy -p "<prompt>" --model X --dangerously-skip-permissions`). Cả
+hai CLI phải được **đăng nhập sẵn** trên máy chạy server — nếu chưa auth, agent
+sẽ treo cho tới khi timeout (504).
+
+Antigravity (`agy`) là một ứng dụng **TUI**: ở print mode nó chỉ render ra terminal
+thật, nên khi bị pipe stdout sẽ rỗng. Server tự chạy `agy` dưới một **PTY giả**
+(ConPTY qua `pywinpty` trên Windows, module `pty` trên POSIX) rồi strip ANSI để
+trả về plain text — bật/tắt qua cờ `pty` trong registry. Cài `pywinpty` (đã có
+trong `requirements.txt`) để dùng được agent này trên Windows.
+
+Registry agent + cờ mặc định nằm ở [`agent/config.py`](agent/config.py) (`AI_AGENTS`),
+override được hết qua env (`AGENT_CLAUDE_BIN`, `AGENT_ANTIGRAVITY_BIN`,
+`AGENT_ANTIGRAVITY_ARGS`, `AGENT_CLI_TIMEOUT`, `AGENT_SKIP_PERMISSIONS`, ...) nếu
+binary/cờ của CLI thay đổi.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
