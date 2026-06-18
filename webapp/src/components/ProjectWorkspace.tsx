@@ -3,6 +3,7 @@ import { api, type Project } from "../api/client";
 import ScriptTab from "./script/ScriptTab";
 import AssetsTab from "./assets/AssetsTab";
 import StoryboardTab from "./storyboard/StoryboardTab";
+import ShotsTab from "./shots/ShotsTab";
 
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble"] as const;
 type Tab = (typeof TABS)[number];
@@ -79,6 +80,8 @@ export default function ProjectWorkspace({
           <AssetsTab key={project.id} project={project} />
         ) : tab === "Storyboard" ? (
           <StoryboardTab key={project.id} project={project} />
+        ) : tab === "Shots" ? (
+          <ShotsTab key={project.id} project={project} />
         ) : (
           <Placeholder tab={tab} project={project} />
         )}

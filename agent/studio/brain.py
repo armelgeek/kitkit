@@ -193,6 +193,18 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
     )
 
 
+def shot_prompts_prompt(description: str, style: str) -> str:
+    return (
+        "For this storyboard frame, write two prompts for an image-to-video model:\n"
+        "- `visual_prompt`: what is on screen (subject, composition, lighting).\n"
+        "- `motion_prompt`: the camera move + the action that happens during the clip "
+        "(concrete, e.g. 'the fox steps onto the ice, camera slowly pushes in').\n"
+        f"Visual style: {style}.\n\n"
+        f"FRAME: {description}\n\n"
+        "Return ONLY JSON: {\"visual_prompt\":\"...\",\"motion_prompt\":\"...\"}"
+    )
+
+
 def edit_script_prompt(script: str, instruction: str, style: str) -> str:
     return (
         "You are editing a FOUNTAIN screenplay. Apply the user's instruction and return "

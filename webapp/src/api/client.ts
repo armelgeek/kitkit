@@ -148,6 +148,14 @@ export const storyboard = {
     req<any>(`/projects/${pid}/storyboard/generate-all`, { method: "POST" }),
 };
 
+export const shots = {
+  genPrompts: (sid: string) => req<Shot>(`/shots/${sid}/prompts`, { method: "POST" }),
+  genVideo: (sid: string) => req<Shot>(`/shots/${sid}/video`, { method: "POST" }),
+  upscale: (sid: string) => req<Shot>(`/shots/${sid}/upscale`, { method: "POST" }),
+  genAllVideos: (pid: string) =>
+    req<any>(`/projects/${pid}/shots/generate-all`, { method: "POST" }),
+};
+
 export interface Scene {
   id: string;
   idx: number;

@@ -77,6 +77,17 @@ async def ensure_local(media_id: str, project_id: str, ext: str = "png") -> str 
     return None
 
 
+async def save_from_url(media_id: str, project_id: str, ext: str, url: str) -> str | None:
+    """Download a known URL (e.g. video fifeUrl from poll) to the local cache."""
+    rel = Path(project_id) / f"{media_id}.{ext}"
+    dest = MEDIA_DIR / rel
+    if dest.exists() and dest.stat().st_size > 0:
+        return f"/media/{rel.as_posix()}"
+    if await _download(url, dest):
+        return f"/media/{rel.as_posix()}"
+    return None
+
+
 async def ensure_thumb(media_key: str) -> Path | None:
     """Ensure a cached thumbnail for a Flow media key; return local file path."""
     dest = THUMB_DIR / f"{media_key}.png"
