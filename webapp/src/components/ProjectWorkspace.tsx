@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Project } from "../api/client";
 import ScriptTab from "./script/ScriptTab";
+import AssetsTab from "./assets/AssetsTab";
 
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble"] as const;
 type Tab = (typeof TABS)[number];
@@ -73,6 +74,8 @@ export default function ProjectWorkspace({
       <div className="flex-1 overflow-hidden">
         {tab === "Script" ? (
           <ScriptTab key={project.id} project={project} />
+        ) : tab === "Assets" ? (
+          <AssetsTab key={project.id} project={project} />
         ) : (
           <Placeholder tab={tab} project={project} />
         )}

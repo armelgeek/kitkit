@@ -3,9 +3,10 @@
 Phase 0: project CRUD (DB + Flow), Flow project import with thumbnails, options,
 settings, health. Heavier pipeline endpoints land in later phases.
 """
+import asyncio
 import logging
+import random
 import shutil
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -59,6 +60,24 @@ class SaveScriptRequest(BaseModel):
 
 class ScriptChatRequest(BaseModel):
     instruction: str
+
+
+class AddEntityRequest(BaseModel):
+    type: str = "character"        # character | location | prop
+    name: str
+    description: str = ""
+    ref_prompt: str = ""
+
+
+class UpdateEntityRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    ref_prompt: Optional[str] = None
+    type: Optional[str] = None
+
+
+class SetMediaRequest(BaseModel):
+    media_id: str
 
 
 # ─── Helpers ─────────────────────────────────────────────────
@@ -318,6 +337,185 @@ async def script_chat(pid: str, body: ScriptChatRequest):
     await db.update("project", pid, {"script_raw": script, "updated_at": db.now()})
     scenes = await _save_scenes(pid, script)
     return {"script": script, "scenes": scenes}
+
+
+# ─── Assets (entities) ──────────────────────────────────────
+
+def _to_image_aspect(video_aspect: str) -> str:
+    return (video_aspect or "").replace("VIDEO_ASPECT_RATIO_", "IMAGE_ASPECT_RATIO_") \
+        or "IMAGE_ASPECT_RATIO_LANDSCAPE"
+
+
+async def _resolve_image_model(project: dict) -> Optional[str]:
+    name = project.get("image_model") or (await db.kv_get_all()).get("image_model")
+    if not name:
+        return None  # flow_client default (NANO_BANANA_PRO)
+    return IMAGE_MODELS.get(name, name)  # name → key, or already a key
+
+
+def _extract_image_result(payload: dict) -> dict:
+    media = (payload.get("media") or [{}])[0]
+    gen = media.get("image", {}).get("generatedImage", {})
+    wf = (payload.get("workflows") or [{}])[0]
+    return {
+        "media_id": gen.get("mediaId") or media.get("name"),
+        "workflow_id": wf.get("name"),
+        "primary_media_id": wf.get("metadata", {}).get("primaryMediaId"),
+    }
+
+
+async def _entity_or_404(eid: str) -> dict:
+    row = await db.query_one("SELECT * FROM entity WHERE id=?", (eid,))
+    if not row:
+        raise HTTPException(404, "Entity không tồn tại")
+    return row
+
+
+async def _store_media_on_entity(entity: dict, project: dict, info: dict, label: str):
+    """Rename on Flow + download local + persist media fields onto the entity."""
+    client = get_flow_client()
+    if info.get("workflow_id") and project.get("flow_project_id"):
+        try:
+            await client.change_display_name(
+                info["workflow_id"], project["flow_project_id"], label[:60])
+        except Exception:
+            pass
+    web = None
+    if info.get("media_id"):
+        web = await media_store.ensure_local(info["media_id"], project["id"])
+    await db.update("entity", entity["id"], {
+        "media_id": info.get("media_id"),
+        "primary_media_id": info.get("primary_media_id"),
+        "workflow_id": info.get("workflow_id"),
+        "image_path": web, "updated_at": db.now(),
+    })
+    return await _entity_or_404(entity["id"])
+
+
+async def _generate_entity_image(entity: dict, project: dict) -> dict:
+    client = _require_extension()
+    prompt = brain.ref_image_prompt(
+        entity["type"], entity["name"],
+        entity.get("description") or entity.get("ref_prompt") or "", project["style"])
+    aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop")
+              else _to_image_aspect(project["aspect_ratio"]))
+    model = await _resolve_image_model(project)
+    res = await client.generate_images(
+        prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
+        user_paygate_tier=project["paygate_tier"], image_model=model)
+    if res.get("error"):
+        raise HTTPException(502, str(res["error"]))
+    info = _extract_image_result(res.get("data", res))
+    if not info["media_id"]:
+        raise HTTPException(502, "Flow không trả media")
+    return await _store_media_on_entity(
+        entity, project, info, f"{entity['type']}_{entity['name']}")
+
+
+@router.get("/projects/{pid}/entities")
+async def list_entities(pid: str):
+    await _project_or_404(pid)
+    return {"entities": await db.query_all(
+        "SELECT * FROM entity WHERE project_id=? ORDER BY type, created_at", (pid,))}
+
+
+@router.post("/projects/{pid}/entities/extract")
+async def extract_entities(pid: str):
+    p = await _project_or_404(pid)
+    if not p.get("script_raw"):
+        raise HTTPException(400, "Chưa có kịch bản để trích entity")
+    items = await brain.run_json(brain.entity_extract_prompt(p["script_raw"]))
+    if not isinstance(items, list):
+        raise HTTPException(502, "AI không trả về danh sách entity")
+    # tránh trùng tên (đã có)
+    existing = {r["name"].lower() for r in await db.query_all(
+        "SELECT name FROM entity WHERE project_id=?", (pid,))}
+    ts = db.now()
+    added = 0
+    for it in items:
+        name = (it.get("name") or "").strip()
+        if not name or name.lower() in existing:
+            continue
+        await db.insert("entity", {
+            "id": db.new_id(), "project_id": pid,
+            "type": it.get("type", "character"), "name": name,
+            "description": it.get("description", ""),
+            "ref_prompt": it.get("ref_prompt", ""),
+            "created_at": ts, "updated_at": ts})
+        added += 1
+    return {"added": added, "entities": await db.query_all(
+        "SELECT * FROM entity WHERE project_id=? ORDER BY type, created_at", (pid,))}
+
+
+@router.post("/projects/{pid}/entities")
+async def add_entity(pid: str, body: AddEntityRequest):
+    await _project_or_404(pid)
+    ts = db.now()
+    eid = db.new_id()
+    await db.insert("entity", {
+        "id": eid, "project_id": pid, "type": body.type, "name": body.name,
+        "description": body.description, "ref_prompt": body.ref_prompt,
+        "created_at": ts, "updated_at": ts})
+    return await _entity_or_404(eid)
+
+
+@router.patch("/entities/{eid}")
+async def update_entity(eid: str, body: UpdateEntityRequest):
+    await _entity_or_404(eid)
+    data = body.model_dump(exclude_none=True)
+    data["updated_at"] = db.now()
+    await db.update("entity", eid, data)
+    return await _entity_or_404(eid)
+
+
+@router.delete("/entities/{eid}")
+async def delete_entity(eid: str):
+    row = await _entity_or_404(eid)
+    await db.delete("entity", eid)
+    if row.get("image_path"):
+        f = media_store.MEDIA_DIR / row["image_path"].replace("/media/", "", 1)
+        if f.exists():
+            f.unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@router.post("/entities/{eid}/generate")
+async def generate_entity(eid: str):
+    entity = await _entity_or_404(eid)
+    project = await _project_or_404(entity["project_id"])
+    return await _generate_entity_image(entity, project)
+
+
+@router.put("/entities/{eid}/image")
+async def set_entity_image(eid: str, body: SetMediaRequest):
+    """Gán ảnh chính từ media_id có sẵn (xác thực tồn tại trên Flow → tải local)."""
+    entity = await _entity_or_404(eid)
+    project = await _project_or_404(entity["project_id"])
+    web = await media_store.ensure_local(body.media_id, project["id"])
+    if not web:
+        raise HTTPException(404, "media_id không hợp lệ hoặc không tồn tại trên Flow")
+    await db.update("entity", eid, {
+        "media_id": body.media_id, "primary_media_id": body.media_id,
+        "image_path": web, "updated_at": db.now()})
+    return await _entity_or_404(eid)
+
+
+@router.post("/projects/{pid}/assets/generate-all")
+async def generate_all_assets(pid: str, force: bool = False):
+    """✦ Auto gen: sinh ảnh cho asset CHƯA có ảnh (idempotent). Tuần tự + throttle."""
+    project = await _project_or_404(pid)
+    rows = await db.query_all("SELECT * FROM entity WHERE project_id=?", (pid,))
+    todo = [e for e in rows if force or not e.get("image_path")]
+    done, errors = 0, []
+    for i, e in enumerate(todo):
+        try:
+            await _generate_entity_image(e, project)
+            done += 1
+        except Exception as ex:
+            errors.append({"entity": e["name"], "error": str(ex)[:200]})
+        if i < len(todo) - 1:
+            await asyncio.sleep(random.uniform(2, 6))  # rate-limit
+    return {"requested": len(todo), "done": done, "errors": errors}
 
 
 # ─── Thumbnail / media resolve ──────────────────────────────

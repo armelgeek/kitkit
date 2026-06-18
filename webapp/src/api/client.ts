@@ -79,7 +79,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ instruction }),
     }),
+
+  listEntities: (id: string) => req<{ entities: Entity[] }>(`/projects/${id}/entities`),
+  extractEntities: (id: string) =>
+    req<{ added: number; entities: Entity[] }>(`/projects/${id}/entities/extract`, {
+      method: "POST",
+    }),
+  addEntity: (id: string, body: Partial<Entity>) =>
+    req<Entity>(`/projects/${id}/entities`, { method: "POST", body: JSON.stringify(body) }),
+  updateEntity: (eid: string, body: Partial<Entity>) =>
+    req<Entity>(`/entities/${eid}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteEntity: (eid: string) =>
+    req<{ ok: boolean }>(`/entities/${eid}`, { method: "DELETE" }),
+  generateEntity: (eid: string) =>
+    req<Entity>(`/entities/${eid}/generate`, { method: "POST" }),
+  setEntityImage: (eid: string, media_id: string) =>
+    req<Entity>(`/entities/${eid}/image`, { method: "PUT", body: JSON.stringify({ media_id }) }),
+  generateAllAssets: (id: string) =>
+    req<{ requested: number; done: number; errors: any[] }>(
+      `/projects/${id}/assets/generate-all`,
+      { method: "POST" }
+    ),
 };
+
+export interface Entity {
+  id: string;
+  project_id: string;
+  type: "character" | "location" | "prop";
+  name: string;
+  description: string | null;
+  ref_prompt: string | null;
+  media_id: string | null;
+  image_path: string | null;
+}
 
 export interface Scene {
   id: string;

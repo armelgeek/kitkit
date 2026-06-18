@@ -138,6 +138,40 @@ def script_from_idea_prompt(idea: str, target_duration: int | None,
     )
 
 
+def entity_extract_prompt(script: str) -> str:
+    return (
+        "Extract every distinct ENTITY from this screenplay for an asset library.\n"
+        "Three types: 'character' (people/animals), 'location' (places), 'prop' (key objects).\n"
+        "For each, write a concise visual `description` and a `ref_prompt` (a vivid image "
+        "prompt to generate its reference art).\n\n"
+        f"SCREENPLAY:\n{script}\n\n"
+        "Return ONLY JSON array: "
+        "[{\"type\":\"character|location|prop\",\"name\":\"...\",\"description\":\"...\","
+        "\"ref_prompt\":\"...\"}]"
+    )
+
+
+# Per-type reference-image prompt rules (video-app.md §2.2) — clean refs.
+_SHEET = {
+    "character": ("character design sheet, multiple turnaround views (front, 3/4, side, "
+                  "back), neutral A-pose, neutral expression, plain solid white background, "
+                  "no scene, no props, no ground shadow, studio reference"),
+    "prop": ("object design sheet, multiple angles (front, 3/4, side, top), single isolated "
+             "object on plain solid white background, no background scene, no shadow, "
+             "studio product reference"),
+}
+
+
+def ref_image_prompt(entity_type: str, name: str, description: str, style: str) -> str:
+    """Build the generate-image prompt for an entity's reference art."""
+    base = (description or name).strip()
+    rule = _SHEET.get(entity_type)
+    if rule:  # character / prop → design sheet, white bg
+        return f"{name}: {base}. {rule}. Art style: {style}."
+    # location → establishing shot, keep background
+    return f"Establishing shot of {name}: {base}. {style}, cinematic, no people."
+
+
 def edit_script_prompt(script: str, instruction: str, style: str) -> str:
     return (
         "You are editing a FOUNTAIN screenplay. Apply the user's instruction and return "
