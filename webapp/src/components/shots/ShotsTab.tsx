@@ -157,7 +157,11 @@ export default function ShotsTab({
                               goal: "video",
                               id: sh.id,
                               title: sh.title,
-                              prompt: sh.motion_prompt || sh.visual_prompt || sh.description || sh.title,
+                              // Video prompt = motion (the action) + visual context for the i2v model.
+                              prompt:
+                                [sh.motion_prompt, sh.visual_prompt].filter(Boolean).join("\n\n") ||
+                                sh.description ||
+                                sh.title,
                               refEntityIds: parseRefs(sh.ref_entity_ids),
                               imageMediaId: sh.image_media_id,
                               imageSrc: sh.image_path,
