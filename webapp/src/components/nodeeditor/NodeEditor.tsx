@@ -1,90 +1,331 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
+  Handle,
+  Position,
   addEdge,
   useNodesState,
   useEdgesState,
   type Node,
   type Edge,
   type Connection,
+  type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { graphApi, type Entity } from "../../api/client";
+import { api, graphApi, type Entity } from "../../api/client";
 
 export interface EditorTarget {
   kind: "shot" | "entity";
   id: string;
   title: string;
-  // Seed data so the editor opens with the current prompt / references / media
-  // already filled in (instead of empty nodes).
   prompt?: string | null;
   refEntityIds?: string[];
   imageSrc?: string | null;
   videoSrc?: string | null;
 }
 
-const PALETTE: { type: string; label: string }[] = [
-  { type: "prompt", label: "Prompt" },
-  { type: "refs", label: "References" },
-  { type: "image", label: "Generate Image" },
-  { type: "editImage", label: "Edit Image" },
-  { type: "video", label: "Generate Video" },
-  { type: "output", label: "Output" },
-];
-
-const COLOR: Record<string, string> = {
-  prompt: "#6366f1", refs: "#0ea5e9", image: "#10b981",
-  editImage: "#f59e0b", video: "#ec4899", output: "#64748b",
+// ─── Node type metadata (icon / label / accent color) ───────
+const META: Record<string, { label: string; icon: string; color: string }> = {
+  source: { label: "Nguồn ảnh", icon: "🖼", color: "#f59e0b" },
+  prompt: { label: "Prompt đầu vào", icon: "≣", color: "#3b82f6" },
+  refs: { label: "References", icon: "🔗", color: "#0ea5e9" },
+  image: { label: "Tạo ảnh AI", icon: "🎨", color: "#a855f7" },
+  editImage: { label: "Sửa ảnh AI", icon: "🖌", color: "#f59e0b" },
+  video: { label: "Tạo video AI", icon: "🎬", color: "#a855f7" },
+  output: { label: "Output", icon: "📤", color: "#64748b" },
 };
 
+const PALETTE = ["source", "prompt", "refs", "image", "video", "editImage", "output"];
+
+const prettyModel = (m: string) =>
+  m.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Shared state for custom nodes (update fn + lookups). Avoids prop drilling into
+// React Flow's nodeTypes (which must be stable module-level components).
+const NodeOps = createContext<{
+  update: (id: string, patch: any) => void;
+  entities: Entity[];
+  imageModels: string[];
+}>({ update: () => {}, entities: [], imageModels: [] });
+
+const handleStyle = (color: string) => ({
+  width: 9,
+  height: 9,
+  background: color,
+  border: "2px solid #0e1411",
+});
+
+function Shell({
+  type,
+  children,
+  inputs = true,
+  outputs = true,
+}: {
+  type: string;
+  children: React.ReactNode;
+  inputs?: boolean;
+  outputs?: boolean;
+}) {
+  const m = META[type] || META.output;
+  return (
+    <div
+      className="w-[228px] overflow-hidden rounded-xl border border-neutral-700/80 bg-[#0e1411] shadow-xl"
+      style={{ borderTopColor: m.color, borderTopWidth: 3 }}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
+        <span style={{ color: m.color }}>{m.icon}</span>
+        {m.label}
+      </div>
+      <div className="space-y-2 px-3 pb-3">{children}</div>
+      {inputs && <Handle type="target" position={Position.Left} style={handleStyle(m.color)} />}
+      {outputs && <Handle type="source" position={Position.Right} style={handleStyle(m.color)} />}
+    </div>
+  );
+}
+
+const fieldCls =
+  "nodrag w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-[11px] text-neutral-200 outline-none focus:border-indigo-500";
+
+function Preview({ src, video, label }: { src?: string; video?: boolean; label: string }) {
+  if (!src)
+    return (
+      <div className="grid aspect-video w-full place-items-center rounded-md bg-neutral-800/70 text-[11px] text-neutral-500">
+        {label}
+      </div>
+    );
+  return video ? (
+    <video key={src} src={src} controls className="aspect-video w-full rounded-md bg-black object-cover" />
+  ) : (
+    <img key={src} src={src} className="aspect-video w-full rounded-md object-cover" />
+  );
+}
+
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix?: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-0.5 flex justify-between text-[10px] uppercase tracking-wide text-neutral-500">
+        <span>{label}</span>
+        <span className="text-neutral-300">{value}{suffix}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="nodrag h-1 w-full cursor-pointer accent-indigo-500"
+      />
+    </div>
+  );
+}
+
+// ─── Node components ────────────────────────────────────────
+function SourceNode({ id, data }: NodeProps) {
+  const { update } = useContext(NodeOps);
+  const d = data as any;
+  return (
+    <Shell type="source" inputs={false}>
+      <Preview src={d.web} label="Nguồn ảnh" />
+      <input
+        className={fieldCls}
+        placeholder="media_id (tuỳ chọn)"
+        defaultValue={d.media_id || ""}
+        onBlur={(e) => update(id, { media_id: e.target.value.trim() })}
+      />
+    </Shell>
+  );
+}
+
+function PromptNode({ id, data }: NodeProps) {
+  const { update } = useContext(NodeOps);
+  const d = data as any;
+  return (
+    <Shell type="prompt" inputs={false}>
+      <textarea
+        className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
+        value={d.text || ""}
+        placeholder="Nhập prompt…"
+        onChange={(e) => update(id, { text: e.target.value })}
+      />
+      <div className="text-[10px] text-neutral-500">ⓘ viết prompt chi tiết để AI hiểu rõ hơn</div>
+    </Shell>
+  );
+}
+
+function RefsNode({ id, data }: NodeProps) {
+  const { update, entities } = useContext(NodeOps);
+  const ids: string[] = (data as any).entity_ids || [];
+  const toggle = (eid: string) =>
+    update(id, {
+      entity_ids: ids.includes(eid) ? ids.filter((x) => x !== eid) : [...ids, eid],
+    });
+  return (
+    <Shell type="refs" inputs={false}>
+      <div className="nodrag nowheel max-h-36 space-y-0.5 overflow-auto">
+        {entities.length === 0 && <p className="text-[11px] text-neutral-600">Chưa có asset.</p>}
+        {entities.map((e) => (
+          <label key={e.id} className="flex items-center gap-1.5 rounded px-1 py-0.5 text-[11px] hover:bg-neutral-800">
+            <input type="checkbox" checked={ids.includes(e.id)} onChange={() => toggle(e.id)} className="h-3 w-3 accent-indigo-500" />
+            <span className={`h-1.5 w-1.5 rounded-full ${e.media_id ? "bg-emerald-400" : "bg-neutral-600"}`} />
+            <span className="truncate text-neutral-300">{e.name}</span>
+          </label>
+        ))}
+      </div>
+    </Shell>
+  );
+}
+
+function AspectModelRow({
+  id,
+  data,
+  models,
+  videoModels,
+}: {
+  id: string;
+  data: any;
+  models?: string[];
+  videoModels?: boolean;
+}) {
+  const { update } = useContext(NodeOps);
+  const aspects = videoModels ? ["16:9", "9:16"] : ["16:9", "9:16", "1:1"];
+  return (
+    <div className="flex gap-2">
+      <label className="flex-1">
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Tỷ lệ</div>
+        <select className={fieldCls} value={data.aspect || "16:9"} onChange={(e) => update(id, { aspect: e.target.value })}>
+          {aspects.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </label>
+      <label className="flex-1">
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Model</div>
+        {videoModels ? (
+          <select className={fieldCls} value={data.model || "omni"} onChange={(e) => update(id, { model: e.target.value })}>
+            <option value="omni">Omni Flash</option>
+            <option value="veo">Veo i2v</option>
+          </select>
+        ) : (
+          <select className={fieldCls} value={data.model || ""} onChange={(e) => update(id, { model: e.target.value })}>
+            <option value="">Mặc định</option>
+            {(models || []).map((m) => <option key={m} value={m}>{prettyModel(m)}</option>)}
+          </select>
+        )}
+      </label>
+    </div>
+  );
+}
+
+function ImageNode({ id, data, type }: NodeProps) {
+  const { update, imageModels } = useContext(NodeOps);
+  const d = data as any;
+  return (
+    <Shell type={type || "image"}>
+      <Preview src={d._result || d.preview} label="Kết quả ảnh" />
+      <AspectModelRow id={id} data={d} models={imageModels} />
+      <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
+    </Shell>
+  );
+}
+
+function VideoNode({ id, data }: NodeProps) {
+  const { update } = useContext(NodeOps);
+  const d = data as any;
+  const isOmni = (d.model || "omni") === "omni";
+  return (
+    <Shell type="video">
+      <Preview src={d._result} video label="Kết quả video" />
+      <AspectModelRow id={id} data={d} videoModels />
+      <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
+      {isOmni && (
+        <Slider label="Thời lượng" value={d.duration || 8} min={4} max={10} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
+      )}
+    </Shell>
+  );
+}
+
+function OutputNode({ data }: NodeProps) {
+  const d = data as any;
+  return (
+    <Shell type="output" outputs={false}>
+      <Preview src={d._result} video={d._ext === "mp4"} label="Output cuối" />
+    </Shell>
+  );
+}
+
+const NODE_TYPES = {
+  source: SourceNode,
+  prompt: PromptNode,
+  refs: RefsNode,
+  image: ImageNode,
+  editImage: ImageNode,
+  video: VideoNode,
+  output: OutputNode,
+};
+
+// ─── Default graphs ─────────────────────────────────────────
 function defaultGraph(kind: string, seed?: EditorTarget): { nodes: Node[]; edges: Edge[] } {
   const mk = (id: string, type: string, x: number, y: number, data: any = {}): Node => ({
-    id, position: { x, y }, data: { ...data, _type: type, label: type },
-    style: nodeStyle(type),
+    id,
+    type,
+    position: { x, y },
+    data: { ...data, _type: type },
   });
-  const promptText = seed?.prompt ?? "";
+  const prompt = seed?.prompt ?? "";
   const refIds = seed?.refEntityIds ?? [];
   if (kind === "shot") {
     return {
       nodes: [
-        mk("p", "prompt", 0, 0, { text: promptText }),
-        mk("r", "refs", 0, 150, { entity_ids: refIds }),
-        mk("v", "video", 260, 40, { text: "" }),
-        mk("o", "output", 500, 40),
+        mk("src", "source", 0, 0, { media_id: "", web: seed?.imageSrc || "" }),
+        mk("p", "prompt", 0, 230, { text: prompt }),
+        mk("v", "video", 320, 60, { model: "omni", aspect: "16:9", duration: 8, count: 1, _result: seed?.videoSrc || "" }),
       ],
       edges: [
-        { id: "e1", source: "p", target: "v" },
-        { id: "e2", source: "r", target: "v" },
-        { id: "e3", source: "v", target: "o" },
+        { id: "e1", source: "src", target: "v" },
+        { id: "e2", source: "p", target: "v" },
       ],
     };
   }
   return {
     nodes: [
-      mk("p", "prompt", 0, 0, { text: promptText }),
-      mk("r", "refs", 0, 120, { entity_ids: refIds }),
-      mk("i", "image", 260, 40),
-      mk("o", "output", 500, 40),
+      mk("p", "prompt", 0, 0, { text: prompt }),
+      mk("r", "refs", 0, 230, { entity_ids: refIds }),
+      mk("i", "image", 320, 60, { aspect: "16:9", model: "", count: 1, _result: seed?.imageSrc || "" }),
     ],
     edges: [
       { id: "e1", source: "p", target: "i" },
       { id: "e2", source: "r", target: "i" },
-      { id: "e3", source: "i", target: "o" },
     ],
   };
 }
 
-function nodeStyle(type: string) {
-  return {
-    background: "#18181b", color: "#e7e7ea",
-    border: `1px solid ${COLOR[type] || "#444"}`, borderRadius: 10,
-    padding: "8px 12px", fontSize: 12, width: 160,
-  };
-}
-
-export default function NodeEditor({
+// ─── Editor ─────────────────────────────────────────────────
+function Editor({
   target,
   entities,
   onClose,
@@ -97,26 +338,41 @@ export default function NodeEditor({
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [selId, setSelId] = useState<string | null>(null);
+  const [imageModels, setImageModels] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const update = useCallback(
+    (id: string, patch: any) =>
+      setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n))),
+    [setNodes]
+  );
+
   useEffect(() => {
-    graphApi.get(target.kind, target.id).then((r) => {
-      const g = r.graph && r.graph.nodes?.length ? r.graph : defaultGraph(target.kind, target);
-      // re-apply styles + labels
-      g.nodes = g.nodes.map((n: any) => ({
-        ...n,
-        data: { ...n.data, label: n.data?._type || n.type, _type: n.data?._type || n.type },
-        style: nodeStyle(n.data?._type || n.type),
-      }));
-      setNodes(g.nodes);
-      setEdges(g.edges || []);
-    }).catch(() => {
-      const g = defaultGraph(target.kind, target);
-      setNodes(g.nodes);
-      setEdges(g.edges);
-    });
+    api.options().then((o) => setImageModels(o.image_models || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    graphApi
+      .get(target.kind, target.id)
+      .then((r) => {
+        const g = r.graph && r.graph.nodes?.length ? r.graph : defaultGraph(target.kind, target);
+        setNodes(
+          g.nodes.map((n: any) => ({
+            id: n.id,
+            type: n.type || n.data?._type || "prompt",
+            position: n.position || { x: 0, y: 0 },
+            data: { ...n.data, _type: n.type || n.data?._type },
+          }))
+        );
+        setEdges((g.edges || []).map((e: any, i: number) => ({ id: e.id || `e${i}`, source: e.source, target: e.target })));
+      })
+      .catch(() => {
+        const g = defaultGraph(target.kind, target);
+        setNodes(g.nodes);
+        setEdges(g.edges);
+      });
   }, [target.id]);
 
   const onConnect = useCallback(
@@ -126,38 +382,39 @@ export default function NodeEditor({
 
   const addNode = (type: string) => {
     const id = `${type}-${Date.now()}`;
+    const base: any = { _type: type };
+    if (type === "prompt") base.text = "";
+    if (type === "refs") base.entity_ids = [];
+    if (type === "image" || type === "editImage") Object.assign(base, { aspect: "16:9", model: "", count: 1 });
+    if (type === "video") Object.assign(base, { aspect: "16:9", model: "omni", duration: 8, count: 1 });
     setNodes((ns) => [
       ...ns,
-      {
-        id, position: { x: 60 + Math.random() * 120, y: 60 + Math.random() * 160 },
-        data: { _type: type, label: type, ...(type === "prompt" ? { text: "" } : {}),
-                ...(type === "refs" ? { entity_ids: [] } : {}) },
-        style: nodeStyle(type),
-      },
+      { id, type, position: { x: 80 + Math.random() * 160, y: 80 + Math.random() * 200 }, data: base },
     ]);
   };
 
-  // serialize graph for API: type at top level + data
   const serialize = () => ({
-    nodes: nodes.map((n) => ({
-      id: n.id, type: (n.data as any)._type,
-      data: n.data, position: n.position,
-    })),
+    nodes: nodes.map((n) => {
+      const { _result, ...rest } = n.data as any; // drop transient preview
+      return { id: n.id, type: n.type, data: rest, position: n.position };
+    }),
     edges: edges.map((e) => ({ source: e.source, target: e.target })),
   });
 
-  const updateSel = (patch: any) =>
-    setNodes((ns) =>
-      ns.map((n) => (n.id === selId ? { ...n, data: { ...n.data, ...patch } } : n))
-    );
+  const save = () => graphApi.save(target.kind, target.id, serialize());
 
   const run = async () => {
     setBusy(true);
     setErr(null);
+    setDone(false);
     try {
       const r = await graphApi.run(target.kind, target.id, serialize());
+      const outs = (r.node_outputs || {}) as Record<string, string>;
+      setNodes((ns) =>
+        ns.map((n) => (outs[n.id] ? { ...n, data: { ...n.data, _result: outs[n.id] } } : n))
+      );
+      setDone(true);
       onApplied(r);
-      onClose();
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -165,12 +422,7 @@ export default function NodeEditor({
     }
   };
 
-  const save = async () => {
-    await graphApi.save(target.kind, target.id, serialize());
-  };
-
-  const sel = nodes.find((n) => n.id === selId);
-  const selType = sel ? (sel.data as any)._type : null;
+  const ops = useMemo(() => ({ update, entities, imageModels }), [update, entities, imageModels]);
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-neutral-950">
@@ -179,20 +431,25 @@ export default function NodeEditor({
         <div className="ml-2 flex flex-wrap gap-1">
           {PALETTE.map((p) => (
             <button
-              key={p.type}
-              onClick={() => addNode(p.type)}
+              key={p}
+              onClick={() => addNode(p)}
               className="rounded-md border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800"
+              style={{ borderLeftColor: META[p].color, borderLeftWidth: 3 }}
             >
-              + {p.label}
+              + {META[p].label}
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
+          {done && <span className="text-xs text-emerald-400">✓ Đã tạo & áp dụng</span>}
           <button onClick={save} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm hover:bg-neutral-800">
             Lưu
           </button>
-          <button onClick={run} disabled={busy}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+          <button
+            onClick={run}
+            disabled={busy}
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+          >
             {busy ? "Đang chạy…" : "▶ Run"}
           </button>
           <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800">
@@ -201,92 +458,38 @@ export default function NodeEditor({
         </div>
       </div>
       {err && <div className="bg-rose-950/50 px-4 py-1.5 text-sm text-rose-300">{err}</div>}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex-1">
-          {(target.videoSrc || target.imageSrc) && (
-            <div className="absolute left-3 top-3 z-10 w-44 overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900/90 shadow-xl backdrop-blur">
-              <div className="px-2 py-1 text-[11px] text-neutral-400">Ảnh/video hiện tại</div>
-              {target.videoSrc ? (
-                <video src={target.videoSrc} controls className="aspect-video w-full bg-black" />
-              ) : (
-                <img src={target.imageSrc!} className="aspect-video w-full object-cover" />
-              )}
-            </div>
-          )}
+      <div className="flex-1">
+        <NodeOps.Provider value={ops}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            nodeTypes={NODE_TYPES}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onNodeClick={(_, n) => setSelId(n.id)}
             fitView
+            minZoom={0.3}
             colorMode="dark"
+            proOptions={{ hideAttribution: true }}
           >
-            <Background />
+            <Background gap={20} color="#1f2937" />
             <Controls />
           </ReactFlow>
-        </div>
-        {sel && (
-          <aside className="w-72 shrink-0 overflow-auto border-l border-neutral-800 p-4">
-            <div className="mb-3 text-sm font-medium capitalize">{selType}</div>
-            {selType === "prompt" && (
-              <textarea
-                value={(sel.data as any).text || ""}
-                onChange={(e) => updateSel({ text: e.target.value })}
-                placeholder="Nội dung prompt (dùng {Tên} để gắn ref)"
-                className="h-40 w-full resize-none rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-sm outline-none focus:border-indigo-500"
-              />
-            )}
-            {selType === "refs" && (
-              <div className="space-y-1">
-                {entities.map((e) => {
-                  const ids: string[] = (sel.data as any).entity_ids || [];
-                  return (
-                    <label key={e.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-neutral-800">
-                      <input
-                        type="checkbox"
-                        checked={ids.includes(e.id)}
-                        onChange={() =>
-                          updateSel({
-                            entity_ids: ids.includes(e.id)
-                              ? ids.filter((x) => x !== e.id)
-                              : [...ids, e.id],
-                          })
-                        }
-                        className="h-3.5 w-3.5 accent-indigo-500"
-                      />
-                      <span className={`h-1.5 w-1.5 rounded-full ${e.media_id ? "bg-emerald-400" : "bg-neutral-600"}`} />
-                      <span className="truncate text-neutral-300">{e.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            {(selType === "video" || selType === "editImage" || selType === "image") && (
-              <textarea
-                value={(sel.data as any).text || ""}
-                onChange={(e) => updateSel({ text: e.target.value })}
-                placeholder="Prompt (nếu không nối từ node Prompt)"
-                className="h-28 w-full resize-none rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-sm outline-none focus:border-indigo-500"
-              />
-            )}
-            {selType === "output" && (
-              <p className="text-xs text-neutral-500">Gán media cuối vào {target.kind}.</p>
-            )}
-            <button
-              onClick={() => {
-                setNodes((ns) => ns.filter((n) => n.id !== selId));
-                setEdges((es) => es.filter((e) => e.source !== selId && e.target !== selId));
-                setSelId(null);
-              }}
-              className="mt-4 w-full rounded-lg border border-rose-900 py-1.5 text-xs text-rose-400 hover:bg-rose-950/40"
-            >
-              Xóa node
-            </button>
-          </aside>
-        )}
+        </NodeOps.Provider>
       </div>
     </div>
+  );
+}
+
+export default function NodeEditor(props: {
+  target: EditorTarget;
+  entities: Entity[];
+  onClose: () => void;
+  onApplied: (r: any) => void;
+}) {
+  return (
+    <ReactFlowProvider>
+      <Editor {...props} />
+    </ReactFlowProvider>
   );
 }

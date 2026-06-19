@@ -7,7 +7,6 @@ upstream nodes. The Output node applies the final media to the target shot/entit
 Self-contained (calls flow_client/media_store directly) to avoid importing the router.
 """
 import asyncio
-import json
 import logging
 import time as _t
 
@@ -49,14 +48,34 @@ def _upstream_ids(node_id: str, edges: list[dict]) -> list[str]:
     return [e["source"] for e in edges if e.get("target") == node_id]
 
 
-def _img_model(project: dict) -> str | None:
-    name = project.get("image_model")
+from agent.config import OMNI_FLASH_MODELS
+
+# Friendly aspect tokens used by the node UI → Flow enums.
+_IMG_ASPECT = {"16:9": "IMAGE_ASPECT_RATIO_LANDSCAPE",
+               "9:16": "IMAGE_ASPECT_RATIO_PORTRAIT",
+               "1:1": "IMAGE_ASPECT_RATIO_SQUARE"}
+_VID_ASPECT = {"16:9": "VIDEO_ASPECT_RATIO_LANDSCAPE",
+               "9:16": "VIDEO_ASPECT_RATIO_PORTRAIT"}
+
+
+def _img_model(project: dict, data: dict | None = None) -> str | None:
+    name = (data or {}).get("model") or project.get("image_model")
     return IMAGE_MODELS.get(name, name) if name else None
 
 
-def _img_aspect(project: dict) -> str:
+def _img_aspect(project: dict, data: dict | None = None) -> str:
+    a = (data or {}).get("aspect")
+    if a in _IMG_ASPECT:
+        return _IMG_ASPECT[a]
     return (project.get("aspect_ratio") or "").replace(
         "VIDEO_ASPECT_RATIO_", "IMAGE_ASPECT_RATIO_") or "IMAGE_ASPECT_RATIO_LANDSCAPE"
+
+
+def _vid_aspect(project: dict, data: dict | None = None) -> str:
+    a = (data or {}).get("aspect")
+    if a in _VID_ASPECT:
+        return _VID_ASPECT[a]
+    return project.get("aspect_ratio") or "VIDEO_ASPECT_RATIO_LANDSCAPE"
 
 
 async def _poll_video(client, media_id, scene_key, timeout=240, interval=8):
@@ -90,17 +109,29 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
     final = None
 
     def merged_inputs(nid):
-        merged = {"text": None, "references": [], "media_id": None, "ext": "png"}
+        """Collect upstream text, reference images (refs + any source/generated media),
+        and the single best start image for i2v."""
+        text = None
+        refs: list[dict] = []
+        start = None
+        start_ext = "png"
         for up in _upstream_ids(nid, edges):
             o = outputs.get(up, {})
             if o.get("text"):
-                merged["text"] = o["text"]
-            if o.get("references"):
-                merged["references"] = o["references"]
+                text = o["text"]
+            for r in o.get("references", []):
+                refs.append(r)
             if o.get("media_id"):
-                merged["media_id"] = o["media_id"]
-                merged["ext"] = o.get("ext", "png")
-        return merged
+                refs.append({"handle": o.get("handle", "source"), "media_id": o["media_id"]})
+                if o.get("ext", "png") != "mp4":   # only images can be a start frame
+                    start = o["media_id"]
+                    start_ext = o.get("ext", "png")
+        seen, uniq = set(), []
+        for r in refs:
+            if r.get("media_id") and r["media_id"] not in seen:
+                uniq.append(r)
+                seen.add(r["media_id"])
+        return {"text": text, "references": uniq[:10], "media_id": start, "ext": start_ext}
 
     for node in _topo_sort(nodes, edges):
         t = node.get("type")
@@ -110,6 +141,11 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
 
         if t == "prompt":
             outputs[nid] = {"text": data.get("text", "")}
+
+        elif t == "source":
+            mid = data.get("media_id")
+            web = data.get("web") or (await media_store.ensure_local(mid, pid) if mid else None)
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "source"}
 
         elif t == "refs":
             ids = data.get("entity_ids") or []
@@ -123,15 +159,15 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
             body = inp["text"] or data.get("text") or ""
             res = await client.generate_images(
                 prompt=brain.compose_prompt(project, body), project_id=flow_pid,
-                aspect_ratio=_img_aspect(project),
+                aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
-                references=inp["references"] or None, image_model=_img_model(project))
+                references=inp["references"] or None, image_model=_img_model(project, data))
             if res.get("error"):
                 raise GraphError(str(res["error"]))
             p = res.get("data", res)
             mid = (p.get("media") or [{}])[0].get("image", {}).get("generatedImage", {}).get("mediaId")
             web = await media_store.ensure_local(mid, pid) if mid else None
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
             final = outputs[nid]
 
         elif t == "editImage":
@@ -140,23 +176,37 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
                 raise GraphError("editImage cần ảnh nguồn")
             res = await client.edit_image(
                 inp["text"] or data.get("text") or "", src, flow_pid,
-                aspect_ratio=_img_aspect(project), user_paygate_tier=project["paygate_tier"])
+                aspect_ratio=_img_aspect(project, data), user_paygate_tier=project["paygate_tier"])
             if res.get("error"):
                 raise GraphError(str(res["error"]))
             p = res.get("data", res)
             mid = (p.get("media") or [{}])[0].get("image", {}).get("generatedImage", {}).get("mediaId")
             web = await media_store.ensure_local(mid, pid) if mid else None
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
             final = outputs[nid]
 
         elif t == "video":
-            src = inp["media_id"]
-            if not src:
-                raise GraphError("video cần ảnh start")
-            res = await client.generate_video(
-                start_image_media_id=src, prompt=inp["text"] or data.get("text") or "",
-                project_id=flow_pid, scene_id=target["id"],
-                aspect_ratio=project["aspect_ratio"], user_paygate_tier=project["paygate_tier"])
+            prompt = inp["text"] or data.get("text") or ""
+            aspect_v = _vid_aspect(project, data)
+            kind_v = (data.get("model") or "omni").lower()
+            if kind_v == "omni" or kind_v in OMNI_FLASH_MODELS.values():
+                ref_ids = [r["media_id"] for r in inp["references"]]
+                if not ref_ids and inp["media_id"]:
+                    ref_ids = [inp["media_id"]]
+                if not ref_ids:
+                    raise GraphError("Omni Flash cần ít nhất 1 ảnh tham chiếu/nguồn")
+                res = await client.generate_video_omni(
+                    prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,
+                    duration_s=int(data.get("duration") or 8), aspect_ratio=aspect_v,
+                    user_paygate_tier=project["paygate_tier"],
+                    references=inp["references"] or None)
+            else:   # Veo i2v — needs a start frame
+                if not inp["media_id"]:
+                    raise GraphError("Veo i2v cần ảnh start (nối từ Nguồn ảnh / Tạo ảnh)")
+                res = await client.generate_video(
+                    start_image_media_id=inp["media_id"], prompt=prompt,
+                    project_id=flow_pid, scene_id=target["id"],
+                    aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"])
             if res.get("error"):
                 raise GraphError(str(res["error"]))
             p = res.get("data", res)
@@ -165,7 +215,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
             if not url:
                 raise GraphError("Video timeout")
             web = await media_store.save_from_url(mid, pid, "mp4", url)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4", "handle": "video"}
             final = outputs[nid]
 
         elif t == "output":
@@ -177,6 +227,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
 
     if not final or not final.get("media_id"):
         raise GraphError("Đồ thị không tạo ra media nào")
+
+    node_outputs = {k: o.get("web") for k, o in outputs.items() if o.get("web")}
 
     # apply to target
     web = final.get("web") or await media_store.ensure_local(
@@ -190,4 +242,5 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
         await db.update("shot", target["id"], {
             f"{col}_media_id": final["media_id"], f"{col}_primary_id": final["media_id"],
             f"{col}_path": web, "updated_at": db.now()})
-    return {"media_id": final["media_id"], "path": web, "ext": final.get("ext", "png")}
+    return {"media_id": final["media_id"], "path": web, "ext": final.get("ext", "png"),
+            "node_outputs": node_outputs}
