@@ -25,6 +25,8 @@ router = APIRouter(prefix="/studio", tags=["studio"])
 
 # Google đôi khi chặn ảnh theo policy (không trả media) hoặc trả filtered → thử lại.
 IMAGE_GEN_RETRIES = 3
+# Video tốn thời gian (15–30s/lần) nên thử lại ít hơn.
+VIDEO_GEN_RETRIES = 2
 
 
 # ─── Models ──────────────────────────────────────────────────
@@ -1021,34 +1023,52 @@ async def _generate_shot_video(shot: dict) -> dict:
     if not shot.get("image_media_id"):
         raise HTTPException(400, "Shot chưa có ảnh frame — tạo ảnh ở Storyboard trước")
     motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
+    tier = await _current_tier()
     await db.update("shot", shot["id"], {"status": "running", "updated_at": db.now()})
-    res = await client.generate_video(
-        start_image_media_id=shot["image_media_id"], prompt=motion,
-        project_id=project["flow_project_id"], scene_id=shot["id"],
-        aspect_ratio=project["aspect_ratio"], user_paygate_tier=await _current_tier())
-    if res.get("error"):
-        await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
-        raise HTTPException(502, str(res["error"]))
-    info = _extract_video_submit(res.get("data", res))
-    op = {"operation": {"name": info["media_id"]}, "sceneId": shot["id"]}
-    await db.update("shot", shot["id"], {"operation_json": json.dumps(op)})
-    url = await _poll_video(client, op)
-    if not url:
-        await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
-        raise HTTPException(504, "Video chưa xong trong thời gian chờ — thử lại sau")
-    if info.get("workflow_id"):
-        try:
-            await client.change_display_name(
-                info["workflow_id"], project["flow_project_id"],
-                f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_vid")
-        except Exception:
-            pass
-    web = await media_store.save_from_url(info["media_id"], project["id"], "mp4", url)
-    await db.update("shot", shot["id"], {
-        "video_media_id": info["media_id"], "video_primary_id": info["primary_media_id"],
-        "video_workflow_id": info["workflow_id"], "video_path": web,
-        "status": "done", "updated_at": db.now()})
-    return await _shot_or_404(shot["id"])
+
+    last = ""
+    for attempt in range(VIDEO_GEN_RETRIES):
+        res = await client.generate_video(
+            start_image_media_id=shot["image_media_id"], prompt=motion,
+            project_id=project["flow_project_id"], scene_id=shot["id"],
+            aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier)
+        if res.get("error"):
+            last = str(res["error"])
+        else:
+            info = _extract_video_submit(res.get("data", res))
+            if not info.get("media_id"):
+                last = _image_block_reason(res.get("data", res)) or "Flow không trả media"
+            else:
+                op = {"operation": {"name": info["media_id"]}, "sceneId": shot["id"]}
+                await db.update("shot", shot["id"], {"operation_json": json.dumps(op)})
+                url = await _poll_video(client, op)
+                if not url:
+                    last = "video chưa xong trong thời gian chờ"
+                else:
+                    if info.get("workflow_id"):
+                        try:
+                            await client.change_display_name(
+                                info["workflow_id"], project["flow_project_id"],
+                                f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_vid")
+                        except Exception:
+                            pass
+                    web = await media_store.save_from_url(
+                        info["media_id"], project["id"], "mp4", url)
+                    if web:
+                        await db.update("shot", shot["id"], {
+                            "video_media_id": info["media_id"],
+                            "video_primary_id": info["primary_media_id"],
+                            "video_workflow_id": info["workflow_id"], "video_path": web,
+                            "status": "done", "updated_at": db.now()})
+                        return await _shot_or_404(shot["id"])
+                    last = "tải video về lỗi"
+        logger.warning("video shot %s hỏng (lần %d/%d): %s",
+                       shot["id"][:6], attempt + 1, VIDEO_GEN_RETRIES, last)
+        if attempt < VIDEO_GEN_RETRIES - 1:
+            await asyncio.sleep(random.uniform(5, 10))
+
+    await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
+    raise HTTPException(502, f"Tạo video thất bại sau {VIDEO_GEN_RETRIES} lần: {last}")
 
 
 @router.post("/shots/{sid}/prompts")

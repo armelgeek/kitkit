@@ -12,6 +12,8 @@ const parseRefs = (s: string | null): string[] => {
   }
 };
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 export default function ShotsTab({
   project,
   onEdit,
@@ -24,6 +26,7 @@ export default function ShotsTab({
   const [sel, setSel] = useState<Shot | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<Shot | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -55,33 +58,46 @@ export default function ShotsTab({
       return n;
     });
 
-  const genVideo = async (shot: Shot) => {
+  const genVideo = async (shot: Shot): Promise<boolean> => {
     if (!shot.image_path) {
       setErr("Shot chưa có ảnh frame — tạo ở Storyboard trước");
-      return;
+      return false;
     }
     mark(shot.id, true);
     setErr(null);
     try {
       setShot(await shotsApi.genVideo(shot.id));
+      return true;
     } catch (e: any) {
       setErr(e.message);
+      return false;
     } finally {
       mark(shot.id, false);
     }
   };
 
+  // Render videos one-by-one on the client so each shot shows its "Đang render…"
+  // overlay live + progress; backend verifies the clip and retries failures.
   const genAll = async () => {
+    const all = scenes.flatMap((sc) => byScene[sc.id] || []);
+    const todo = all.filter((s) => s.image_media_id && !s.video_path);
+    if (!todo.length) {
+      setErr("Không có shot nào (có ảnh, chưa có video) để render.");
+      return;
+    }
     setBusy(true);
     setErr(null);
-    try {
-      await shotsApi.genAllVideos(project.id);
-      for (const s of scenes) await loadShots(s.id);
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
+    let okN = 0;
+    const failed: string[] = [];
+    for (let i = 0; i < todo.length; i++) {
+      setProgress(`Đang render ${i + 1}/${todo.length}: ${todo[i].title}`);
+      const ok = await genVideo(todo[i]);
+      ok ? okN++ : failed.push(todo[i].title);
+      if (i < todo.length - 1) await sleep(15000 + Math.random() * 15000);
     }
+    setProgress(null);
+    setBusy(false);
+    if (failed.length) setErr(`Xong ${okN}/${todo.length}. Lỗi: ${failed.join(", ")}`);
   };
 
   return (
@@ -100,6 +116,12 @@ export default function ShotsTab({
             {busy ? "Đang render…" : "✦ Auto gen video"}
           </button>
         </div>
+        {progress && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-800 bg-indigo-950/40 px-3 py-2 text-sm text-indigo-300">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+            {progress}
+          </div>
+        )}
         {err && (
           <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
             {err}

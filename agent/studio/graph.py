@@ -8,6 +8,7 @@ Self-contained (calls flow_client/media_store directly) to avoid importing the r
 """
 import asyncio
 import logging
+import random
 import time as _t
 
 from agent.config import IMAGE_MODELS
@@ -76,6 +77,85 @@ def _vid_aspect(project: dict, data: dict | None = None) -> str:
     if a in _VID_ASPECT:
         return _VID_ASPECT[a]
     return project.get("aspect_ratio") or "VIDEO_ASPECT_RATIO_LANDSCAPE"
+
+
+_GRAPH_IMG_RETRIES = 3
+_GRAPH_VID_RETRIES = 2
+
+
+def _deep_find(obj, key):
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            r = _deep_find(v, key)
+            if r is not None:
+                return r
+    elif isinstance(obj, list):
+        for v in obj:
+            r = _deep_find(v, key)
+            if r is not None:
+                return r
+    return None
+
+
+def _block_reason(payload):
+    for k in ("raiFilteredReason", "filteredReason", "raiFilterReason", "blockReason"):
+        v = _deep_find(payload, k)
+        if v:
+            return str(v)
+    return None
+
+
+async def _img_gen_retry(call, pid):
+    """Run an image-producing Flow call, VERIFY a media was made + downloaded, and retry
+    on content-policy blocks / transient failures. Returns (media_id, web_path)."""
+    last = ""
+    for attempt in range(_GRAPH_IMG_RETRIES):
+        res = await call()
+        if res.get("error"):
+            last = str(res["error"])
+        else:
+            p = res.get("data", res)
+            mid = (p.get("media") or [{}])[0].get("image", {}).get("generatedImage", {}).get("mediaId")
+            if mid:
+                web = await media_store.ensure_local(mid, pid)
+                if web:
+                    return mid, web
+                last = "tải ảnh lỗi"
+            else:
+                last = _block_reason(p) or "Flow không trả media (có thể bị chặn)"
+        if attempt < _GRAPH_IMG_RETRIES - 1:
+            await asyncio.sleep(random.uniform(2, 5))
+    raise GraphError(f"Tạo ảnh thất bại sau {_GRAPH_IMG_RETRIES} lần: {last}")
+
+
+async def _vid_gen_retry(submit, scene_key, pid):
+    """Submit a video, poll, download — verify the clip exists and retry on failure.
+    Returns (media_id, web_path)."""
+    client = get_flow_client()
+    last = ""
+    for attempt in range(_GRAPH_VID_RETRIES):
+        res = await submit()
+        if res.get("error"):
+            last = str(res["error"])
+        else:
+            p = res.get("data", res)
+            mid = (p.get("media") or [{}])[0].get("name")
+            if not mid:
+                last = _block_reason(p) or "Flow không trả media"
+            else:
+                url = await _poll_video(client, mid, scene_key)
+                if not url:
+                    last = "video chưa xong trong thời gian chờ"
+                else:
+                    web = await media_store.save_from_url(mid, pid, "mp4", url)
+                    if web:
+                        return mid, web
+                    last = "tải video lỗi"
+        if attempt < _GRAPH_VID_RETRIES - 1:
+            await asyncio.sleep(random.uniform(5, 10))
+    raise GraphError(f"Tạo video thất bại sau {_GRAPH_VID_RETRIES} lần: {last}")
 
 
 async def _poll_video(client, media_id, scene_key, timeout=240, interval=8):
@@ -157,16 +237,12 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
 
         elif t == "image":
             body = inp["text"] or data.get("text") or ""
-            res = await client.generate_images(
+            mid, web = await _img_gen_retry(lambda: client.generate_images(
                 prompt=brain.compose_prompt(project, body), project_id=flow_pid,
                 aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
-                references=inp["references"] or None, image_model=_img_model(project, data))
-            if res.get("error"):
-                raise GraphError(str(res["error"]))
-            p = res.get("data", res)
-            mid = (p.get("media") or [{}])[0].get("image", {}).get("generatedImage", {}).get("mediaId")
-            web = await media_store.ensure_local(mid, pid) if mid else None
+                references=inp["references"] or None,
+                image_model=_img_model(project, data)), pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
             final = outputs[nid]
 
@@ -174,14 +250,10 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
             src = inp["media_id"]
             if not src:
                 raise GraphError("editImage cần ảnh nguồn")
-            res = await client.edit_image(
+            mid, web = await _img_gen_retry(lambda: client.edit_image(
                 inp["text"] or data.get("text") or "", src, flow_pid,
-                aspect_ratio=_img_aspect(project, data), user_paygate_tier=project["paygate_tier"])
-            if res.get("error"):
-                raise GraphError(str(res["error"]))
-            p = res.get("data", res)
-            mid = (p.get("media") or [{}])[0].get("image", {}).get("generatedImage", {}).get("mediaId")
-            web = await media_store.ensure_local(mid, pid) if mid else None
+                aspect_ratio=_img_aspect(project, data),
+                user_paygate_tier=project["paygate_tier"]), pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
             final = outputs[nid]
 
@@ -195,7 +267,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
                     ref_ids = [inp["media_id"]]
                 if not ref_ids:
                     raise GraphError("Omni Flash cần ít nhất 1 ảnh tham chiếu/nguồn")
-                res = await client.generate_video_omni(
+                submit = lambda: client.generate_video_omni(
                     prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,
                     duration_s=int(data.get("duration") or 8), aspect_ratio=aspect_v,
                     user_paygate_tier=project["paygate_tier"],
@@ -203,18 +275,12 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
             else:   # Veo i2v — needs a start frame
                 if not inp["media_id"]:
                     raise GraphError("Veo i2v cần ảnh start (nối từ Nguồn ảnh / Tạo ảnh)")
-                res = await client.generate_video(
-                    start_image_media_id=inp["media_id"], prompt=prompt,
+                start = inp["media_id"]
+                submit = lambda: client.generate_video(
+                    start_image_media_id=start, prompt=prompt,
                     project_id=flow_pid, scene_id=target["id"],
                     aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"])
-            if res.get("error"):
-                raise GraphError(str(res["error"]))
-            p = res.get("data", res)
-            mid = (p.get("media") or [{}])[0].get("name")
-            url = await _poll_video(client, mid, target["id"])
-            if not url:
-                raise GraphError("Video timeout")
-            web = await media_store.save_from_url(mid, pid, "mp4", url)
+            mid, web = await _vid_gen_retry(submit, target["id"], pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4", "handle": "video"}
             final = outputs[nid]
 
