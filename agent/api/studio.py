@@ -7,7 +7,6 @@ import asyncio
 import json
 import logging
 import random
-import re
 import shutil
 from typing import Optional
 
@@ -247,43 +246,55 @@ async def flow_projects():
     return {"projects": _flow_projects(raw)}
 
 
-_UUID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
-
-
 def _flow_media_items(raw: dict) -> list[dict]:
-    """Pull media items out of a getProjectContents envelope (tolerant of schema).
+    """Pull named media out of a getProjectContents envelope.
 
-    Collects any dict that carries a media id (`mediaId`, or a UUID `name`) together
-    with an image/video marker, so the user can browse a Flow project's assets and
-    reference them by media_id — including projects created outside the Studio app.
+    Real schema (data.result.data.json.result):
+      - `workflows[]`: each generation, with metadata.displayName (the asset name we
+        set) + metadata.primaryMediaId (the image/video to reference).
+      - `media[]`: raw media items (name = media id, has `image`/`video`) — used to
+        tell whether a workflow's primary media is an image or a video.
+      - `externalReferenceMedia[]`: uploaded reference media (mediaId, mediaType,
+        workflowDisplayName) — we keep the IMAGE ones (skip AUDIO voice presets).
     """
     data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    workflows = _deep_find(data, "workflows") or []
+    media_list = _deep_find(data, "media") or []
+    ext = _deep_find(data, "externalReferenceMedia") or []
+
+    by_name: dict[str, dict] = {}
+    for m in media_list:
+        if isinstance(m, dict) and m.get("name"):
+            by_name[m["name"]] = m
+
+    def kind_of(mid: str) -> str:
+        m = by_name.get(mid) or {}
+        return "video" if "video" in m else "image"
+
     out: list[dict] = []
     seen: set[str] = set()
 
-    def walk(o):
-        if isinstance(o, dict):
-            mid = o.get("mediaId")
-            if not mid:
-                nm = o.get("name")
-                if isinstance(nm, str) and _UUID_RE.match(nm):
-                    mid = nm
-            has_img = "image" in o or "generatedImage" in o
-            has_vid = "video" in o or "generatedVideo" in o
-            mtype = str(o.get("mediaType") or "").upper()
-            if mid and mid not in seen and (has_img or has_vid or "IMAGE" in mtype or "VIDEO" in mtype):
-                seen.add(mid)
-                name = _deep_find(o, "displayName") or _deep_find(o, "caption") or ""
-                kind = "video" if (has_vid or "VIDEO" in mtype) else "image"
-                out.append({"media_id": mid, "name": str(name)[:80], "kind": kind})
-            for v in o.values():
-                walk(v)
-        elif isinstance(o, list):
-            for v in o:
-                walk(v)
+    for w in workflows:
+        if not isinstance(w, dict):
+            continue
+        meta = w.get("metadata") or {}
+        mid = meta.get("primaryMediaId")
+        if not mid or mid in seen:
+            continue
+        seen.add(mid)
+        out.append({"media_id": mid, "name": str(meta.get("displayName") or "")[:80],
+                    "kind": kind_of(mid)})
 
-    walk(data)
+    for e in ext:
+        if not isinstance(e, dict) or str(e.get("mediaType") or "").upper() != "IMAGE":
+            continue
+        mid = e.get("mediaId")
+        if not mid or mid in seen:
+            continue
+        seen.add(mid)
+        out.append({"media_id": mid, "name": str(e.get("workflowDisplayName") or "")[:80],
+                    "kind": "image"})
+
     return out
 
 
