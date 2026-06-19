@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, type Entity, type Project } from "../api/client";
 import ScriptTab from "./script/ScriptTab";
 import AssetsTab from "./assets/AssetsTab";
@@ -20,6 +20,12 @@ export default function ProjectWorkspace({
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("Script");
+  // Keep-alive: render every tab we've visited and just hide the inactive ones, so a
+  // long-running job (e.g. Storyboard auto-gen) and its progress survive tab switches.
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set(["Script"]));
+  useEffect(() => {
+    setVisited((v) => (v.has(tab) ? v : new Set(v).add(tab)));
+  }, [tab]);
   const [project, setProject] = useState(initial);
   const [style, setStyle] = useState(initial.style);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
@@ -44,6 +50,15 @@ export default function ProjectWorkspace({
       }
     }
   };
+
+  // Plain function (not a component) so the child element keeps its identity across
+  // renders — only its visibility toggles. Unvisited tabs aren't rendered yet.
+  const pane = (t: Tab, node: ReactNode) =>
+    visited.has(t) ? (
+      <div key={t} className={tab === t ? "h-full" : "hidden"}>
+        {node}
+      </div>
+    ) : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -92,28 +107,27 @@ export default function ProjectWorkspace({
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {tab === "Script" ? (
+        {pane(
+          "Script",
           <ScriptTab
             key={project.id}
             project={project}
             onScriptChange={(script_raw) => setProject((p) => ({ ...p, script_raw }))}
           />
-        ) : tab === "Assets" ? (
-          <AssetsTab key={project.id + reload} project={project} onEdit={openEditor} />
-        ) : tab === "Storyboard" ? (
+        )}
+        {pane("Assets", <AssetsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
+        {pane(
+          "Storyboard",
           <StoryboardTab
             key={project.id + reload}
             project={project}
             onEdit={openEditor}
             onCoverSet={(key) => setProject((p) => ({ ...p, thumb_media_key: key }))}
           />
-        ) : tab === "Shots" ? (
-          <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />
-        ) : tab === "Assemble" ? (
-          <AssembleTab key={project.id + reload} project={project} />
-        ) : (
-          <AllImages key={project.id + reload} project={project} />
         )}
+        {pane("Shots", <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
+        {pane("Assemble", <AssembleTab key={project.id + reload} project={project} />)}
+        {pane("Ảnh", <AllImages key={project.id + reload} project={project} />)}
       </div>
 
       {editor && (
