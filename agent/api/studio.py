@@ -6,6 +6,7 @@ settings, health. Heavier pipeline endpoints land in later phases.
 import asyncio
 import json
 import logging
+import math
 import random
 import shutil
 from typing import Optional
@@ -816,6 +817,17 @@ class AutofillRequest(BaseModel):
     n_frames: Optional[int] = None
 
 
+class BuildBeatsRequest(BaseModel):
+    language: str = "Vietnamese"
+
+
+# ≈2.5 spoken words/second (video-app.md §5.2) → estimate a narration's length without
+# burning TTS quota. Real durations replace this when narration is generated / at assemble.
+def _estimate_narration_secs(text: str) -> float:
+    words = len((text or "").split())
+    return max(1.0, round(words / 2.5, 2))
+
+
 class UpdateShotRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -995,6 +1007,122 @@ async def autofill_all_storyboard(pid: str, body: AutofillRequest, force: bool =
         except Exception as ex:
             errors.append({"scene": sc["id"], "error": str(ex)[:200]})
     return {"requested": len(scenes), "done": done, "errors": errors}
+
+
+@router.post("/scenes/{sid}/beats")
+async def build_scene_beats(sid: str, body: BuildBeatsRequest):
+    """Storytelling (§2.6): cut a scene into narration beats → audio-driven shots.
+
+    Each beat = one voiceover moment; its (estimated) audio length sets the shot length.
+    A beat longer than `shot_duration` (~8s) becomes `ceil(dur/8)` chained sub-shots whose
+    motion flows on (the last frame of each feeds the next at gen time, `is_chained`).
+    Durations are estimated from word count — no TTS needed; real narration durations are
+    fitted at assemble time."""
+    scene = await _scene_or_404(sid)
+    project = await _project_or_404(scene["project_id"])
+    shot_dur = project["shot_duration"] or 8
+    entities = await db.query_all(
+        "SELECT name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    beats = await brain.run_json(brain.scene_beats_prompt(
+        scene["heading"], scene.get("action") or "", entities, project["style"], body.language))
+    if not isinstance(beats, list):
+        raise HTTPException(502, "AI không trả về danh sách beat")
+
+    erows = await db.query_all(
+        "SELECT id, name, type FROM entity WHERE project_id=?", (scene["project_id"],))
+    name_to_id = {r["name"].lower(): r["id"] for r in erows}
+    used = {n.lower() for b in beats for n in b.get("ref_entity_names", [])}
+    loc_id = next((r["id"] for r in erows
+                   if r["type"] == "location" and r["name"].lower() in used), None)
+
+    await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
+    ts = db.now()
+    shot_idx = 0
+    for b in beats:
+        narr = (b.get("narrator_text") or "").strip()
+        dur = _estimate_narration_secs(narr)
+        n_parts = max(1, math.ceil(dur / shot_dur))
+        # continuation motions for a long beat (otherwise just the beat's own motion)
+        motions = [b.get("motion_prompt") or ""]
+        if n_parts > 1:
+            try:
+                pp = await brain.run_json(brain.beat_parts_prompt(
+                    b.get("beat_action") or narr, b.get("motion_prompt") or "", n_parts))
+                parts = pp.get("parts") if isinstance(pp, dict) else None
+                if parts:
+                    motions = [p.get("motion_prompt") or "" for p in sorted(
+                        parts, key=lambda x: x.get("part_idx", 0))]
+            except Exception as ex:  # noqa: BLE001 — fall back to repeating the beat motion
+                logger.warning("beat_parts failed: %s", ex)
+        while len(motions) < n_parts:
+            motions.append(b.get("motion_prompt") or "")
+
+        ref_names = list(b.get("ref_entity_names", []))
+        ref_ids = [name_to_id[n.lower()] for n in ref_names if n.lower() in name_to_id]
+        if loc_id and loc_id not in ref_ids:
+            ref_ids = [loc_id] + ref_ids
+
+        beat_id = db.new_id()
+        for p in range(n_parts):
+            part_dur = min(shot_dur, dur - shot_dur * p)
+            part_dur = max(1, int(round(part_dur)))
+            await db.insert("shot", {
+                "id": db.new_id(), "scene_id": sid, "idx": shot_idx,
+                "beat_id": beat_id, "part_idx": p, "is_chained": 1 if p > 0 else 0,
+                "title": (b.get("title") or narr[:40] or f"Beat {shot_idx+1}")
+                         + (f" ({p+1}/{n_parts})" if n_parts > 1 else ""),
+                "description": b.get("description", ""),
+                "visual_prompt": b.get("visual_prompt") or None,
+                "motion_prompt": motions[p] or None,
+                "beat_action": b.get("beat_action") or None,
+                # The whole beat's narration sits on part 0 (the audio anchor); sub-parts
+                # are silent visual continuations fitted under that same audio at assemble.
+                "narrator_text": narr if p == 0 else None,
+                "narration_duration": dur if p == 0 else None,
+                "ref_entity_ids": json.dumps(ref_ids),
+                "duration": part_dur,
+                "status": "pending", "created_at": ts, "updated_at": ts})
+            shot_idx += 1
+
+    if loc_id:
+        await db.update("scene", sid, {"location_entity_id": loc_id})
+    return {"shots": await db.query_all(
+        "SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))}
+
+
+@router.post("/projects/{pid}/voiceover")
+async def build_project_beats(pid: str, body: BuildBeatsRequest):
+    """Storytelling: build audio-driven beat-shots for EVERY scene + stitch the project
+    voiceover_raw from the beats' narration (deletes existing shots per scene)."""
+    await _project_or_404(pid)
+    scenes = await db.query_all(
+        "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
+    if not scenes:
+        raise HTTPException(400, "Chưa có scene — tạo kịch bản (Script) trước.")
+    done, errors = 0, []
+    for sc in scenes:
+        try:
+            await build_scene_beats(sc["id"], body)
+            done += 1
+        except HTTPException as ex:
+            errors.append({"scene": sc["id"], "error": str(ex.detail)[:200]})
+        except Exception as ex:  # noqa: BLE001
+            errors.append({"scene": sc["id"], "error": str(ex)[:200]})
+
+    # Recompute start_time across the whole project + stitch the voiceover text.
+    all_shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
+    t, vo = 0.0, []
+    for sh in all_shots:
+        await db.update("shot", sh["id"], {"start_time": round(t, 3)})
+        t += float(sh.get("duration") or 0)
+        if sh.get("narrator_text"):
+            vo.append(sh["narrator_text"])
+    await db.update("project", pid, {
+        "voiceover_raw": "\n\n".join(vo), "storytelling": 1, "updated_at": db.now()})
+    return {"requested": len(scenes), "done": done, "errors": errors,
+            "total_duration_est": round(t, 1), "shots": len(all_shots)}
 
 
 @router.post("/scenes/{sid}/shots")

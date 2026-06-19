@@ -102,14 +102,79 @@ async def _image_clip(img: Path, narration: Path | None, out: Path,
     await _run(args)
 
 
+def _group_beats(shots: list[dict]) -> list[list[dict]]:
+    """Group consecutive shots that belong to the same beat (storytelling sub-shots share
+    one narration). A null/blank beat_id → its own single-shot group (standard mode)."""
+    groups: list[list[dict]] = []
+    for sh in shots:
+        bid = sh.get("beat_id")
+        if bid and groups and groups[-1][0].get("beat_id") == bid:
+            groups[-1].append(sh)
+        else:
+            groups.append([sh])
+    return groups
+
+
+async def _beat_image_clip(parts: list[dict], out: Path, w: int, h: int,
+                           default_duration: float, ken_burns: bool) -> float:
+    """Render one beat (1+ chained still images) to `out`. If the beat has a narration on
+    its first part, the part images are shown back-to-back to cover that audio and the
+    narration is the audio track; otherwise each part uses its own `duration`. Returns the
+    clip length (seconds)."""
+    part0 = parts[0]
+    narr = _local(part0["narration_path"]) if part0.get("narration_path") else None
+    narr = narr if (narr and narr.exists()) else None
+    audio_total = None
+    if narr:
+        audio_total = float(part0.get("narration_duration") or 0) or await probe_duration(narr)
+
+    # per-part display lengths
+    base = [max(0.5, float(p.get("duration") or default_duration)) for p in parts]
+    if narr and audio_total and audio_total > 0:
+        s = sum(base) or 1.0
+        durs = [d * audio_total / s for d in base]   # scale parts to cover the real audio
+    else:
+        durs = base
+
+    if len(parts) == 1:
+        src = _local(parts[0]["image_path"])
+        await _image_clip(src, narr, out, w, h, durs[0], ken_burns)
+        return durs[0]
+
+    # multi-part: build each silent sub-clip, concat, then mux the beat narration once
+    tmp = []
+    for k, p in enumerate(parts):
+        src = _local(p["image_path"])
+        if not src.exists():
+            continue
+        sub = out.with_name(f"{out.stem}_p{k}.mp4")
+        await _image_clip(src, None, sub, w, h, durs[k], ken_burns)
+        tmp.append(sub)
+    if not tmp:
+        raise RuntimeError("beat không có ảnh hợp lệ")
+    lst = out.with_name(f"{out.stem}_parts.txt")
+    lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in tmp), encoding="utf-8")
+    silent = out.with_name(f"{out.stem}_silent.mp4")
+    await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
+                "-c", "copy", str(silent)])
+    if narr:
+        await _run(["ffmpeg", "-y", "-i", str(silent), "-i", str(narr),
+                    "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                    "-c:a", "aac", "-ar", "44100", "-shortest", str(out)])
+    else:
+        silent.replace(out)
+    return await probe_duration(out)
+
+
 async def assemble_from_images(project_id: str, ken_burns: bool = True,
                                default_duration: float = 4.0) -> dict:
     """Build ONE long video from the shot IMAGES (scene/shot order).
 
     Each image is shown for the length of its TTS narration (storytelling "đọc tới đâu
-    hình tới đó"); shots without narration fall back to their `duration`. The clips are
-    concatenated into studio_media/<pid>/final.mp4 with the narration as the audio track.
-    No Flow video generation is involved — this is a fast image-slideshow path.
+    hình tới đó"); shots without narration fall back to their `duration`. Storytelling
+    sub-shots of one beat share that beat's single narration (shown back-to-back to cover
+    it). Clips are concatenated into studio_media/<pid>/final.mp4. No Flow video gen — a
+    fast image-slideshow path.
     """
     project = await db.query_one("SELECT * FROM project WHERE id=?", (project_id,))
     if not project:
@@ -126,21 +191,13 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
     w, h = _res(project["aspect_ratio"])
 
     clip_paths, total = [], 0.0
-    for i, sh in enumerate(shots):
-        src = _local(sh["image_path"])
-        if not src.exists():
+    for gi, parts in enumerate(_group_beats(shots)):
+        parts = [p for p in parts if _local(p["image_path"]).exists()]
+        if not parts:
             continue
-        narr = _local(sh["narration_path"]) if sh.get("narration_path") else None
-        if narr and narr.exists():
-            dur = sh.get("narration_duration") or await probe_duration(narr) or default_duration
-        else:
-            narr = None
-            dur = float(sh.get("duration") or default_duration)
-        dur = max(0.5, float(dur))
-        out = out_dir / f"img{i:03d}.mp4"
-        await _image_clip(src, narr, out, w, h, dur, ken_burns)
+        out = out_dir / f"img{gi:03d}.mp4"
+        total += await _beat_image_clip(parts, out, w, h, default_duration, ken_burns)
         clip_paths.append(out)
-        total += dur
 
     if not clip_paths:
         raise RuntimeError("Không có ảnh hợp lệ để ghép")

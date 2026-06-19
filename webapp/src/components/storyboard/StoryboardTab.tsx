@@ -176,6 +176,34 @@ export default function StoryboardTab({
     }
   };
 
+  // Storytelling (§2.6): build audio-driven beat-shots from the voiceover for every scene.
+  const buildBeats = async () => {
+    if (
+      !window.confirm(
+        "Dựng shots theo LỜI ĐỌC (storytelling) cho mọi scene?\n\n" +
+          "AI cắt từng scene thành beat (1 câu đọc = 1 cảnh), độ dài shot bám theo độ dài " +
+          "lời đọc (ước lượng); beat dài hơn ~8s tự tách thành nhiều shot nối tiếp. " +
+          "Thao tác này XÓA các shot hiện tại."
+      )
+    )
+      return;
+    setBusy("beats");
+    setErr(null);
+    try {
+      const r = await storyboard.buildBeats(project.id);
+      await reloadAll();
+      setNotice(
+        `Đã dựng ${r.shots} shot theo lời đọc cho ${r.done}/${r.requested} scene ` +
+          `(~${r.total_duration_est}s). Tạo ảnh rồi sinh narration để khớp audio thật.`
+      );
+      setTimeout(() => setNotice(null), 5000);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Rebuild the shot list for EVERY scene from the script (force) — deletes existing
   // shots (incl. manual edits) and re-splits via AI. Confirm because it's destructive.
   const rebuildAll = async () => {
@@ -230,6 +258,16 @@ export default function StoryboardTab({
             >
               {busy === "rebuild-all" ? "Đang dựng lại…" : "↻ Dựng lại tất cả"}
             </button>
+            {!!project.storytelling && (
+              <button
+                disabled={!!busy || !scenes.length}
+                onClick={buildBeats}
+                title="Storytelling: dựng shots theo độ dài lời đọc (beat audio-driven)"
+                className="rounded-lg border border-violet-700/60 px-3 py-2 text-sm text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
+              >
+                {busy === "beats" ? "Đang dựng beat…" : "🎙 Dựng theo lời đọc"}
+              </button>
+            )}
             <button
               disabled={!!busy || !scenes.length}
               onClick={projectAll}

@@ -249,6 +249,59 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
     )
 
 
+def scene_beats_prompt(scene_heading: str, scene_body: str, entities: list[dict],
+                       style: str, language: str = "Vietnamese") -> str:
+    """Storytelling (§2.6, audio-first): cut a scene into narration BEATS. Each beat is
+    one spoken moment / action → becomes one shot (split later if the audio runs long)."""
+    roster = "\n".join(
+        f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
+    ) or "(none)"
+    locations = [e["name"] for e in entities if e.get("type") == "location"]
+    loc_line = (
+        "Location entities available: " + ", ".join("{" + n + "}" for n in locations)
+        + ". Every beat happens at the ONE location of this scene."
+    ) if locations else (
+        "No location entity yet — invent ONE consistent place name in curly braces and "
+        "reuse it for every beat."
+    )
+    return (
+        "This is STORYTELLING mode (narration-driven). Break the scene into BEATS — each "
+        "beat = one continuous moment of the voiceover tied to a single on-screen action.\n"
+        f"{loc_line}\n\n"
+        "For each beat return:\n"
+        f"- `narrator_text`: the spoken {language} voiceover for this beat (natural, 1–2 "
+        "sentences, no stage directions). This is the audio whose length drives the shot.\n"
+        "- `beat_action`: the concrete action happening during the beat (English ok).\n"
+        "- `description`: image prompt that MUST begin with the location then camera angle, "
+        "e.g. \"At {Làng}, wide shot, {Tấm} scrubs the porch...\".\n"
+        "- `visual_prompt`: what is on screen (subject, composition, lighting), same entity refs.\n"
+        "- `motion_prompt`: the camera move + action during the clip, same entity refs.\n"
+        "- `ref_entity_names`: every entity used (names WITHOUT braces); MUST include the location.\n\n"
+        "Wrap known entity names in curly braces in description/visual/motion so they bind to "
+        f"their reference images. Visual style: {style}.\n\n"
+        f"AVAILABLE ENTITIES:\n{roster}\n\n"
+        f"SCENE: {scene_heading}\n{scene_body}\n\n"
+        "Return ONLY JSON array: [{\"narrator_text\":\"...\",\"beat_action\":\"...\","
+        "\"description\":\"At {Loc}, <angle>, ...\",\"visual_prompt\":\"...\","
+        "\"motion_prompt\":\"...\",\"ref_entity_names\":[\"Loc\",\"...\"]}]"
+    )
+
+
+def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int) -> str:
+    """A beat's audio is longer than one clip (≤8s) → split into `n_parts` continuous
+    sub-clips. Returns a continuation motion prompt for each part (the visual flows on)."""
+    return (
+        f"A single beat lasts longer than one {8}-second clip, so it is split into "
+        f"{n_parts} consecutive sub-clips that play back-to-back as ONE continuous action. "
+        "Each sub-clip starts from the last frame of the previous one (chained), so the "
+        "motion must flow on without resetting.\n\n"
+        f"BEAT ACTION: {beat_action}\nFULL MOTION: {motion_prompt}\n\n"
+        f"Write {n_parts} motion prompts, one per sub-clip, each describing the portion of "
+        "the action in that ~8s window (continuous, no repetition, same entities/refs).\n"
+        "Return ONLY JSON: {\"parts\":[{\"part_idx\":0,\"motion_prompt\":\"...\"}, ...]}"
+    )
+
+
 def shot_prompts_prompt(description: str, style: str) -> str:
     return (
         "For this storyboard frame, write two prompts for an image-to-video model:\n"
