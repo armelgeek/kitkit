@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, type Entity, type LibraryEntity, type Project } from "../../api/client";
+import {
+  api,
+  thumbUrl,
+  type Entity,
+  type FlowMedia,
+  type FlowProject,
+  type LibraryEntity,
+  type Project,
+} from "../../api/client";
 import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import Thumb from "../Thumb";
 import Lightbox from "../common/Lightbox";
@@ -215,12 +223,14 @@ export default function AssetsTab({
           }
           actionLabel={picker.mode === "link" ? "Tham chiếu" : "+ Dùng"}
           onClose={() => setPicker(null)}
-          onPick={async (e) => {
-            if (picker.mode === "link") {
-              await api.linkEntity(picker.entity.id, e.id);
-            } else {
-              await api.importEntity(project.id, e.id);
-            }
+          onPickEntity={async (e) => {
+            if (picker.mode === "link") await api.linkEntity(picker.entity.id, e.id);
+            else await api.importEntity(project.id, e.id);
+            await load();
+          }}
+          onPickMedia={async (m) => {
+            if (picker.mode === "link") await api.setEntityImage(picker.entity.id, m.media_id);
+            else await api.importMedia(project.id, { media_id: m.media_id, name: m.name || "Flow asset" });
             await load();
           }}
         />
@@ -337,54 +347,39 @@ const TYPE_LABEL: Record<string, string> = {
   prop: "Đạo cụ",
 };
 
-// Picker to reuse an asset from ANY other project (shared asset library).
-// `onPick` decides what happens (import as new entity, or link onto an existing one).
+// Picker to reuse an asset from another STUDIO project OR directly from a project on
+// Google Flow (browse its media by media_id). `onPickEntity` handles studio library
+// items; `onPickMedia` handles raw Flow media — the parent decides import vs link.
 function AssetPicker({
   projectId,
   title,
   actionLabel,
   onClose,
-  onPick,
+  onPickEntity,
+  onPickMedia,
 }: {
   projectId: string;
   title: string;
   actionLabel: string;
   onClose: () => void;
-  onPick: (e: LibraryEntity) => Promise<void> | void;
+  onPickEntity: (e: LibraryEntity) => Promise<void> | void;
+  onPickMedia: (m: FlowMedia) => Promise<void> | void;
 }) {
-  const [items, setItems] = useState<LibraryEntity[] | null>(null);
-  const [q, setQ] = useState("");
-  const [importing, setImporting] = useState<string | null>(null);
+  const [tab, setTab] = useState<"studio" | "flow">("studio");
+  const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    api
-      .libraryEntities(projectId)
-      .then((r) => setItems(r.entities))
-      .catch((e) => setErr(e.message));
-  }, [projectId]);
-
-  const filtered = (items || []).filter((e) => {
-    const s = `${e.name} ${e.project_title} ${e.type}`.toLowerCase();
-    return s.includes(q.toLowerCase());
-  });
-
-  const doImport = async (e: LibraryEntity) => {
-    setImporting(e.id);
+  const run = async (id: string, fn: () => Promise<void> | void) => {
+    setBusy(id);
     setErr(null);
     try {
-      await onPick(e);
+      await fn();
       onClose();
     } catch (ex: any) {
       setErr(ex.message);
-    } finally {
-      setImporting(null);
+      setBusy(null);
     }
   };
-
-  // group by source project
-  const byProject: Record<string, LibraryEntity[]> = {};
-  for (const e of filtered) (byProject[e.project_title] ??= []).push(e);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-6" onClick={onClose}>
@@ -394,51 +389,216 @@ function AssetPicker({
       >
         <div className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
           <h3 className="font-semibold">{title}</h3>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Tìm theo tên / dự án…"
-            className="ml-auto w-64 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
-          />
+          <div className="ml-auto flex gap-1 rounded-lg bg-neutral-900 p-1">
+            <TabBtn active={tab === "studio"} onClick={() => setTab("studio")}>Dự án Studio</TabBtn>
+            <TabBtn active={tab === "flow"} onClick={() => setTab("flow")}>Dự án Flow</TabBtn>
+          </div>
           <button onClick={onClose} className="text-neutral-500 hover:text-neutral-300">✕</button>
         </div>
 
         <div className="flex-1 overflow-auto p-5">
           {err && <div className="mb-3 rounded-lg bg-rose-950/40 px-3 py-2 text-sm text-rose-300">{err}</div>}
-          {items === null && <p className="text-sm text-neutral-500">Đang tải…</p>}
-          {items !== null && !filtered.length && (
-            <p className="text-sm text-neutral-500">Không có asset nào ở dự án khác.</p>
+          {tab === "studio" ? (
+            <StudioSource
+              projectId={projectId}
+              actionLabel={actionLabel}
+              busy={busy}
+              onPick={(e) => run(e.id, () => onPickEntity(e))}
+            />
+          ) : (
+            <FlowSource
+              actionLabel={actionLabel}
+              busy={busy}
+              onPick={(m) => run(m.media_id, () => onPickMedia(m))}
+            />
           )}
-          {Object.entries(byProject).map(([proj, list]) => (
-            <section key={proj} className="mb-6">
-              <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{proj}</h4>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {list.map((e) => (
-                  <button
-                    key={e.id}
-                    onClick={() => doImport(e)}
-                    disabled={!!importing}
-                    className="group overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left transition hover:border-indigo-500 disabled:opacity-50"
-                  >
-                    <div className="relative">
-                      <Thumb src={e.image_path} alt={e.name} rounded="rounded-none" className="aspect-video w-full" />
-                      <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/50">
-                        <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
-                          {importing === e.id ? "Đang xử lý…" : actionLabel}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-2">
-                      <div className="truncate text-sm font-medium">{e.name}</div>
-                      <div className="text-xs text-neutral-500">{TYPE_LABEL[e.type] || e.type}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
         </div>
       </div>
     </div>
+  );
+}
+
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-3 py-1 text-xs transition ${
+        active ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PickCard({
+  src,
+  title,
+  subtitle,
+  busy,
+  actionLabel,
+  onClick,
+}: {
+  src?: string | null;
+  title: string;
+  subtitle?: string;
+  busy: boolean;
+  actionLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className="group overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left transition hover:border-indigo-500 disabled:opacity-50"
+    >
+      <div className="relative">
+        <Thumb src={src} alt={title} rounded="rounded-none" className="aspect-video w-full" />
+        <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/50">
+          <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
+            {busy ? "Đang xử lý…" : actionLabel}
+          </span>
+        </div>
+      </div>
+      <div className="p-2">
+        <div className="truncate text-sm font-medium">{title || "—"}</div>
+        {subtitle && <div className="truncate text-xs text-neutral-500">{subtitle}</div>}
+      </div>
+    </button>
+  );
+}
+
+// Source 1: assets from other STUDIO projects (have a real entity row).
+function StudioSource({
+  projectId,
+  actionLabel,
+  busy,
+  onPick,
+}: {
+  projectId: string;
+  actionLabel: string;
+  busy: string | null;
+  onPick: (e: LibraryEntity) => void;
+}) {
+  const [items, setItems] = useState<LibraryEntity[] | null>(null);
+  const [q, setQ] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.libraryEntities(projectId).then((r) => setItems(r.entities)).catch((e) => setErr(e.message));
+  }, [projectId]);
+
+  const filtered = (items || []).filter((e) =>
+    `${e.name} ${e.project_title} ${e.type}`.toLowerCase().includes(q.toLowerCase())
+  );
+  const byProject: Record<string, LibraryEntity[]> = {};
+  for (const e of filtered) (byProject[e.project_title] ??= []).push(e);
+
+  return (
+    <>
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Tìm theo tên / dự án…"
+        className="mb-4 w-72 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+      />
+      {err && <p className="text-sm text-rose-300">{err}</p>}
+      {items === null && <p className="text-sm text-neutral-500">Đang tải…</p>}
+      {items !== null && !filtered.length && (
+        <p className="text-sm text-neutral-500">Không có asset nào ở dự án Studio khác.</p>
+      )}
+      {Object.entries(byProject).map(([proj, list]) => (
+        <section key={proj} className="mb-6">
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{proj}</h4>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {list.map((e) => (
+              <PickCard
+                key={e.id}
+                src={e.image_path}
+                title={e.name}
+                subtitle={TYPE_LABEL[e.type] || e.type}
+                busy={busy === e.id}
+                actionLabel={actionLabel}
+                onClick={() => onPick(e)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+// Source 2: media directly from a project on Google Flow (browse by media_id).
+function FlowSource({
+  actionLabel,
+  busy,
+  onPick,
+}: {
+  actionLabel: string;
+  busy: string | null;
+  onPick: (m: FlowMedia) => void;
+}) {
+  const [projects, setProjects] = useState<FlowProject[] | null>(null);
+  const [sel, setSel] = useState<string>("");
+  const [media, setMedia] = useState<FlowMedia[] | null>(null);
+  const [loadingMedia, setLoadingMedia] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.flowProjects().then((r) => setProjects(r.projects)).catch((e) => setErr(e.message));
+  }, []);
+
+  const loadMedia = async (flowId: string) => {
+    setSel(flowId);
+    setMedia(null);
+    if (!flowId) return;
+    setLoadingMedia(true);
+    setErr(null);
+    try {
+      setMedia((await api.flowProjectMedia(flowId)).media);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setLoadingMedia(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-sm text-neutral-400">Project Flow:</span>
+        <select
+          value={sel}
+          onChange={(e) => loadMedia(e.target.value)}
+          className="w-72 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+        >
+          <option value="">— chọn project —</option>
+          {(projects || []).map((p) => (
+            <option key={p.flow_project_id} value={p.flow_project_id}>
+              {p.title || p.flow_project_id.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {err && <p className="mb-2 text-sm text-rose-300">{err}</p>}
+      {!sel && <p className="text-sm text-neutral-500">Chọn một project Flow để xem ảnh bên trong.</p>}
+      {loadingMedia && <p className="text-sm text-neutral-500">Đang tải media…</p>}
+      {media !== null && !media.length && !loadingMedia && (
+        <p className="text-sm text-neutral-500">Không tìm thấy ảnh trong project này.</p>
+      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {(media || []).map((m) => (
+          <PickCard
+            key={m.media_id}
+            src={thumbUrl(m.media_id)}
+            title={m.name || "Ảnh Flow"}
+            busy={busy === m.media_id}
+            actionLabel={actionLabel}
+            onClick={() => onPick(m)}
+          />
+        ))}
+      </div>
+    </>
   );
 }

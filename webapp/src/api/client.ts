@@ -124,7 +124,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ source_entity_id }),
     }),
+  flowProjectMedia: (flowId: string) =>
+    req<{ media: FlowMedia[] }>(`/flow-projects/${flowId}/media`),
+  importMedia: (pid: string, body: { media_id: string; name?: string; type?: string }) =>
+    req<Entity>(`/projects/${pid}/entities/import-media`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
+
+export interface FlowMedia {
+  media_id: string;
+  name: string;
+  kind: string;
+}
 
 export interface LibraryEntity extends Entity {
   project_title: string;

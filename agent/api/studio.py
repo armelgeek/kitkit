@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 import shutil
 from typing import Optional
 
@@ -95,6 +96,13 @@ class ImportEntityRequest(BaseModel):
 
 class LinkEntityRequest(BaseModel):
     source_entity_id: str
+
+
+class ImportMediaRequest(BaseModel):
+    media_id: str
+    name: str = "Flow asset"
+    type: str = "character"
+    description: str = ""
 
 
 # ─── Helpers ─────────────────────────────────────────────────
@@ -237,6 +245,57 @@ async def flow_projects():
     client = _require_extension()
     raw = await client.get_projects()
     return {"projects": _flow_projects(raw)}
+
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def _flow_media_items(raw: dict) -> list[dict]:
+    """Pull media items out of a getProjectContents envelope (tolerant of schema).
+
+    Collects any dict that carries a media id (`mediaId`, or a UUID `name`) together
+    with an image/video marker, so the user can browse a Flow project's assets and
+    reference them by media_id — including projects created outside the Studio app.
+    """
+    data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def walk(o):
+        if isinstance(o, dict):
+            mid = o.get("mediaId")
+            if not mid:
+                nm = o.get("name")
+                if isinstance(nm, str) and _UUID_RE.match(nm):
+                    mid = nm
+            has_img = "image" in o or "generatedImage" in o
+            has_vid = "video" in o or "generatedVideo" in o
+            mtype = str(o.get("mediaType") or "").upper()
+            if mid and mid not in seen and (has_img or has_vid or "IMAGE" in mtype or "VIDEO" in mtype):
+                seen.add(mid)
+                name = _deep_find(o, "displayName") or _deep_find(o, "caption") or ""
+                kind = "video" if (has_vid or "VIDEO" in mtype) else "image"
+                out.append({"media_id": mid, "name": str(name)[:80], "kind": kind})
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+
+    walk(data)
+    return out
+
+
+@router.get("/flow-projects/{flow_id}/media")
+async def flow_project_media(flow_id: str, images_only: bool = True):
+    """Media (ảnh) bên trong một project Flow — để tham chiếu/đồng bộ làm asset."""
+    client = _require_extension()
+    raw = await client.get_project(flow_id)
+    items = _flow_media_items(raw)
+    if images_only:
+        items = [m for m in items if m["kind"] == "image"]
+    return {"media": items}
 
 
 # ─── Studio projects (DB) ───────────────────────────────────
@@ -572,6 +631,23 @@ async def import_entity(pid: str, body: ImportEntityRequest):
         "media_id": src.get("media_id"), "primary_media_id": src.get("primary_media_id"),
         "workflow_id": src.get("workflow_id"), "image_path": web,
         "created_at": ts, "updated_at": ts})
+    return await _entity_or_404(eid)
+
+
+@router.post("/projects/{pid}/entities/import-media")
+async def import_flow_media(pid: str, body: ImportMediaRequest):
+    """Tạo entity mới từ một media_id Flow bất kỳ (đồng bộ asset từ project trên Flow)."""
+    await _project_or_404(pid)
+    web = await media_store.ensure_local(body.media_id, pid)
+    if not web:
+        raise HTTPException(404, "media_id không hợp lệ hoặc không tồn tại trên Flow")
+    eid = db.new_id()
+    ts = db.now()
+    await db.insert("entity", {
+        "id": eid, "project_id": pid, "type": body.type or "character",
+        "name": (body.name or "Flow asset")[:80], "description": body.description,
+        "ref_prompt": "", "media_id": body.media_id, "primary_media_id": body.media_id,
+        "image_path": web, "created_at": ts, "updated_at": ts})
     return await _entity_or_404(eid)
 
 
