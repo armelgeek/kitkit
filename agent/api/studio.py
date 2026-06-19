@@ -84,6 +84,10 @@ class SetMediaRequest(BaseModel):
     media_id: str
 
 
+class ImportEntityRequest(BaseModel):
+    source_entity_id: str
+
+
 # ─── Helpers ─────────────────────────────────────────────────
 
 def _deep_find(obj, key: str):
@@ -480,6 +484,50 @@ async def list_entities(pid: str):
     await _project_or_404(pid)
     return {"entities": await db.query_all(
         "SELECT * FROM entity WHERE project_id=? ORDER BY type, created_at", (pid,))}
+
+
+@router.get("/library/entities")
+async def library_entities(exclude_project: Optional[str] = None):
+    """Mọi asset (đã có ảnh) trên TẤT CẢ dự án — để dùng chung asset giữa các project.
+
+    Một dự án có thể đóng vai 'thư viện' chứa nhân vật/bối cảnh/đạo cụ; dự án khác chỉ
+    việc import lại entity có sẵn (không phải gen lại).
+    """
+    rows = await db.query_all(
+        "SELECT e.*, p.title AS project_title FROM entity e "
+        "JOIN project p ON e.project_id = p.id "
+        "WHERE e.media_id IS NOT NULL "
+        + ("AND e.project_id != ? " if exclude_project else "")
+        + "ORDER BY p.title, e.type, e.name",
+        (exclude_project,) if exclude_project else ())
+    return {"entities": rows}
+
+
+@router.post("/projects/{pid}/entities/import")
+async def import_entity(pid: str, body: ImportEntityRequest):
+    """Sao chép một entity từ dự án khác vào dự án này, GIỮ ảnh sẵn có (không gen lại)."""
+    await _project_or_404(pid)
+    src = await db.query_one("SELECT * FROM entity WHERE id=?", (body.source_entity_id,))
+    if not src:
+        raise HTTPException(404, "Entity nguồn không tồn tại")
+    # tải ảnh về thư mục project hiện tại (an toàn nếu dự án nguồn bị xoá); fallback path cũ
+    web = None
+    if src.get("media_id"):
+        try:
+            web = await media_store.ensure_local(src["media_id"], pid)
+        except Exception:
+            web = None
+    web = web or src.get("image_path")
+    eid = db.new_id()
+    ts = db.now()
+    await db.insert("entity", {
+        "id": eid, "project_id": pid, "type": src.get("type", "character"),
+        "name": src.get("name", ""), "description": src.get("description", ""),
+        "ref_prompt": src.get("ref_prompt", ""),
+        "media_id": src.get("media_id"), "primary_media_id": src.get("primary_media_id"),
+        "workflow_id": src.get("workflow_id"), "image_path": web,
+        "created_at": ts, "updated_at": ts})
+    return await _entity_or_404(eid)
 
 
 @router.post("/projects/{pid}/entities/extract")

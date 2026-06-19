@@ -110,7 +110,20 @@ export const api = {
       `/projects/${id}/assets/generate-all`,
       { method: "POST" }
     ),
+  libraryEntities: (excludeProject?: string) =>
+    req<{ entities: LibraryEntity[] }>(
+      `/library/entities${excludeProject ? `?exclude_project=${excludeProject}` : ""}`
+    ),
+  importEntity: (pid: string, source_entity_id: string) =>
+    req<Entity>(`/projects/${pid}/entities/import`, {
+      method: "POST",
+      body: JSON.stringify({ source_entity_id }),
+    }),
 };
+
+export interface LibraryEntity extends Entity {
+  project_title: string;
+}
 
 export interface Entity {
   id: string;
