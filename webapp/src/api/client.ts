@@ -242,6 +242,12 @@ export const graphApi = {
       method: "PUT",
       body: JSON.stringify({ graph }),
     }),
+  // Commit a media (e.g. a per-node quick-gen result) to the shot/entity.
+  applyMedia: (kind: "shot" | "entity", id: string, media_id: string, ext = "png") =>
+    req<any>(`/${kind === "shot" ? "shots" : "entities"}/${id}/apply-media`, {
+      method: "POST",
+      body: JSON.stringify({ media_id, ext }),
+    }),
 };
 
 export const assemble = {

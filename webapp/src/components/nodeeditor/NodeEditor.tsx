@@ -684,7 +684,17 @@ function Editor({
       setErr(null);
       try {
         const r = await graphApi.run(target.kind, target.id, serialize(), goal, id);
-        applyOutputs((r.node_outputs || {}) as Record<string, Out>);
+        const outs = (r.node_outputs || {}) as Record<string, Out>;
+        applyOutputs(outs);
+        // If this regenerated the node feeding the Output, commit that media to the
+        // shot/entity so the storyboard/asset reflects it (quick-gen alone doesn't apply).
+        const outNode = nodes.find((n) => n.type === "output");
+        const up = outNode && edges.find((e) => e.target === outNode.id)?.source;
+        const m = up ? outs[up] : undefined;
+        if (m?.media_id) {
+          await graphApi.applyMedia(target.kind, target.id, m.media_id, m.ext || "png");
+          onApplied(r);
+        }
       } catch (e: any) {
         setErr(e.message);
       } finally {
@@ -692,7 +702,7 @@ function Editor({
       }
     },
     // serialize/applyOutputs close over nodes+edges; recreate when they change.
-    [nodes, edges, goal, target.kind, target.id]
+    [nodes, edges, goal, target.kind, target.id, onApplied]
   );
 
   const preview = useCallback((src: string, video: boolean) => setLightbox({ src, video }), []);

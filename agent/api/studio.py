@@ -1362,6 +1362,37 @@ async def run_entity_graph(eid: str, body: SaveGraphRequest):
     return {**out, "entity": await _entity_or_404(eid)}
 
 
+class ApplyMediaRequest(BaseModel):
+    media_id: str
+    ext: str = "png"
+
+
+# Commit a media (e.g. the result of a per-node "tạo nhanh") to a shot/entity so the
+# storyboard / asset reflects it without a full graph run.
+@router.post("/shots/{sid}/apply-media")
+async def apply_shot_media(sid: str, body: ApplyMediaRequest):
+    shot = await _shot_or_404(sid)
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    web = await media_store.ensure_local(body.media_id, project["id"], body.ext)
+    col = "video" if body.ext == "mp4" else "image"
+    await db.update("shot", sid, {
+        f"{col}_media_id": body.media_id, f"{col}_primary_id": body.media_id,
+        f"{col}_path": web, "updated_at": db.now()})
+    return {"ok": True, "path": web, "shot": await _shot_or_404(sid)}
+
+
+@router.post("/entities/{eid}/apply-media")
+async def apply_entity_media(eid: str, body: ApplyMediaRequest):
+    entity = await _entity_or_404(eid)
+    project = await _project_or_404(entity["project_id"])
+    web = await media_store.ensure_local(body.media_id, project["id"], body.ext)
+    await db.update("entity", eid, {
+        "media_id": body.media_id, "primary_media_id": body.media_id,
+        "image_path": web, "updated_at": db.now()})
+    return {"ok": True, "path": web, "entity": await _entity_or_404(eid)}
+
+
 # ─── Assemble / narration / export ──────────────────────────
 
 class NarrationRequest(BaseModel):
