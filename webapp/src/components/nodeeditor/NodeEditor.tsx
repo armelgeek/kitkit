@@ -59,9 +59,10 @@ const prettyModel = (m: string) =>
 // React Flow's nodeTypes (which must be stable module-level components).
 const NodeOps = createContext<{
   update: (id: string, patch: any) => void;
+  remove: (id: string) => void;
   entities: Entity[];
   imageModels: string[];
-}>({ update: () => {}, entities: [], imageModels: [] });
+}>({ update: () => {}, remove: () => {}, entities: [], imageModels: [] });
 
 const handleStyle = (color: string) => ({
   width: 18,
@@ -73,15 +74,18 @@ const handleStyle = (color: string) => ({
 
 function Shell({
   type,
+  id,
   children,
   inputs = true,
   outputs = true,
 }: {
   type: string;
+  id?: string;
   children: React.ReactNode;
   inputs?: boolean;
   outputs?: boolean;
 }) {
+  const { remove } = useContext(NodeOps);
   const m = META[type] || META.output;
   return (
     <div
@@ -90,7 +94,16 @@ function Shell({
     >
       <div className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
         <span style={{ color: m.color }}>{m.icon}</span>
-        {m.label}
+        <span className="truncate">{m.label}</span>
+        {id && (
+          <button
+            onClick={() => remove(id)}
+            title="Xóa node"
+            className="nodrag ml-auto grid h-5 w-5 place-items-center rounded text-neutral-500 hover:bg-rose-600/80 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
       </div>
       <div className="space-y-2 px-3 pb-3">{children}</div>
       {inputs && <Handle type="target" position={Position.Left} style={handleStyle(m.color)} />}
@@ -162,7 +175,7 @@ function SourceNode({ id, data }: NodeProps) {
     if (e) update(id, { entity_id: e.id, media_id: e.media_id, web: e.image_path, label: e.name });
   };
   return (
-    <Shell type="source" inputs={false}>
+    <Shell type="source" id={id} inputs={false}>
       <Preview src={d.web} label="Chọn ảnh bên dưới" />
       <select className={fieldCls} value={d.entity_id || ""} onChange={(e) => pick(e.target.value)}>
         <option value="">{d.web ? "(ảnh hiện tại)" : "— chọn ảnh asset —"}</option>
@@ -179,7 +192,7 @@ function PromptNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="prompt" inputs={false}>
+    <Shell type="prompt" id={id} inputs={false}>
       <textarea
         className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
         value={d.text || ""}
@@ -199,7 +212,7 @@ function RefsNode({ id, data }: NodeProps) {
       entity_ids: ids.includes(eid) ? ids.filter((x) => x !== eid) : [...ids, eid],
     });
   return (
-    <Shell type="refs" inputs={false}>
+    <Shell type="refs" id={id} inputs={false}>
       <div className="nodrag nowheel max-h-36 space-y-0.5 overflow-auto">
         {entities.length === 0 && <p className="text-[11px] text-neutral-600">Chưa có asset.</p>}
         {entities.map((e) => (
@@ -257,7 +270,7 @@ function ImageNode({ id, data, type }: NodeProps) {
   const { update, imageModels } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type={type || "image"}>
+    <Shell type={type || "image"} id={id}>
       <Preview src={d._result || d.preview} label="Kết quả ảnh" />
       <AspectModelRow id={id} data={d} models={imageModels} />
       <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
@@ -270,7 +283,7 @@ function VideoNode({ id, data }: NodeProps) {
   const d = data as any;
   const isOmni = (d.model || "omni") === "omni";
   return (
-    <Shell type="video">
+    <Shell type="video" id={id}>
       <Preview src={d._result} video label="Kết quả video" />
       <AspectModelRow id={id} data={d} videoModels />
       <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
@@ -281,10 +294,10 @@ function VideoNode({ id, data }: NodeProps) {
   );
 }
 
-function OutputNode({ data }: NodeProps) {
+function OutputNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
-    <Shell type="output" outputs={false}>
+    <Shell type="output" id={id} outputs={false}>
       <Preview src={d._result} video={d._ext === "mp4"} label="Output cuối" />
     </Shell>
   );
@@ -403,6 +416,15 @@ function Editor({
     [setNodes]
   );
 
+  const remove = useCallback(
+    (id: string) => {
+      setNodes((ns) => ns.filter((n) => n.id !== id));
+      setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
+      setActiveId((a) => (a === id ? null : a));
+    },
+    [setNodes, setEdges]
+  );
+
   useEffect(() => {
     api.options().then((o) => setImageModels(o.image_models || [])).catch(() => {});
   }, []);
@@ -476,7 +498,10 @@ function Editor({
     }
   };
 
-  const ops = useMemo(() => ({ update, entities, imageModels }), [update, entities, imageModels]);
+  const ops = useMemo(
+    () => ({ update, remove, entities, imageModels }),
+    [update, remove, entities, imageModels]
+  );
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-neutral-950">
