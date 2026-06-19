@@ -1298,25 +1298,33 @@ class SaveGraphRequest(BaseModel):
     graph: dict
 
 
+# A shot owns two separate graphs: the storyboard IMAGE graph (graph_json) and the
+# shots-tab VIDEO graph (video_graph_json). `goal` selects which column to read/write.
+def _shot_graph_col(goal: str | None) -> str:
+    return "video_graph_json" if goal == "video" else "graph_json"
+
+
 @router.get("/shots/{sid}/graph")
-async def get_shot_graph(sid: str):
+async def get_shot_graph(sid: str, goal: str | None = None):
     row = await _shot_or_404(sid)
-    return {"graph": json.loads(row["graph_json"]) if row.get("graph_json") else None}
+    col = _shot_graph_col(goal)
+    return {"graph": json.loads(row[col]) if row.get(col) else None}
 
 
 @router.put("/shots/{sid}/graph")
-async def put_shot_graph(sid: str, body: SaveGraphRequest):
+async def put_shot_graph(sid: str, body: SaveGraphRequest, goal: str | None = None):
     await _shot_or_404(sid)
-    await db.update("shot", sid, {"graph_json": json.dumps(body.graph), "updated_at": db.now()})
+    col = _shot_graph_col(goal)
+    await db.update("shot", sid, {col: json.dumps(body.graph), "updated_at": db.now()})
     return {"ok": True}
 
 
 @router.post("/shots/{sid}/graph/run")
-async def run_shot_graph(sid: str, body: SaveGraphRequest):
+async def run_shot_graph(sid: str, body: SaveGraphRequest, goal: str | None = None):
     shot = await _shot_or_404(sid)
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
-    await db.update("shot", sid, {"graph_json": json.dumps(body.graph)})
+    await db.update("shot", sid, {_shot_graph_col(goal): json.dumps(body.graph)})
     project = {**project, "paygate_tier": await _current_tier()}
     try:
         out = await graph_mod.run_graph(body.graph, shot, project, "shot")

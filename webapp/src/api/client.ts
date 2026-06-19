@@ -212,16 +212,27 @@ export const shots = {
     req<Shot>(`/shots/${sid}/narration`, { method: "POST", body: JSON.stringify({ language }) }),
 };
 
+// `goal` distinguishes a shot's two graphs: "video" (shots tab) vs "image" (storyboard).
+const graphUrl = (
+  kind: "shot" | "entity",
+  id: string,
+  suffix: "" | "/run",
+  goal?: "image" | "video"
+) => {
+  const url = `/${kind === "shot" ? "shots" : "entities"}/${id}/graph${suffix}`;
+  return goal === "video" ? `${url}?goal=video` : url;
+};
+
 export const graphApi = {
-  get: (kind: "shot" | "entity", id: string) =>
-    req<{ graph: any }>(`/${kind === "shot" ? "shots" : "entities"}/${id}/graph`),
-  run: (kind: "shot" | "entity", id: string, graph: any) =>
-    req<any>(`/${kind === "shot" ? "shots" : "entities"}/${id}/graph/run`, {
+  get: (kind: "shot" | "entity", id: string, goal?: "image" | "video") =>
+    req<{ graph: any }>(graphUrl(kind, id, "", goal)),
+  run: (kind: "shot" | "entity", id: string, graph: any, goal?: "image" | "video") =>
+    req<any>(graphUrl(kind, id, "/run", goal), {
       method: "POST",
       body: JSON.stringify({ graph }),
     }),
-  save: (kind: "shot" | "entity", id: string, graph: any) =>
-    req<any>(`/${kind === "shot" ? "shots" : "entities"}/${id}/graph`, {
+  save: (kind: "shot" | "entity", id: string, graph: any, goal?: "image" | "video") =>
+    req<any>(graphUrl(kind, id, "", goal), {
       method: "PUT",
       body: JSON.stringify({ graph }),
     }),

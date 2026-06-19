@@ -475,9 +475,13 @@ function Editor({
     api.options().then((o) => setImageModels(o.image_models || [])).catch(() => {});
   }, []);
 
+  // A shot has separate image (storyboard) and video (shots-tab) graphs — keep them apart.
+  const goal: "image" | "video" =
+    target.goal || (target.kind === "shot" ? "video" : "image");
+
   useEffect(() => {
     graphApi
-      .get(target.kind, target.id)
+      .get(target.kind, target.id, goal)
       .then((r) => {
         const g = r.graph && r.graph.nodes?.length ? r.graph : defaultGraph(target, entities);
         setNodes(
@@ -529,14 +533,14 @@ function Editor({
     edges: edges.map((e) => ({ source: e.source, target: e.target })),
   });
 
-  const save = () => graphApi.save(target.kind, target.id, serialize());
+  const save = () => graphApi.save(target.kind, target.id, serialize(), goal);
 
   const run = async () => {
     setBusy(true);
     setErr(null);
     setDone(false);
     try {
-      const r = await graphApi.run(target.kind, target.id, serialize());
+      const r = await graphApi.run(target.kind, target.id, serialize(), goal);
       const outs = (r.node_outputs || {}) as Record<string, string>;
       const mapped: Record<string, { web: string; ext: string }> = {};
       for (const [k, web] of Object.entries(outs)) {

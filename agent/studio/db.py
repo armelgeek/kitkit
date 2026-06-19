@@ -89,6 +89,9 @@ _MIGRATIONS = [
     ("project", "prompt_header", "TEXT"),
     ("project", "prompt_footer", "TEXT"),
     ("project", "culture_hint", "TEXT"),
+    # A shot has two independent node graphs: graph_json = the storyboard IMAGE graph,
+    # video_graph_json = the shots-tab VIDEO graph. They must not share storage.
+    ("shot", "video_graph_json", "TEXT"),
 ]
 
 
