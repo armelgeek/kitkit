@@ -13,7 +13,7 @@ import time as _t
 
 from agent.config import IMAGE_MODELS
 from agent.services.flow_client import get_flow_client
-from agent.studio import db, media_store
+from agent.studio import db, media_store, brain
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +120,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str) -> dict
             outputs[nid] = {"references": refs}
 
         elif t == "image":
-            prompt = inp["text"] or data.get("text") or ""
+            body = inp["text"] or data.get("text") or ""
             res = await client.generate_images(
-                prompt=f"{prompt}. {project['style']}", project_id=flow_pid,
+                prompt=brain.compose_prompt(project, body), project_id=flow_pid,
                 aspect_ratio=_img_aspect(project),
                 user_paygate_tier=project["paygate_tier"],
                 references=inp["references"] or None, image_model=_img_model(project))

@@ -48,6 +48,9 @@ class UpdateProjectRequest(BaseModel):
     target_duration: Optional[int] = None
     shot_duration: Optional[int] = None
     storytelling: Optional[bool] = None
+    prompt_header: Optional[str] = None
+    prompt_footer: Optional[str] = None
+    culture_hint: Optional[str] = None
 
 
 class GenerateScriptRequest(BaseModel):
@@ -349,12 +352,17 @@ async def generate_script(pid: str, body: GenerateScriptRequest):
     script = result.get("script", "")
     if not script:
         raise HTTPException(502, "AI không trả về script")
-    await db.update("project", pid, {
-        "idea": body.idea, "target_duration": body.target_duration,
-        "script_raw": script, "updated_at": db.now()})
+    fields = {"idea": body.idea, "target_duration": body.target_duration,
+              "script_raw": script, "updated_at": db.now()}
+    # culture_hint is auto-detected from the content; don't clobber a user override.
+    ch = (result.get("culture_hint") or "").strip()
+    if ch and not (p.get("culture_hint") or "").strip():
+        fields["culture_hint"] = ch
+    await db.update("project", pid, fields)
     scenes = await _save_scenes(pid, script)
     return {"script": script, "scenes": scenes,
-            "estimated_duration": result.get("estimated_duration")}
+            "estimated_duration": result.get("estimated_duration"),
+            "culture_hint": fields.get("culture_hint") or p.get("culture_hint")}
 
 
 @router.put("/projects/{pid}/script")
@@ -448,10 +456,11 @@ async def _store_media_on_entity(entity: dict, project: dict, info: dict, label:
 
 async def _generate_entity_image(entity: dict, project: dict) -> dict:
     client = _require_extension()
-    prompt = brain.ref_image_prompt(
+    body = brain.ref_image_prompt(
         entity["type"], entity["name"],
-        entity.get("description") or entity.get("ref_prompt") or "", project["style"])
-    aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop")
+        entity.get("description") or entity.get("ref_prompt") or "")
+    prompt = brain.compose_prompt(project, body)
+    aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
               else _to_image_aspect(project["aspect_ratio"]))
     model = await _resolve_image_model(project)
     res = await client.generate_images(
@@ -667,7 +676,8 @@ async def _generate_frame_image(shot: dict) -> dict:
     project = await _project_or_404(scene["project_id"])
     client = _require_extension()
     refs = await _build_frame_references(shot, scene)
-    prompt = f"{shot.get('description') or shot.get('title') or ''}. Art style: {project['style']}."
+    prompt = brain.compose_prompt(
+        project, shot.get("description") or shot.get("title") or "")
     aspect = _to_image_aspect(project["aspect_ratio"])
     model = await _resolve_image_model(project)
     res = await client.generate_images(
@@ -718,12 +728,19 @@ async def autofill_storyboard(sid: str, body: AutofillRequest):
     await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
     ts = db.now()
     for i, f in enumerate(frames):
-        ref_ids = [name_to_id[n.lower()] for n in f.get("ref_entity_names", [])
-                   if n.lower() in name_to_id]
+        ref_names = list(f.get("ref_entity_names", []))
+        ref_ids = [name_to_id[n.lower()] for n in ref_names if n.lower() in name_to_id]
+        # ensure the scene location is always referenced by every frame
+        if loc_id and loc_id not in ref_ids:
+            ref_ids = [loc_id] + ref_ids
         await db.insert("shot", {
             "id": db.new_id(), "scene_id": sid, "idx": i,
             "title": f.get("title", f"Shot {i+1}"),
             "description": f.get("description", ""),
+            # visual/motion prompts come from the same autofill pass so the shot image
+            # and its video action stay consistent (same entity references).
+            "visual_prompt": f.get("visual_prompt") or None,
+            "motion_prompt": f.get("motion_prompt") or None,
             "ref_entity_ids": json.dumps(ref_ids),
             "duration": project["shot_duration"] or 8,
             "status": "pending", "created_at": ts, "updated_at": ts})
@@ -731,6 +748,27 @@ async def autofill_storyboard(sid: str, body: AutofillRequest):
         await db.update("scene", sid, {"location_entity_id": loc_id})
     return {"shots": await db.query_all(
         "SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))}
+
+
+@router.post("/projects/{pid}/storyboard/autofill-all")
+async def autofill_all_storyboard(pid: str, body: AutofillRequest, force: bool = False):
+    """✨ Autofill every scene in the project (skip scenes that already have shots unless force)."""
+    await _project_or_404(pid)
+    scenes = await db.query_all(
+        "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
+    done, errors = 0, []
+    for sc in scenes:
+        if not force:
+            existing = await db.query_one(
+                "SELECT COUNT(*) AS n FROM shot WHERE scene_id=?", (sc["id"],))
+            if existing and existing["n"]:
+                continue
+        try:
+            await autofill_storyboard(sc["id"], body)
+            done += 1
+        except Exception as ex:
+            errors.append({"scene": sc["id"], "error": str(ex)[:200]})
+    return {"requested": len(scenes), "done": done, "errors": errors}
 
 
 @router.post("/scenes/{sid}/shots")
@@ -1107,7 +1145,7 @@ async def export_project(pid: str):
         client = get_flow_client()
         if client.connected and meta.get("thumbnail_prompt"):
             res = await client.generate_images(
-                prompt=f"{meta['thumbnail_prompt']}. {p['style']}",
+                prompt=brain.compose_prompt(p, meta["thumbnail_prompt"]),
                 project_id=p["flow_project_id"],
                 aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE",
                 user_paygate_tier=await _current_tier(),

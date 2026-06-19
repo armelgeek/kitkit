@@ -6,6 +6,7 @@ import StoryboardTab from "./storyboard/StoryboardTab";
 import ShotsTab from "./shots/ShotsTab";
 import AssembleTab from "./assemble/AssembleTab";
 import NodeEditor, { type EditorTarget } from "./nodeeditor/NodeEditor";
+import ProjectSettings from "./settings/ProjectSettings";
 
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble"] as const;
 type Tab = (typeof TABS)[number];
@@ -23,6 +24,7 @@ export default function ProjectWorkspace({
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [reload, setReload] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Fetch the full project (with script_raw) + entities on open.
   useEffect(() => {
@@ -78,12 +80,23 @@ export default function ProjectWorkspace({
             onBlur={saveStyle}
             className="w-44 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500"
           />
+          <button
+            onClick={() => setSettingsOpen(true)}
+            title="Cấu hình dự án (prompt header/footer, culture, model)"
+            className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+          >
+            ⚙
+          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
         {tab === "Script" ? (
-          <ScriptTab key={project.id} project={project} />
+          <ScriptTab
+            key={project.id}
+            project={project}
+            onScriptChange={(script_raw) => setProject((p) => ({ ...p, script_raw }))}
+          />
         ) : tab === "Assets" ? (
           <AssetsTab key={project.id + reload} project={project} onEdit={openEditor} />
         ) : tab === "Storyboard" ? (
@@ -101,6 +114,17 @@ export default function ProjectWorkspace({
           entities={entities}
           onClose={() => setEditor(null)}
           onApplied={() => setReload((r) => r + 1)}
+        />
+      )}
+
+      {settingsOpen && (
+        <ProjectSettings
+          project={project}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(p) => {
+            setProject(p);
+            setStyle(p.style);
+          }}
         />
       )}
     </div>

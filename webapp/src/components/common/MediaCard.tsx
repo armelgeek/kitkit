@@ -40,6 +40,7 @@ export default function MediaCard({
       <div className="relative cursor-pointer" onClick={onClick}>
         {videoSrc ? (
           <video
+            key={videoSrc}
             src={videoSrc}
             className="aspect-video w-full bg-black object-cover"
             muted

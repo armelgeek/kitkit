@@ -124,6 +124,12 @@ Tạo một project trống để gom nhóm các hình ảnh và video được 
 * **Method:** `GET`
 * **Description:** Xóa project tương ứng trên Google Flow.
 
+### 5. Thay Đổi Ảnh Đại Diện Project (Change Project Cover)
+* **URL:** `/api/flow/change-project-cover/{project_id}/{media_id}`
+* **Method:** `GET`
+* **Description:** Đặt ảnh có `media_id` làm ảnh đại diện cho dự án `project_id`.
+* **Ví dụ:** `/api/flow/change-project-cover/7a2b3eb3-4cb0-41ee-9662-4dd4d7d85cd5/296074c9-4ac5-4e3a-92e0-f608b67512f1`
+
 ---
 
 ## 🎨 Tạo và Biên Tập Hình Ảnh (Image Generation & Edit)
@@ -141,6 +147,8 @@ Tạo hình ảnh mới dựa trên mô tả văn bản (Prompt).
   | `aspect_ratio` | `str` | No | `"IMAGE_ASPECT_RATIO_PORTRAIT"` | Tỉ lệ ảnh (`IMAGE_ASPECT_RATIO_PORTRAIT`, `IMAGE_ASPECT_RATIO_LANDSCAPE`, `IMAGE_ASPECT_RATIO_SQUARE`) |
   | `user_paygate_tier` | `str` | No | `"PAYGATE_TIER_ONE"` | Tier tài khoản (`PAYGATE_TIER_ONE`, `PAYGATE_TIER_TWO`) |
   | `character_media_ids` | `list[str]` | No | `null` | Danh sách ID ảnh nhân vật mẫu (nếu muốn giữ nhân vật) |
+  | `references` | `list[dict]` | No | `null` | Danh sách tham chiếu chứa `handle` (tên nhãn) và `media_id` (vd: `[{"handle": "Thao", "media_id": "..."}]`). Prompt có thể nhúng `{handle}` để model map chính xác hình ảnh nhân vật mà không bị lẫn |
+  | `image_model` | `str` | No | `null` | Ghi đè model tạo ảnh (vd: `"GEM_PIX_2"`, `"NARWHAL"`) |
 
 * **Request Example:**
   ```json
@@ -270,8 +278,43 @@ Sinh video sử dụng nhiều hình ảnh làm mẫu tham chiếu.
   | `scene_id` | `str` | Yes | | ID phân cảnh tự định nghĩa |
   | `aspect_ratio` | `str` | No | `"VIDEO_ASPECT_RATIO_PORTRAIT"` | Tỉ lệ video |
   | `user_paygate_tier` | `str` | No | `"PAYGATE_TIER_ONE"` | Tier tài khoản |
+  | `references` | `list[dict]` | No | `null` | Danh sách tham chiếu chứa `handle` và `media_id` (vd: `[{"handle": "Thao", "media_id": "..."}]`). Hỗ trợ nhúng `{handle}` trong prompt để map chính xác thực thể |
+  | `video_model` | `str` | No | `null` | Ghi đè model sinh video (vd: `"veo_3_1_r2v_lite"`) |
 
-### 3. Nâng Cấp Chất Lượng Video (Upscale Video)
+### 3. Tạo Video Sử Dụng Model Omni Flash (Omni Flash Video Generation)
+Sinh video tham chiếu (r2v) bằng mô hình **Omni Flash** với tùy chọn độ dài linh hoạt (4, 6, 8, 10 giây). Yêu cầu có ít nhất 1 ảnh tham chiếu và tỉ lệ khung hình phải là `VIDEO_ASPECT_RATIO_PORTRAIT` hoặc `VIDEO_ASPECT_RATIO_LANDSCAPE`.
+
+* **URL:** `/api/flow/generate-video-omni`
+* **Method:** `POST`
+* **Request Body (JSON):**
+  | Field | Type | Required | Default | Description |
+  | :--- | :--- | :---: | :---: | :--- |
+  | `prompt` | `str` | Yes | | Prompt mô tả hành động |
+  | `project_id` | `str` | Yes | | ID project |
+  | `reference_media_ids` | `list[str]` | Yes | | Danh sách ID ảnh tham chiếu |
+  | `duration_s` | `int` | No | `8` | Độ dài video bằng giây (hỗ trợ `4`, `6`, `8`, `10`) |
+  | `aspect_ratio` | `str` | No | `"VIDEO_ASPECT_RATIO_LANDSCAPE"` | Tỉ lệ video (`VIDEO_ASPECT_RATIO_PORTRAIT` hoặc `VIDEO_ASPECT_RATIO_LANDSCAPE`) |
+  | `user_paygate_tier` | `str` | No | `"PAYGATE_TIER_ONE"` | Tier tài khoản |
+  | `references` | `list[dict]` | No | `null` | Danh sách tham chiếu có `handle` và `media_id` phục vụ việc gán tag `{handle}` trong prompt |
+
+* **Request Example:**
+  ```json
+  {
+    "prompt": "{fox} running happily in the snow, slow motion",
+    "project_id": "c4898aaf-606f-47cb-b61e-52b49053ac7e",
+    "reference_media_ids": ["b214b800-b61a-4753-9596-a918d830fd91"],
+    "duration_s": 6,
+    "aspect_ratio": "VIDEO_ASPECT_RATIO_LANDSCAPE",
+    "references": [
+      {
+        "handle": "fox",
+        "media_id": "b214b800-b61a-4753-9596-a918d830fd91"
+      }
+    ]
+  }
+  ```
+
+### 4. Nâng Cấp Chất Lượng Video (Upscale Video)
 Tăng chất lượng/độ phân giải của video lên tối đa 4K.
 
 * **URL:** `/api/flow/upscale/video`

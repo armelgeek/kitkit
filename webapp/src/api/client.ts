@@ -11,6 +11,11 @@ export interface Project {
   idea: string | null;
   target_duration: number | null;
   script_raw: string | null;
+  image_model?: string | null;
+  video_model?: string | null;
+  prompt_header?: string | null;
+  prompt_footer?: string | null;
+  culture_hint?: string | null;
   status: string;
   updated_at: number;
 }
@@ -56,6 +61,11 @@ export const api = {
     req<Project>("/projects", { method: "POST", body: JSON.stringify(body) }),
   updateProject: (id: string, body: any) =>
     req<Project>(`/projects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  setCover: (id: string, media_id: string) =>
+    req<{ project: Project; flow_updated: boolean }>(`/projects/${id}/cover`, {
+      method: "PUT",
+      body: JSON.stringify({ media_id }),
+    }),
   deleteProject: (id: string) =>
     req<{ ok: boolean }>(`/projects/${id}`, { method: "DELETE" }),
   getSettings: () => req<Record<string, any>>("/settings"),
@@ -120,6 +130,7 @@ export interface Shot {
   title: string;
   description: string | null;
   ref_entity_ids: string | null;
+  image_media_id: string | null;
   image_path: string | null;
   video_path: string | null;
   visual_prompt: string | null;
@@ -136,9 +147,14 @@ export const storyboard = {
       method: "POST",
       body: JSON.stringify({ n_frames: n_frames ?? null }),
     }),
+  autofillAll: (pid: string, n_frames?: number) =>
+    req<any>(`/projects/${pid}/storyboard/autofill-all`, {
+      method: "POST",
+      body: JSON.stringify({ n_frames: n_frames ?? null }),
+    }),
   addShot: (sid: string) => req<Shot>(`/scenes/${sid}/shots`, { method: "POST" }),
   insertShot: (sid: string) => req<Shot>(`/shots/${sid}/insert`, { method: "POST" }),
-  updateShot: (sid: string, body: Partial<Shot> & { ref_entity_ids?: string[] }) =>
+  updateShot: (sid: string, body: Partial<Omit<Shot, "ref_entity_ids">> & { ref_entity_ids?: string[] }) =>
     req<Shot>(`/shots/${sid}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteShot: (sid: string) => req<{ ok: boolean }>(`/shots/${sid}`, { method: "DELETE" }),
   genImage: (sid: string) => req<Shot>(`/shots/${sid}/image`, { method: "POST" }),

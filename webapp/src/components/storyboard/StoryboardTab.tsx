@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 import { api, storyboard, type Entity, type Project, type Scene, type Shot } from "../../api/client";
+import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
+
+const parseRefs = (s: string | null): string[] => {
+  try {
+    return JSON.parse(s || "[]");
+  } catch {
+    return [];
+  }
+};
 
 export default function StoryboardTab({
   project,
   onEdit,
 }: {
   project: Project;
-  onEdit?: (t: { kind: "shot"; id: string; title: string }) => void;
+  onEdit?: (t: EditorTarget) => void;
 }) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
@@ -85,12 +94,62 @@ export default function StoryboardTab({
     }
   };
 
+  const reloadAll = async () => {
+    for (const s of scenes) await loadShots(s.id);
+  };
+
+  const autofillAll = async () => {
+    setBusy("autofill-all");
+    setErr(null);
+    try {
+      await storyboard.autofillAll(project.id);
+      await reloadAll();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const projectAll = async () => {
+    setBusy("gen-all");
+    setErr(null);
+    try {
+      await storyboard.genProjectAll(project.id);
+      await reloadAll();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="flex h-full">
       <div className="min-w-0 flex-1 overflow-auto px-6 py-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Storyboard</h2>
-          <span className="text-sm text-neutral-500">Ảnh từng frame theo scene</span>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Storyboard</h2>
+            <p className="text-sm text-neutral-500">Ảnh từng frame theo scene</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={!!busy || !scenes.length}
+              onClick={autofillAll}
+              title="Autofill toàn bộ scene chưa có frame"
+              className="rounded-lg border border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
+            >
+              {busy === "autofill-all" ? "Đang autofill…" : "✨ Autofill all"}
+            </button>
+            <button
+              disabled={!!busy || !scenes.length}
+              onClick={projectAll}
+              title="Tạo ảnh cho mọi frame chưa có ảnh trong dự án"
+              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+            >
+              {busy === "gen-all" ? "Đang tạo…" : "✦ Auto gen all"}
+            </button>
+          </div>
         </div>
         {err && (
           <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
@@ -141,7 +200,20 @@ export default function StoryboardTab({
                     busyLabel="Đang tạo ảnh…"
                     onClick={() => setSel(sh)}
                     onPreview={sh.image_path ? () => setLightbox(sh) : undefined}
-                    onEdit={onEdit ? () => onEdit({ kind: "shot", id: sh.id, title: sh.title }) : undefined}
+                    onEdit={
+                      onEdit
+                        ? () =>
+                            onEdit({
+                              kind: "shot",
+                              id: sh.id,
+                              title: sh.title,
+                              prompt: sh.description || sh.visual_prompt || sh.title,
+                              refEntityIds: parseRefs(sh.ref_entity_ids),
+                              imageSrc: sh.image_path,
+                              videoSrc: sh.video_path,
+                            })
+                        : undefined
+                    }
                     actions={
                       <>
                         <button
@@ -154,6 +226,22 @@ export default function StoryboardTab({
                         >
                           ⚡
                         </button>
+                        {sh.image_media_id && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await api.setCover(project.id, sh.image_media_id!);
+                              } catch (ex: any) {
+                                setErr(ex.message);
+                              }
+                            }}
+                            title="Đặt làm ảnh đại diện dự án"
+                            className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-amber-600"
+                          >
+                            ★
+                          </button>
+                        )}
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();

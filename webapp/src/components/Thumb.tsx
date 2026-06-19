@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Props {
   src?: string | null;
@@ -11,6 +11,9 @@ interface Props {
 // gradient placeholder with the first letter — so the grid never looks broken.
 export default function Thumb({ src, alt, className = "", rounded = "rounded-xl" }: Props) {
   const [failed, setFailed] = useState(false);
+  // When src changes (e.g. an image was just generated/downloaded), clear any prior
+  // error state so the new image actually loads without needing a tab-switch/remount.
+  useEffect(() => setFailed(false), [src]);
   const show = src && !failed;
   return (
     <div
@@ -18,6 +21,7 @@ export default function Thumb({ src, alt, className = "", rounded = "rounded-xl"
     >
       {show ? (
         <img
+          key={src!}
           src={src!}
           alt={alt}
           loading="lazy"

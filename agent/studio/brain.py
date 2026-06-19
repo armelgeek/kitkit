@@ -111,6 +111,25 @@ def parse_scenes(script: str) -> list[dict]:
     return scenes
 
 
+# ─── Prompt composition (style-first + header/footer + culture) ──
+
+def compose_prompt(project: dict, body: str, *, include_culture: bool = True) -> str:
+    """Assemble the final image/video prompt for a project.
+
+    Order: [prompt_header] → style (always first of the visual terms) + culture_hint →
+    body → [prompt_footer]. `style` leads so the model anchors on it; the culture hint
+    (e.g. "Vietnamese folk tale, traditional Vietnamese architecture") keeps imagery
+    faithful to the story's origin instead of defaulting to the style's home culture.
+    """
+    style = (project.get("style") or "").strip()
+    header = (project.get("prompt_header") or "").strip()
+    footer = (project.get("prompt_footer") or "").strip()
+    culture = (project.get("culture_hint") or "").strip() if include_culture else ""
+    lead = ", ".join(p for p in (style, culture) if p)
+    parts = [header, lead, (body or "").strip(), footer]
+    return ". ".join(p for p in parts if p)
+
+
 # ─── Prompt templates ───────────────────────────────────────
 
 def script_from_idea_prompt(idea: str, target_duration: int | None,
@@ -133,8 +152,14 @@ def script_from_idea_prompt(idea: str, target_duration: int | None,
         "(scene headings like 'INT. PLACE - DAY', action lines, CHARACTER cues, dialogue).\n"
         f"Visual style of the film: {style}.\n{mode}{budget}\n\n"
         f"IDEA / CONTENT:\n{idea}\n\n"
+        "Also DETECT the cultural origin of this content (which country/era/folk tradition "
+        "it belongs to) and return a short ENGLISH `culture_hint` — a comma-separated list of "
+        "concrete visual cues that make generated imagery faithful to that origin "
+        "(e.g. for a Vietnamese folk tale: 'Vietnamese folk tale, traditional Vietnamese "
+        "architecture (nhà tranh, đình làng), áo dài / áo tứ thân clothing, Vietnamese rural "
+        "landscape, conical hats'). If the content is culturally neutral, return an empty string.\n\n"
         "Return ONLY JSON: {\"script\": \"<fountain screenplay>\", "
-        "\"estimated_duration\": <seconds>}"
+        "\"estimated_duration\": <seconds>, \"culture_hint\": \"<english visual cues or empty>\"}"
     )
 
 
@@ -152,24 +177,32 @@ def entity_extract_prompt(script: str) -> str:
 
 
 # Per-type reference-image prompt rules (video-app.md §2.2) — clean refs.
+# Returns the BODY only; the caller wraps it with style/culture/header/footer via
+# compose_prompt() so style always leads the prompt.
 _SHEET = {
-    "character": ("character design sheet, multiple turnaround views (front, 3/4, side, "
-                  "back), neutral A-pose, neutral expression, plain solid white background, "
-                  "no scene, no props, no ground shadow, studio reference"),
+    "character": ("full character reference sheet on a plain solid white background, "
+                  "laid out as a single sheet: ONE large detailed upper-body (bust) "
+                  "portrait on the left, a row of turnaround views (front, 3/4, side, back) "
+                  "in a neutral A-pose, and a separate row of facial EXPRESSION studies "
+                  "(neutral, happy, sad, angry, surprised). Same consistent character in "
+                  "every view. No scene, no extra props, no ground shadow, studio reference"),
     "prop": ("object design sheet, multiple angles (front, 3/4, side, top), single isolated "
              "object on plain solid white background, no background scene, no shadow, "
              "studio product reference"),
+    "location": ("establishing location reference sheet, a 2x2 grid showing FOUR different "
+                 "camera angles of the SAME place (wide establishing, reverse angle, high "
+                 "angle, eye-level detail), consistent architecture and lighting across all "
+                 "four, cinematic, no people"),
 }
 
 
-def ref_image_prompt(entity_type: str, name: str, description: str, style: str) -> str:
-    """Build the generate-image prompt for an entity's reference art."""
+def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
+    """Build the (style-less) body of an entity's reference-art prompt."""
     base = (description or name).strip()
     rule = _SHEET.get(entity_type)
-    if rule:  # character / prop → design sheet, white bg
-        return f"{name}: {base}. {rule}. Art style: {style}."
-    # location → establishing shot, keep background
-    return f"Establishing shot of {name}: {base}. {style}, cinematic, no people."
+    if rule:
+        return f"{name}: {base}. {rule}"
+    return f"{name}: {base}. clean reference image"
 
 
 def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
@@ -178,18 +211,41 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
     roster = "\n".join(
         f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
     ) or "(none)"
+    locations = [e["name"] for e in entities if e.get("type") == "location"]
+    loc_line = (
+        "The location entities available are: "
+        + ", ".join("{" + n + "}" for n in locations)
+        + ". Pick the single location this scene happens at."
+    ) if locations else (
+        "No location entity exists yet — invent a consistent place name and wrap it in "
+        "curly braces, reusing the SAME name for every frame of this scene."
+    )
     count = f"about {n_frames} frames" if n_frames else "as many frames as the action needs (2–6)"
     return (
-        "Break this scene into storyboard FRAMES (still shots). For each frame write a "
-        "`title` and a vivid `description` for an image generator.\n"
-        "IMPORTANT: when a known entity appears, wrap its name in curly braces exactly as "
-        "listed (e.g. {Mai}) so it can be bound to its reference image. List the entities "
-        "used per frame in `ref_entity_names` (names without braces).\n"
+        "Break this scene into storyboard FRAMES (still shots). Every frame in this scene "
+        "happens at ONE shared location.\n"
+        f"{loc_line}\n\n"
+        "For each frame return:\n"
+        "- `title`: short label.\n"
+        "- `description`: a vivid image-generator prompt that MUST begin by naming the "
+        "location and the camera angle, e.g. \"At {Khu rừng}, camera angle from the left, "
+        "{Mai} opens the wooden door...\". Always state the place first, then the angle, "
+        "then the action.\n"
+        "- `visual_prompt`: what is on screen for an image-to-video model (subject, "
+        "composition, lighting) — keep the SAME entity references.\n"
+        "- `motion_prompt`: the camera move + the concrete action that happens during the "
+        "clip, referencing the SAME entities.\n"
+        "- `ref_entity_names`: every entity used in the frame (names WITHOUT braces), and it "
+        "MUST include the scene's location.\n"
+        "IMPORTANT: whenever a known entity (character/location/prop) appears in ANY prompt, "
+        "wrap its name in curly braces exactly as listed (e.g. {Mai}) so it binds to its "
+        "reference image.\n"
         f"Visual style: {style}. Produce {count}.\n\n"
         f"AVAILABLE ENTITIES:\n{roster}\n\n"
         f"SCENE: {scene_heading}\n{scene_body}\n\n"
-        "Return ONLY JSON array: [{\"title\":\"...\",\"description\":\"... {Entity} ...\","
-        "\"ref_entity_names\":[\"Entity\"]}]"
+        "Return ONLY JSON array: [{\"title\":\"...\",\"description\":\"At {Location}, "
+        "<angle>, ... {Entity} ...\",\"visual_prompt\":\"...\",\"motion_prompt\":\"...\","
+        "\"ref_entity_names\":[\"Location\",\"Entity\"]}]"
     )
 
 

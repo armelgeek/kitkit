@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS project (
   idea TEXT, target_duration INTEGER, shot_duration INTEGER DEFAULT 8,
   storytelling INTEGER DEFAULT 0,
   voiceover_raw TEXT, script_raw TEXT,
+  prompt_header TEXT, prompt_footer TEXT, culture_hint TEXT,
   thumb_media_key TEXT,
   status TEXT DEFAULT 'draft',
   created_at REAL, updated_at REAL
@@ -83,6 +84,22 @@ CREATE INDEX IF NOT EXISTS idx_scene_project ON scene(project_id);
 CREATE INDEX IF NOT EXISTS idx_shot_scene ON shot(scene_id);
 """
 
+# Columns added after the initial schema shipped — ALTER on existing DBs (idempotent).
+_MIGRATIONS = [
+    ("project", "prompt_header", "TEXT"),
+    ("project", "prompt_footer", "TEXT"),
+    ("project", "culture_hint", "TEXT"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, col, decl in _MIGRATIONS:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    conn.commit()
+
 
 def _get_conn() -> sqlite3.Connection:
     global _conn
@@ -92,6 +109,7 @@ def _get_conn() -> sqlite3.Connection:
         _conn.row_factory = sqlite3.Row
         _conn.executescript(_SCHEMA)
         _conn.commit()
+        _migrate(_conn)
     return _conn
 
 

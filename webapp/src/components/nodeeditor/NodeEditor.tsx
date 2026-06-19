@@ -17,6 +17,12 @@ export interface EditorTarget {
   kind: "shot" | "entity";
   id: string;
   title: string;
+  // Seed data so the editor opens with the current prompt / references / media
+  // already filled in (instead of empty nodes).
+  prompt?: string | null;
+  refEntityIds?: string[];
+  imageSrc?: string | null;
+  videoSrc?: string | null;
 }
 
 const PALETTE: { type: string; label: string }[] = [
@@ -33,28 +39,32 @@ const COLOR: Record<string, string> = {
   editImage: "#f59e0b", video: "#ec4899", output: "#64748b",
 };
 
-function defaultGraph(kind: string): { nodes: Node[]; edges: Edge[] } {
+function defaultGraph(kind: string, seed?: EditorTarget): { nodes: Node[]; edges: Edge[] } {
   const mk = (id: string, type: string, x: number, y: number, data: any = {}): Node => ({
     id, position: { x, y }, data: { ...data, _type: type, label: type },
     style: nodeStyle(type),
   });
+  const promptText = seed?.prompt ?? "";
+  const refIds = seed?.refEntityIds ?? [];
   if (kind === "shot") {
     return {
       nodes: [
-        mk("p", "prompt", 0, 0, { text: "" }),
-        mk("v", "video", 240, 0, { text: "" }),
-        mk("o", "output", 480, 0),
+        mk("p", "prompt", 0, 0, { text: promptText }),
+        mk("r", "refs", 0, 150, { entity_ids: refIds }),
+        mk("v", "video", 260, 40, { text: "" }),
+        mk("o", "output", 500, 40),
       ],
       edges: [
         { id: "e1", source: "p", target: "v" },
-        { id: "e2", source: "v", target: "o" },
+        { id: "e2", source: "r", target: "v" },
+        { id: "e3", source: "v", target: "o" },
       ],
     };
   }
   return {
     nodes: [
-      mk("p", "prompt", 0, 0, { text: "" }),
-      mk("r", "refs", 0, 120, { entity_ids: [] }),
+      mk("p", "prompt", 0, 0, { text: promptText }),
+      mk("r", "refs", 0, 120, { entity_ids: refIds }),
       mk("i", "image", 260, 40),
       mk("o", "output", 500, 40),
     ],
@@ -93,7 +103,7 @@ export default function NodeEditor({
 
   useEffect(() => {
     graphApi.get(target.kind, target.id).then((r) => {
-      const g = r.graph && r.graph.nodes?.length ? r.graph : defaultGraph(target.kind);
+      const g = r.graph && r.graph.nodes?.length ? r.graph : defaultGraph(target.kind, target);
       // re-apply styles + labels
       g.nodes = g.nodes.map((n: any) => ({
         ...n,
@@ -103,7 +113,7 @@ export default function NodeEditor({
       setNodes(g.nodes);
       setEdges(g.edges || []);
     }).catch(() => {
-      const g = defaultGraph(target.kind);
+      const g = defaultGraph(target.kind, target);
       setNodes(g.nodes);
       setEdges(g.edges);
     });
@@ -192,7 +202,17 @@ export default function NodeEditor({
       </div>
       {err && <div className="bg-rose-950/50 px-4 py-1.5 text-sm text-rose-300">{err}</div>}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1">
+        <div className="relative flex-1">
+          {(target.videoSrc || target.imageSrc) && (
+            <div className="absolute left-3 top-3 z-10 w-44 overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900/90 shadow-xl backdrop-blur">
+              <div className="px-2 py-1 text-[11px] text-neutral-400">Ảnh/video hiện tại</div>
+              {target.videoSrc ? (
+                <video src={target.videoSrc} controls className="aspect-video w-full bg-black" />
+              ) : (
+                <img src={target.imageSrc!} className="aspect-video w-full object-cover" />
+              )}
+            </div>
+          )}
           <ReactFlow
             nodes={nodes}
             edges={edges}

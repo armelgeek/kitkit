@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 import { api, storyboard, shots as shotsApi, type Project, type Scene, type Shot } from "../../api/client";
+import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
+
+const parseRefs = (s: string | null): string[] => {
+  try {
+    return JSON.parse(s || "[]");
+  } catch {
+    return [];
+  }
+};
 
 export default function ShotsTab({
   project,
   onEdit,
 }: {
   project: Project;
-  onEdit?: (t: { kind: "shot"; id: string; title: string }) => void;
+  onEdit?: (t: EditorTarget) => void;
 }) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [byScene, setByScene] = useState<Record<string, Shot[]>>({});
@@ -118,7 +127,20 @@ export default function ShotsTab({
                     busyLabel="Đang render…"
                     onClick={() => setSel(sh)}
                     onPreview={sh.video_path || sh.image_path ? () => setLightbox(sh) : undefined}
-                    onEdit={onEdit ? () => onEdit({ kind: "shot", id: sh.id, title: sh.title }) : undefined}
+                    onEdit={
+                      onEdit
+                        ? () =>
+                            onEdit({
+                              kind: "shot",
+                              id: sh.id,
+                              title: sh.title,
+                              prompt: sh.motion_prompt || sh.visual_prompt || sh.description || sh.title,
+                              refEntityIds: parseRefs(sh.ref_entity_ids),
+                              imageSrc: sh.image_path,
+                              videoSrc: sh.video_path,
+                            })
+                        : undefined
+                    }
                     actions={
                       <button
                         onClick={(e) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Entity, type Project } from "../../api/client";
+import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import Thumb from "../Thumb";
 
 const GROUPS: { type: Entity["type"]; label: string }[] = [
@@ -13,7 +14,7 @@ export default function AssetsTab({
   onEdit,
 }: {
   project: Project;
-  onEdit?: (t: { kind: "entity"; id: string; title: string }) => void;
+  onEdit?: (t: EditorTarget) => void;
 }) {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -63,7 +64,8 @@ export default function AssetsTab({
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
+    <div className="h-full overflow-auto">
+      <div className="mx-auto max-w-6xl px-6 py-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Thư viện Asset</h2>
@@ -118,8 +120,24 @@ export default function AssetsTab({
                   entity={e}
                   generating={gening.has(e.id)}
                   onGenerate={() => genOne(e)}
+                  onCover={
+                    e.media_id
+                      ? () => wrap("cover", () => api.setCover(project.id, e.media_id!))
+                      : undefined
+                  }
                   onDelete={() => wrap("del", () => api.deleteEntity(e.id))}
-                  onEdit={onEdit ? () => onEdit({ kind: "entity", id: e.id, title: e.name }) : undefined}
+                  onEdit={
+                    onEdit
+                      ? () =>
+                          onEdit({
+                            kind: "entity",
+                            id: e.id,
+                            title: e.name,
+                            prompt: e.description || e.ref_prompt || e.name,
+                            imageSrc: e.image_path,
+                          })
+                      : undefined
+                  }
                 />
               ))}
               {!items.length && (
@@ -131,6 +149,7 @@ export default function AssetsTab({
           </section>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -139,12 +158,14 @@ function AssetCard({
   entity,
   generating,
   onGenerate,
+  onCover,
   onDelete,
   onEdit,
 }: {
   entity: Entity;
   generating: boolean;
   onGenerate: () => void;
+  onCover?: () => void;
   onDelete: () => void;
   onEdit?: () => void;
 }) {
@@ -178,6 +199,15 @@ function AssetCard({
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
             >
               ✎
+            </button>
+          )}
+          {onCover && (
+            <button
+              onClick={onCover}
+              title="Đặt làm ảnh đại diện dự án"
+              className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-amber-600"
+            >
+              ★
             </button>
           )}
           <button
