@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS project (
   storytelling INTEGER DEFAULT 0,
   voiceover_raw TEXT, script_raw TEXT,
   prompt_header TEXT, prompt_footer TEXT, culture_hint TEXT,
+  image_text_lang TEXT DEFAULT 'Vietnamese',
+  script_lang TEXT DEFAULT 'Vietnamese',
+  bgm_path TEXT, bgm_volume REAL DEFAULT 0.18,
   thumb_media_key TEXT,
   status TEXT DEFAULT 'draft',
   created_at REAL, updated_at REAL
@@ -89,6 +92,14 @@ _MIGRATIONS = [
     ("project", "prompt_header", "TEXT"),
     ("project", "prompt_footer", "TEXT"),
     ("project", "culture_hint", "TEXT"),
+    # Language for any text drawn/written INSIDE generated images (signs, captions,
+    # labels). Default Vietnamese; domain-specific foreign terms stay as-is.
+    ("project", "image_text_lang", "TEXT DEFAULT 'Vietnamese'"),
+    # Language the script / dialogue / voiceover is written in (default Vietnamese).
+    ("project", "script_lang", "TEXT DEFAULT 'Vietnamese'"),
+    # Optional background music mixed under the narration when assembling the final video.
+    ("project", "bgm_path", "TEXT"),
+    ("project", "bgm_volume", "REAL DEFAULT 0.18"),
     # A shot has two independent node graphs: graph_json = the storyboard IMAGE graph,
     # video_graph_json = the shots-tab VIDEO graph. They must not share storage.
     ("shot", "video_graph_json", "TEXT"),

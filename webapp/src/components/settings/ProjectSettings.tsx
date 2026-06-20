@@ -15,11 +15,15 @@ export default function ProjectSettings({
   const [opts, setOpts] = useState<any>(null);
   const [s, setS] = useState({
     style: project.style ?? "",
+    script_lang: project.script_lang ?? "Vietnamese",
+    image_text_lang: project.image_text_lang ?? "Vietnamese",
     culture_hint: project.culture_hint ?? "",
     prompt_header: project.prompt_header ?? "",
     prompt_footer: project.prompt_footer ?? "",
     image_model: project.image_model ?? "",
   });
+  const [bgmPath, setBgmPath] = useState(project.bgm_path ?? null);
+  const [bgmVol, setBgmVol] = useState(project.bgm_volume ?? 0.18);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -33,7 +37,7 @@ export default function ProjectSettings({
     setBusy(true);
     setErr(null);
     try {
-      const updated = await api.updateProject(project.id, s);
+      const updated = await api.updateProject(project.id, { ...s, bgm_volume: bgmVol });
       onSaved(updated);
       onClose();
     } catch (e: any) {
@@ -42,6 +46,37 @@ export default function ProjectSettings({
       setBusy(false);
     }
   };
+
+  const onPickBgm = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const updated = await api.uploadBgm(project.id, file, bgmVol);
+      setBgmPath(updated.bgm_path ?? null);
+      onSaved(updated);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeBgm = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const updated = await api.clearBgm(project.id);
+      setBgmPath(null);
+      onSaved(updated);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const bgmName = bgmPath ? bgmPath.replace(/\\/g, "/").split("/").pop() : null;
 
   return (
     <div className="fixed inset-0 z-[80] flex justify-end bg-black/50" onClick={onClose}>
@@ -60,6 +95,24 @@ export default function ProjectSettings({
           <Field label="Style (luôn được đưa lên đầu mỗi prompt)">
             <input value={s.style} onChange={(e) => set("style", e.target.value)}
               placeholder="vd: chibi ghibli, watercolor" className={inp} />
+          </Field>
+
+          <Field label="Ngôn ngữ kịch bản / lời thoại / lời đọc">
+            <input value={s.script_lang} onChange={(e) => set("script_lang", e.target.value)}
+              placeholder="Tiếng Việt" className={inp} />
+            <p className="mt-1 text-xs text-neutral-600">
+              Kịch bản, hội thoại, lời đọc (voiceover) và SEO sẽ viết bằng ngôn ngữ này (mặc định
+              Tiếng Việt). Áp dụng cho các lần sinh/sửa kịch bản sau.
+            </p>
+          </Field>
+
+          <Field label="Ngôn ngữ chữ viết/vẽ trong ảnh">
+            <input value={s.image_text_lang} onChange={(e) => set("image_text_lang", e.target.value)}
+              placeholder="Tiếng Việt" className={inp} />
+            <p className="mt-1 text-xs text-neutral-600">
+              Mọi chữ/biển/nhãn hiện trong ảnh sẽ viết bằng ngôn ngữ này (mặc định Tiếng Việt). Từ đặc
+              thù ngôn ngữ khác (vd thuật ngữ/nhãn hiệu tiếng Anh) được giữ nguyên.
+            </p>
           </Field>
 
           <Field label="Culture hint (tự nhận từ kịch bản — phong cách văn hoá)">
@@ -87,6 +140,37 @@ export default function ProjectSettings({
               <option value="">(mặc định)</option>
               {(opts?.image_models || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
             </select>
+          </Field>
+
+          <Field label="🎵 Nhạc nền (tự trộn dưới giọng đọc khi ghép video)">
+            {bgmName ? (
+              <div className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
+                <span className="truncate text-neutral-200">🎵 {bgmName}</span>
+                <button onClick={removeBgm} disabled={busy}
+                  className="ml-2 shrink-0 text-rose-400 hover:text-rose-300 disabled:opacity-40">
+                  Gỡ
+                </button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-neutral-700 px-3 py-3 text-sm text-neutral-400 hover:border-indigo-500 hover:text-neutral-200">
+                {busy ? "Đang tải…" : "＋ Chọn file nhạc (mp3, wav, m4a…)"}
+                <input type="file" accept="audio/*" className="hidden"
+                  onChange={(e) => onPickBgm(e.target.files?.[0])} />
+              </label>
+            )}
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-xs text-neutral-500">Âm lượng nhạc</span>
+              <input type="range" min={0} max={0.6} step={0.02} value={bgmVol}
+                onChange={(e) => setBgmVol(parseFloat(e.target.value))}
+                className="flex-1 accent-indigo-500" />
+              <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
+                {Math.round(bgmVol * 100)}%
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-neutral-600">
+              Giọng đọc giữ nguyên âm lượng; nhạc được hạ xuống mức này và lặp cho đủ độ dài video.
+              Bỏ trống → không chèn nhạc. (Lưu cấu hình để áp dụng mức âm lượng mới.)
+            </p>
           </Field>
         </div>
 

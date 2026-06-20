@@ -169,6 +169,41 @@ async def extract_last_frame(video: Path, out_jpg: Path) -> bool:
         return False
 
 
+async def apply_bgm(project: dict, final: Path) -> bool:
+    """Mix the project's background-music file under the existing audio (narration) of
+    `final`, in place. Music is looped to cover the whole video and lowered to
+    `bgm_volume` (narration stays at full level via amix normalize=0). No-op if the
+    project has no music. Failures are swallowed so assembly still completes."""
+    bgm = (project.get("bgm_path") or "").strip()
+    if not bgm:
+        return False
+    music = Path(bgm)
+    if not music.exists():
+        logger.warning("bgm file missing, skipping: %s", bgm)
+        return False
+    try:
+        vol = float(project.get("bgm_volume"))
+    except (TypeError, ValueError):
+        vol = 0.18
+    vol = min(max(vol, 0.0), 1.0)
+    if vol <= 0:
+        return False
+    tmp = final.with_name(f"{final.stem}_bgm.mp4")
+    # input 0 = the assembled video (narration), input 1 = looped music (lowered).
+    filt = (f"[1:a]volume={vol:.3f}[bg];"
+            f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]")
+    try:
+        await _run(["ffmpeg", "-y", "-i", str(final), "-stream_loop", "-1", "-i", str(music),
+                    "-filter_complex", filt, "-map", "0:v", "-map", "[a]",
+                    "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-shortest", str(tmp)])
+    except RuntimeError as e:
+        logger.warning("bgm mix failed, keeping video without music: %s", e)
+        tmp.unlink(missing_ok=True)
+        return False
+    tmp.replace(final)
+    return True
+
+
 async def concat_videos(paths: list[Path], out: Path) -> None:
     """Concatenate clips (same codec params from Flow) into one mp4."""
     lst = out.with_name(f"{out.stem}_concat.txt")
@@ -309,6 +344,7 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
     final = out_dir / "final.mp4"
     await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
                 "-c", "copy", str(final)])
+    bgm = await apply_bgm(project, final)
 
     duration = await probe_duration(final)
     await db.execute("DELETE FROM asset WHERE project_id=? AND kind='final_video'", (project_id,))
@@ -317,7 +353,7 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
         "path": str(final), "meta_json": None, "created_at": db.now()})
     web = f"/studio-media/{project_id}/final.mp4"
     return {"final_path": str(final), "web_path": web, "clips": len(clip_paths),
-            "duration": duration, "mode": "images"}
+            "duration": duration, "mode": "images", "bgm": bgm}
 
 
 async def assemble(project_id: str) -> dict:
@@ -355,6 +391,7 @@ async def assemble(project_id: str) -> dict:
     final = out_dir / "final.mp4"
     await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
                 "-c", "copy", str(final)])
+    bgm = await apply_bgm(project, final)
 
     duration = await probe_duration(final)
     # record asset
@@ -364,4 +401,4 @@ async def assemble(project_id: str) -> dict:
         "path": str(final), "meta_json": None, "created_at": db.now()})
     web = f"/studio-media/{project_id}/final.mp4"
     return {"final_path": str(final), "web_path": web, "clips": len(norm_paths),
-            "duration": duration}
+            "duration": duration, "bgm": bgm}

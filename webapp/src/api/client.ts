@@ -16,6 +16,10 @@ export interface Project {
   prompt_header?: string | null;
   prompt_footer?: string | null;
   culture_hint?: string | null;
+  script_lang?: string | null;
+  image_text_lang?: string | null;
+  bgm_path?: string | null;
+  bgm_volume?: number | null;
   status: string;
   updated_at: number;
 }
@@ -61,6 +65,17 @@ export const api = {
     req<Project>("/projects", { method: "POST", body: JSON.stringify(body) }),
   updateProject: (id: string, body: any) =>
     req<Project>(`/projects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  uploadBgm: async (id: string, file: File, volume?: number): Promise<Project> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (volume != null) fd.append("volume", String(volume));
+    // no JSON Content-Type — let the browser set the multipart boundary
+    const res = await fetch(`/api/studio/projects/${id}/bgm`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+    return res.json();
+  },
+  clearBgm: (id: string) =>
+    req<Project>(`/projects/${id}/bgm`, { method: "DELETE" }),
   setCover: (id: string, media_id: string) =>
     req<{ project: Project; flow_updated: boolean }>(`/projects/${id}/cover`, {
       method: "PUT",

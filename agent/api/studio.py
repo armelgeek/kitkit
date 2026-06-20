@@ -7,11 +7,12 @@ import asyncio
 import json
 import logging
 import math
+import os
 import random
 import shutil
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -37,6 +38,8 @@ class CreateProjectRequest(BaseModel):
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"
     style: str = "Realistic"
     storytelling: bool = False
+    script_lang: str = "Vietnamese"       # ngôn ngữ kịch bản / lời thoại / lời đọc
+    image_text_lang: str = "Vietnamese"   # ngôn ngữ chữ viết/vẽ trong ảnh
     import_flow_project_id: Optional[str] = None   # gắn vào project Flow có sẵn
     import_thumb_media_key: Optional[str] = None
 
@@ -54,6 +57,9 @@ class UpdateProjectRequest(BaseModel):
     target_duration: Optional[int] = None
     shot_duration: Optional[int] = None
     storytelling: Optional[bool] = None
+    script_lang: Optional[str] = None
+    image_text_lang: Optional[str] = None
+    bgm_volume: Optional[float] = None
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
     culture_hint: Optional[str] = None
@@ -368,6 +374,8 @@ async def create_project(body: CreateProjectRequest):
         "style": body.style, "aspect_ratio": body.aspect_ratio,
         "paygate_tier": await _current_tier(),   # từ /api/flow/credits, không do user chọn
         "storytelling": 1 if body.storytelling else 0,
+        "script_lang": (body.script_lang or "Vietnamese").strip() or "Vietnamese",
+        "image_text_lang": (body.image_text_lang or "Vietnamese").strip() or "Vietnamese",
         "thumb_media_key": thumb,
         "status": "draft", "created_at": ts, "updated_at": ts,
     })
@@ -461,7 +469,7 @@ async def generate_script(pid: str, body: GenerateScriptRequest):
     p = await _project_or_404(pid)
     result = await brain.run_json(brain.script_from_idea_prompt(
         body.idea, body.target_duration, bool(p["storytelling"]),
-        p["style"], p["shot_duration"] or 8))
+        p["style"], p["shot_duration"] or 8, p.get("script_lang") or "Vietnamese"))
     script = result.get("script", "")
     if not script:
         raise HTTPException(502, "AI không trả về script")
@@ -490,7 +498,8 @@ async def save_script(pid: str, body: SaveScriptRequest):
 async def script_chat(pid: str, body: ScriptChatRequest):
     p = await _project_or_404(pid)
     result = await brain.run_json(brain.edit_script_prompt(
-        p["script_raw"] or "", body.instruction, p["style"]))
+        p["script_raw"] or "", body.instruction, p["style"],
+        p.get("script_lang") or "Vietnamese"))
     script = result.get("script", "")
     if not script:
         raise HTTPException(502, "AI không trả về script")
@@ -825,7 +834,7 @@ class AutofillRequest(BaseModel):
 
 
 class BuildBeatsRequest(BaseModel):
-    language: str = "Vietnamese"
+    language: Optional[str] = None   # None → dùng script_lang của dự án
     # measure=True → TTS each scene now for the real audio length (needs OmniVoice up);
     # False → estimate from word count (no quota), real length fitted later.
     measure: bool = True
@@ -1131,8 +1140,9 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
         "SELECT name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
 
     # 1) the scene's continuous voiceover text
+    lang = body.language or project.get("script_lang") or "Vietnamese"
     vo = await brain.run_json(brain.scene_voiceover_prompt(
-        scene["heading"], scene.get("action") or "", body.language))
+        scene["heading"], scene.get("action") or "", lang))
     voiceover = ((vo.get("voiceover") if isinstance(vo, dict) else "") or "").strip()
     if not voiceover:
         raise HTTPException(502, "AI không sinh được voiceover cho scene")
@@ -1695,7 +1705,7 @@ async def apply_entity_media(eid: str, body: ApplyMediaRequest):
 # ─── Assemble / narration / export ──────────────────────────
 
 class NarrationRequest(BaseModel):
-    language: str = "Vietnamese"
+    language: Optional[str] = None   # None → dùng script_lang của dự án
     text: Optional[str] = None     # nếu None → AI tự sinh
 
 
@@ -1717,7 +1727,8 @@ async def shot_narration(sid: str, body: NarrationRequest):
     text = body.text
     if not text:
         out = await brain.run_json(brain.narrator_prompt(
-            shot.get("description") or shot.get("title") or "", body.language))
+            shot.get("description") or shot.get("title") or "",
+            body.language or project.get("script_lang") or "Vietnamese"))
         text = out.get("narrator_text", "")
     if not text:
         raise HTTPException(502, "Không sinh được narrator text")
@@ -1753,6 +1764,49 @@ async def assemble_project_images(pid: str, ken_burns: bool = True,
         raise HTTPException(400, str(e))
 
 
+_BGM_EXT = {"audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/wav": ".wav",
+            "audio/x-wav": ".wav", "audio/aac": ".aac", "audio/mp4": ".m4a",
+            "audio/x-m4a": ".m4a", "audio/ogg": ".ogg", "audio/flac": ".flac"}
+
+
+@router.post("/projects/{pid}/bgm")
+async def upload_bgm(pid: str, file: UploadFile = File(...),
+                     volume: Optional[float] = Form(None)):
+    """Tải nhạc nền cho dự án. Khi ghép video, nhạc sẽ tự được trộn dưới giọng đọc với
+    `volume` (mặc định 0.18). Bỏ trống nhạc → không chèn gì."""
+    await _project_or_404(pid)
+    ext = _BGM_EXT.get((file.content_type or "").lower())
+    if not ext:
+        ext = os.path.splitext(file.filename or "")[1].lower() or ".mp3"
+    out_dir = assembler.STUDIO_MEDIA_DIR / pid
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # one bgm per project — remove any previous file with a different extension
+    for old in out_dir.glob("bgm.*"):
+        old.unlink(missing_ok=True)
+    dest = out_dir / f"bgm{ext}"
+    with dest.open("wb") as fh:
+        shutil.copyfileobj(file.file, fh)
+    fields = {"bgm_path": str(dest), "updated_at": db.now()}
+    if volume is not None:
+        fields["bgm_volume"] = min(max(float(volume), 0.0), 1.0)
+    await db.update("project", pid, fields)
+    return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+
+
+@router.delete("/projects/{pid}/bgm")
+async def clear_bgm(pid: str):
+    """Gỡ nhạc nền khỏi dự án (video ghép sau sẽ không còn nhạc)."""
+    p = await _project_or_404(pid)
+    old = (p.get("bgm_path") or "").strip()
+    if old:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+    await db.update("project", pid, {"bgm_path": None, "updated_at": db.now()})
+    return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+
+
 @router.post("/projects/{pid}/export/davinci-xml")
 async def export_davinci(pid: str):
     await _project_or_404(pid)
@@ -1766,7 +1820,8 @@ async def export_davinci(pid: str):
 async def export_project(pid: str):
     """Sinh metadata SEO (AI) + SRT từ narration + thumbnail (AI → Flow image)."""
     p = await _project_or_404(pid)
-    meta = await brain.run_json(brain.seo_prompt(p["title"], p.get("script_raw") or ""))
+    meta = await brain.run_json(brain.seo_prompt(
+        p["title"], p.get("script_raw") or "", p.get("script_lang") or "Vietnamese"))
     # SRT từ narration các shot (theo thứ tự)
     shots = await db.query_all(
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "

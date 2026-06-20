@@ -176,6 +176,7 @@ function CreateModal({
   const [title, setTitle] = useState("");
   const [aspect, setAspect] = useState("VIDEO_ASPECT_RATIO_LANDSCAPE");
   const [style, setStyle] = useState("Realistic");
+  const [scriptLang, setScriptLang] = useState("Tiếng Việt");
   const [storytelling, setStorytelling] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -185,7 +186,8 @@ function CreateModal({
     setBusy(true);
     setErr(null);
     try {
-      await api.createProject({ title, aspect_ratio: aspect, style, storytelling });
+      await api.createProject({ title, aspect_ratio: aspect, style, storytelling,
+        script_lang: scriptLang.trim() || "Tiếng Việt" });
       onCreated();
     } catch (e: any) {
       setErr(e.message);
@@ -231,6 +233,15 @@ function CreateModal({
               className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
             />
           </div>
+        </div>
+        <div className="mb-4">
+          <label className="mb-1 block text-xs text-neutral-400">Ngôn ngữ kịch bản / lời đọc</label>
+          <input
+            value={scriptLang}
+            onChange={(e) => setScriptLang(e.target.value)}
+            placeholder="Tiếng Việt"
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+          />
         </div>
         <label className="mb-4 flex items-center gap-2 text-sm text-neutral-300">
           <input

@@ -126,14 +126,27 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True) ->
     footer = (project.get("prompt_footer") or "").strip()
     culture = (project.get("culture_hint") or "").strip() if include_culture else ""
     lead = ", ".join(p for p in (style, culture) if p)
-    parts = [header, lead, (body or "").strip(), footer]
+    parts = [header, lead, (body or "").strip(), footer, _image_text_clause(project)]
     return ". ".join(p for p in parts if p)
+
+
+def _image_text_clause(project: dict) -> str:
+    """Instruction for the language of any text rendered INSIDE the image (signs,
+    captions, labels). Domain-specific foreign terms (brand/product/English jargon)
+    stay untranslated so they read naturally."""
+    lang = (project.get("image_text_lang") or "Vietnamese").strip()
+    if not lang:
+        return ""
+    return (f"Any visible text, signs, captions or labels in the image must be written "
+            f"in {lang} (keep domain-specific foreign terms, e.g. English brand or "
+            f"technical words, in their original language)")
 
 
 # ─── Prompt templates ───────────────────────────────────────
 
 def script_from_idea_prompt(idea: str, target_duration: int | None,
-                            storytelling: bool, style: str, shot_duration: int = 8) -> str:
+                            storytelling: bool, style: str, shot_duration: int = 8,
+                            language: str = "Vietnamese") -> str:
     budget = ""
     if target_duration:
         shots = max(1, round(target_duration / max(1, shot_duration)))
@@ -150,6 +163,11 @@ def script_from_idea_prompt(idea: str, target_duration: int | None,
     return (
         "You are a professional screenwriter. Write a screenplay in FOUNTAIN format "
         "(scene headings like 'INT. PLACE - DAY', action lines, CHARACTER cues, dialogue).\n"
+        f"WRITE THE SCREENPLAY IN {language.upper()}: all action lines, dialogue and "
+        f"narration must be in {language}. Keep the FOUNTAIN structural keywords in English "
+        "(INT./EXT., DAY/NIGHT, the dual-dialogue caret), but the place name in the scene "
+        f"heading should be in {language}. Keep proper nouns and domain-specific foreign "
+        "terms (brand/technical/English jargon) in their original language.\n"
         f"Visual style of the film: {style}.\n{mode}{budget}\n\n"
         f"IDEA / CONTENT:\n{idea}\n\n"
         "Also DETECT the cultural origin of this content (which country/era/folk tradition "
@@ -205,6 +223,51 @@ def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
     return f"{name}: {base}. clean reference image"
 
 
+# Cinematography spec injected into every shot-creating prompt so each frame's
+# `visual_prompt` is a real camera setup, not a vague description. The model must
+# make a deliberate choice on every axis below (and vary them across shots so the
+# scene doesn't read as one flat angle repeated).
+_CINE = (
+    "CINEMATOGRAPHY — the `visual_prompt` MUST explicitly specify ALL of these, and vary "
+    "them shot-to-shot so the scene has visual rhythm:\n"
+    "  • Shot size / framing: extreme wide, wide/establishing, full, medium, medium close-up, "
+    "close-up, or extreme close-up.\n"
+    "  • Camera angle & height: eye-level, low angle, high angle, overhead/top-down, dutch "
+    "tilt, over-the-shoulder, or POV.\n"
+    "  • Lens / focal length & depth of field: e.g. 24mm wide, 35mm, 50mm, 85mm portrait, "
+    "135mm telephoto — plus shallow depth of field (soft bokeh background) or deep focus.\n"
+    "  • Lighting: scheme and direction (key/fill/back, soft vs hard, Rembrandt, rim/back-"
+    "light, silhouette), source (natural daylight, golden hour, moonlight, practical lamps, "
+    "firelight), color temperature (warm/cool) and overall contrast.\n"
+    "  • Composition & object layout: where each character and prop sits in frame "
+    "(foreground / midground / background), rule of thirds, leading lines, symmetry/balance, "
+    "headroom and negative space.\n"
+    "  • Mood / color palette and atmosphere: time of day, weather, haze/fog/dust, "
+    "volumetric light, particles — whatever sells the scene's emotion."
+)
+
+# Dynamic spec injected into every motion-generating prompt. The shot's START FRAME is an
+# image-to-video reference that ALREADY locks the static look (shot size, angle, focal
+# length, lighting, composition). So the `motion_prompt` must NOT redefine that look — it
+# only describes what MOVES over the clip. Re-stating the static framing risks the model
+# morphing away from the frame.
+_MOTION = (
+    "MOTION (image-to-video) — the start frame already fixes the shot size, camera angle, "
+    "focal length, lighting and composition. The `motion_prompt` describes ONLY what changes "
+    "over time inside that locked frame; do NOT restate or alter the framing/angle/lens:\n"
+    "  • Camera movement: type (push-in/dolly, pull-out, pan L/R, tilt up/down, truck, crane "
+    "up/down, orbit/arc, handheld, or a static lock-off) + direction + speed (slow & steady "
+    "vs brisk & decisive). If the shot is meant to be still, say 'locked-off, no camera move'.\n"
+    "  • Focus pull: any rack focus / focus shift from one subject to another during the clip.\n"
+    "  • Light & atmosphere over time: light shifting, flicker (fire, neon), drifting "
+    "smoke/fog/dust, falling particles, moving shadows.\n"
+    "  • Subject motion & pacing: the concrete action and its timing within the clip "
+    "(when it starts, how it builds), referencing the SAME entities.\n"
+    "  • Continuity: stay within the established frame — the look at the first frame must "
+    "match the reference image; only the motion evolves."
+)
+
+
 def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
                                entities: list[dict], style: str,
                                n_frames: int | None = None) -> str:
@@ -231,12 +294,13 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
         "location and the camera angle, e.g. \"At {Khu rừng}, camera angle from the left, "
         "{Mai} opens the wooden door...\". Always state the place first, then the angle, "
         "then the action.\n"
-        "- `visual_prompt`: what is on screen for an image-to-video model (subject, "
-        "composition, lighting) — keep the SAME entity references.\n"
+        "- `visual_prompt`: the full camera setup + what is on screen for an image-to-video "
+        "model — keep the SAME entity references.\n"
         "- `motion_prompt`: the camera move + the concrete action that happens during the "
         "clip, referencing the SAME entities.\n"
         "- `ref_entity_names`: every entity used in the frame (names WITHOUT braces), and it "
         "MUST include the scene's location.\n"
+        f"\n{_CINE}\n\n{_MOTION}\n\n"
         "IMPORTANT: whenever a known entity (character/location/prop) appears in ANY prompt, "
         "wrap its name in curly braces exactly as listed (e.g. {Mai}) so it binds to its "
         "reference image.\n"
@@ -289,13 +353,14 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str) -> st
         "For each beat return:\n"
         "- `text`: the verbatim voiceover slice for this beat.\n"
         "- `beat_action`: the concrete action happening on screen.\n"
-        "- `description`: image prompt beginning with the location then camera angle, "
-        "e.g. \"At {Làng}, wide shot, {Tấm} scrubs the porch...\".\n"
-        "- `visual_prompt`: subject/composition/lighting (same entity refs).\n"
+        "- `description`: image prompt beginning with the location then the shot size/angle, "
+        "e.g. \"At {Làng}, low-angle wide shot, {Tấm} scrubs the porch...\".\n"
+        "- `visual_prompt`: the full camera setup + what is on screen (same entity refs).\n"
         "- `motion_prompt`: camera move + action during the clip (same entity refs).\n"
         "- `ref_entity_names`: entity names WITHOUT braces, MUST include the location.\n"
         "- `key_phrases`: 1–3 SHORT punchy phrases taken VERBATIM from this beat's `text` "
         "(the words worth flashing on screen as captions); [] if none.\n\n"
+        f"{_CINE}\n\n{_MOTION}\n\n"
         f"Wrap known entity names in curly braces. Visual style: {style}.\n\n"
         f"AVAILABLE ENTITIES:\n{roster}\n\nVOICEOVER:\n{voiceover}\n\n"
         "Return ONLY JSON array: [{\"text\":\"...\",\"beat_action\":\"...\","
@@ -316,7 +381,8 @@ def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
         "smoothly without resetting or repeating.\n\n"
         f"FULL ACTION: {beat_action}\nFULL MOTION: {motion_prompt}\n\n"
         f"Write {n_parts} motion prompts, one per sub-clip in order, each describing only the "
-        f"portion of the action in that ~{clip_s}s window (continuous, no repetition).\n"
+        f"portion of the action in that ~{clip_s}s window (continuous, no repetition).\n\n"
+        f"{_MOTION}\n\n"
         "Return ONLY JSON: {\"parts\":[{\"part_idx\":0,\"motion_prompt\":\"...\"}, ...]}"
     )
 
@@ -324,9 +390,10 @@ def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
 def shot_prompts_prompt(description: str, style: str) -> str:
     return (
         "For this storyboard frame, write two prompts for an image-to-video model:\n"
-        "- `visual_prompt`: what is on screen (subject, composition, lighting).\n"
+        "- `visual_prompt`: the full camera setup + what is on screen.\n"
         "- `motion_prompt`: the camera move + the action that happens during the clip "
         "(concrete, e.g. 'the fox steps onto the ice, camera slowly pushes in').\n"
+        f"\n{_CINE}\n\n{_MOTION}\n\n"
         f"Visual style: {style}.\n\n"
         f"FRAME: {description}\n\n"
         "Return ONLY JSON: {\"visual_prompt\":\"...\",\"motion_prompt\":\"...\"}"
@@ -352,10 +419,13 @@ def seo_prompt(title: str, script: str, language: str = "Vietnamese") -> str:
     )
 
 
-def edit_script_prompt(script: str, instruction: str, style: str) -> str:
+def edit_script_prompt(script: str, instruction: str, style: str,
+                       language: str = "Vietnamese") -> str:
     return (
         "You are editing a FOUNTAIN screenplay. Apply the user's instruction and return "
         "the FULL updated screenplay (keep fountain format, scene headings 'INT./EXT.').\n"
+        f"Keep the screenplay written in {language} (action lines, dialogue, narration), "
+        "unless the instruction explicitly asks for another language.\n"
         f"Film style: {style}.\n\n"
         f"CURRENT SCREENPLAY:\n{script}\n\n"
         f"INSTRUCTION:\n{instruction}\n\n"
