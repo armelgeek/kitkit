@@ -19,7 +19,7 @@ from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
 )
 from agent.services.flow_client import get_flow_client
-from agent.studio import db, media_store, brain, assembler, davinci_xml, graph as graph_mod
+from agent.studio import db, media_store, brain, assembler, davinci_xml, vntext, graph as graph_mod
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/studio", tags=["studio"])
@@ -1061,31 +1061,60 @@ def _caption_windows(beat_text: str, key_phrases: list[str],
     return [c for c in caps if c["end"] > c["start"]]
 
 
+def _concat_wav_bytes(chunks: list[bytes], dest) -> None:
+    """Join same-format WAV byte blobs (the per-segment TTS outputs) into one WAV file."""
+    import io
+    import wave
+    params, frames = None, []
+    for b in chunks:
+        with wave.open(io.BytesIO(b), "rb") as w:
+            if params is None:
+                params = w.getparams()
+            frames.append(w.readframes(w.getnframes()))
+    with wave.open(str(dest), "wb") as out:
+        out.setparams(params)
+        for f in frames:
+            out.writeframes(f)
+
+
+async def _tts_segments(text: str, voice_id: int) -> list[bytes]:
+    """Normalize VN text, split into short sentence-aligned segments, TTS each → WAV bytes.
+    Splitting is only for the engine's processing; the segments are re-joined into one
+    continuous scene WAV so the narration keeps its flow."""
+    import base64
+    from agent.api.tts import _proxy
+    out = []
+    for seg in (vntext.split_segments(text) or [text]):
+        res = await _proxy("POST", "/api/tts",
+                           json={"text": seg, "voice_id": voice_id}, timeout=600.0)
+        b64 = res.get("audio") if isinstance(res, dict) else None
+        if not b64:
+            raise HTTPException(502, "OmniVoice không trả audio")
+        out.append(base64.b64decode(b64))
+    return out
+
+
 async def _scene_narration(text: str, voice_id: int, pid: str, scene_id: str,
                            measure: bool) -> tuple[Optional[str], float]:
-    """TTS the WHOLE scene in ONE read (so the narration keeps its emotional flow), save
-    the WAV and return (web_path, real_duration). If TTS is unavailable or measure=False,
-    return (None, word-count estimate) so beats can still be built without quota."""
-    if measure and text.strip():
+    """Normalize the scene text (numbers/dates/times/currency/symbols → spoken Vietnamese),
+    TTS it (segmented then re-joined into ONE WAV so the read stays continuous), and return
+    (web_path, real_duration). If TTS is off, return (None, word-count estimate)."""
+    norm = vntext.normalize(text)
+    if measure and norm.strip():
         try:
-            import base64
-            from agent.api.tts import _proxy
-            res = await _proxy("POST", "/api/tts",
-                               json={"text": text, "voice_id": voice_id}, timeout=600.0)
-            b64 = res.get("audio") if isinstance(res, dict) else None
-            if b64:
-                rel = f"{pid}/narr_scene_{scene_id}.wav"
-                dest = media_store.MEDIA_DIR / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(base64.b64decode(b64))
-                dur = await assembler.probe_duration(dest)
-                if dur > 0:
-                    return f"/media/{rel}", dur
+            chunks = await _tts_segments(norm, voice_id)
+            rel = f"{pid}/narr_scene_{scene_id}.wav"
+            dest = media_store.MEDIA_DIR / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(_concat_wav_bytes, chunks, dest)
+            dur = await assembler.probe_duration(dest)
+            if dur > 0:
+                return f"/media/{rel}", dur
         except HTTPException as e:
             logger.warning("scene TTS unavailable (%s) — dùng ước lượng", e.detail)
         except Exception as e:  # noqa: BLE001
             logger.warning("scene TTS failed: %s — dùng ước lượng", e)
-    return None, _estimate_narration_secs(text)
+    return None, _estimate_narration_secs(norm or text)
 
 
 @router.post("/scenes/{sid}/beats")
@@ -1671,18 +1700,12 @@ class NarrationRequest(BaseModel):
 
 
 async def _tts_wav(text: str, voice_id: int, project_id: str, shot_id: str) -> Optional[str]:
-    """Synthesize via OmniVoice, save WAV under media/<pid>/, return web path."""
-    import base64
-    from agent.api.tts import _proxy
-    res = await _proxy("POST", "/api/tts",
-                       json={"text": text, "voice_id": voice_id}, timeout=300.0)
-    b64 = res.get("audio") if isinstance(res, dict) else None
-    if not b64:
-        raise HTTPException(502, "OmniVoice không trả audio")
+    """Normalize VN text → synthesize via OmniVoice (segmented + re-joined), save WAV."""
+    chunks = await _tts_segments(vntext.normalize(text) or text, voice_id)
     rel = f"{project_id}/narr_{shot_id}.wav"
     dest = media_store.MEDIA_DIR / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(base64.b64decode(b64))
+    await asyncio.to_thread(_concat_wav_bytes, chunks, dest)
     return f"/media/{rel}"
 
 

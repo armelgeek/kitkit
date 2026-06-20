@@ -1,0 +1,203 @@
+"""Vietnamese text normalization for TTS.
+
+Before sending narration to OmniVoice we expand numbers/dates/times/currency to spoken
+Vietnamese and strip symbols the model would otherwise read literally (e.g. '-' → "gạch
+ngang", '_' → "gạch dưới"). Then `split_segments` cuts the result into short, sentence-
+aligned chunks for the TTS engine (no mid-sentence cuts, so the read stays natural).
+"""
+import re
+
+_ONES = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"]
+_SCALES = ["", " nghìn", " triệu", " tỷ"]
+
+
+def _read_triple(num: int, full: bool) -> str:
+    """Read 0..999. `full` = this group is not the most-significant one, so it must be
+    spoken in full (e.g. trailing group of 1_005 → "không trăm lẻ năm")."""
+    hund, rem = divmod(num, 100)
+    tens, ones = divmod(rem, 10)
+    out = []
+    if hund > 0 or full:
+        out.append(_ONES[hund] + " trăm")
+    if tens == 0:
+        if ones > 0:
+            out.append(("lẻ " if (hund > 0 or full) else "") + _ONES[ones])
+    elif tens == 1:
+        out.append("mười")
+        if ones == 5:
+            out.append("lăm")
+        elif ones > 0:
+            out.append(_ONES[ones])
+    else:
+        out.append(_ONES[tens] + " mươi")
+        if ones == 1:
+            out.append("mốt")
+        elif ones == 4:
+            out.append("tư")
+        elif ones == 5:
+            out.append("lăm")
+        elif ones > 0:
+            out.append(_ONES[ones])
+    return " ".join(out).strip()
+
+
+def int_to_words(n: int) -> str:
+    if n == 0:
+        return "không"
+    neg, n = n < 0, abs(n)
+    groups = []
+    while n > 0:
+        n, r = divmod(n, 1000)
+        groups.append(r)
+    parts = []
+    for i in range(len(groups) - 1, -1, -1):
+        if groups[i] == 0:
+            continue
+        parts.append(_read_triple(groups[i], full=i < len(groups) - 1) + _SCALES[i])
+    res = " ".join(p for p in parts if p).strip()
+    return ("âm " + res) if neg else res
+
+
+def _digits_words(s: str) -> str:
+    return " ".join(_ONES[int(c)] for c in s if c.isdigit())
+
+
+def _number_words(token: str) -> str:
+    """A numeric token → words. '.' = thousands separator, ',' = decimal point (VN style);
+    a lone '.' before <3 digits is treated as a decimal point too (e.g. 3.14)."""
+    token = token.strip()
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+", token):           # 1.000.000 → thousands
+        return int_to_words(int(token.replace(".", "")))
+    if "," in token:                                         # 3,14 → decimal
+        ip, dp = token.split(",", 1)
+        ip = ip.replace(".", "")
+        return f"{int_to_words(int(ip or 0))} phẩy {_digits_words(dp)}".strip()
+    if re.fullmatch(r"\d+\.\d+", token):                     # 3.14 → decimal
+        ip, dp = token.split(".", 1)
+        return f"{int_to_words(int(ip))} phẩy {_digits_words(dp)}".strip()
+    if token.isdigit():
+        return int_to_words(int(token))
+    return token
+
+
+# ─── Special-cased patterns (run before generic number expansion) ───
+
+def _time_sub(m: re.Match) -> str:
+    h, mm = int(m.group("h")), int(m.group("m"))
+    period = (m.group("p") or "").strip()
+    if h > 23 or mm > 59:
+        return m.group(0)
+    if h == 0 and mm == 0:
+        words = "không giờ"
+    else:
+        words = f"{int_to_words(h)} giờ"
+        if mm > 0:
+            words += f" {int_to_words(mm)} phút"
+    if period:
+        words += " " + period
+    elif 0 < h < 12:                 # no explicit am/pm → default morning (per spec)
+        words += " sáng"
+    return words
+
+
+def _date_sub(m: re.Match) -> str:
+    d, mo = int(m.group("d")), int(m.group("mo"))
+    if not (1 <= d <= 31 and 1 <= mo <= 12):
+        return m.group(0)
+    day = ("mùng " if d <= 10 else "") + int_to_words(d)
+    out = f"{day} tháng {int_to_words(mo)}"   # no "ngày" prefix (source often already has it)
+    if m.group("y"):
+        out += f" năm {int_to_words(int(m.group('y')))}"
+    return out
+
+
+_CURRENCY = {"đ": "đồng", "vnd": "đồng", "vnđ": "đồng", "$": "đô la", "usd": "đô la",
+             "€": "ơ rô", "eur": "ơ rô", "¥": "yên", "£": "bảng"}
+
+_ABBREV = [
+    (r"\bTP\.?", "thành phố"), (r"\bTP\.HCM\b", "thành phố Hồ Chí Minh"),
+    (r"\bQ\.(?=\s*\d)", "quận "), (r"\bP\.(?=\s*\d)", "phường "),
+    (r"\bĐ/?C\b", "địa chỉ"), (r"\bSĐT\b", "số điện thoại"),
+    (r"\bTS\b", "tiến sĩ"), (r"\bThS\b", "thạc sĩ"), (r"\bGS\b", "giáo sư"),
+    (r"\bBS\b", "bác sĩ"), (r"\bv\.v\.?", "vân vân"), (r"\bvd\b", "ví dụ"),
+    (r"\bkg\b", "ki lô gam"), (r"\bkm\b", "ki lô mét"), (r"\bcm\b", "xăng ti mét"),
+    (r"\bm2\b", "mét vuông"), (r"\bUBND\b", "ủy ban nhân dân"),
+]
+
+_SYMBOLS = {"%": " phần trăm", "&": " và ", "+": " cộng ", "=": " bằng ",
+            "@": " a còng ", "#": " ", "*": " ", "/": " trên ", "~": " ",
+            "^": " ", "|": " ", "<": " ", ">": " ", "\\": " "}
+
+
+def normalize(text: str) -> str:
+    if not text:
+        return ""
+    t = text
+
+    # abbreviations (longest first so TP.HCM beats TP.)
+    for pat, rep in sorted(_ABBREV, key=lambda x: -len(x[0])):
+        t = re.sub(pat, rep, t)
+
+    # times: HH:MM / HH.MM (2-digit hour for the dot form, to avoid eating decimals like
+    # 3.14) / 8h30, with an optional trailing period word.
+    period = r"(?P<p>sáng|trưa|chiều|tối|đêm)?"
+    t = re.sub(rf"\b(?P<h>\d{{1,2}}):(?P<m>\d{{2}})\b\s*{period}", _time_sub, t)
+    t = re.sub(rf"\b(?P<h>\d{{2}})\.(?P<m>\d{{2}})\b\s*{period}", _time_sub, t)
+    t = re.sub(rf"\b(?P<h>\d{{1,2}})h(?P<m>\d{{2}})\b\s*{period}", _time_sub, t)
+
+    # dates: dd/mm/yyyy or dd/mm
+    t = re.sub(r"\b(?P<d>\d{1,2})/(?P<mo>\d{1,2})/(?P<y>\d{2,4})\b", _date_sub, t)
+    t = re.sub(r"\b(?P<d>\d{1,2})/(?P<mo>\d{1,2})\b(?!\s*\d)", _date_sub, t)
+
+    # currency: number + unit, or leading $/€/£
+    units = "|".join(re.escape(u) for u in _CURRENCY if u.isalpha() or u in "đ")
+    # the unit must not be glued to a following letter (so '10 độ' isn't read as '... đồng')
+    t = re.sub(rf"(\d[\d.,]*)\s*({units}|\$|€|£|¥)(?![\wđ])",
+               lambda m: f"{_number_words(m.group(1))} {_CURRENCY[m.group(2).lower()]}", t,
+               flags=re.IGNORECASE)
+    t = re.sub(r"([$€£¥])\s*(\d[\d.,]*)",
+               lambda m: f"{_number_words(m.group(2))} {_CURRENCY[m.group(1)]}", t)
+
+    # percent
+    t = re.sub(r"(\d[\d.,]*)\s*%", lambda m: f"{_number_words(m.group(1))} phần trăm", t)
+
+    # number ranges: 5-10 → "từ năm đến mười" (both sides numeric; absorb an existing "từ")
+    t = re.sub(r"(?<![\w.])(?:từ\s+)?(\d[\d.,]*)\s*-\s*(\d[\d.,]*)(?![\w.])",
+               lambda m: f"từ {_number_words(m.group(1))} đến {_number_words(m.group(2))}", t)
+
+    # alnum codes: drop the hyphen/underscore so it isn't read as "gạch ngang/dưới"
+    # (DN-31 → "DN 31", file_name → "file name")
+    t = re.sub(r"(?<=\w)[-_](?=\w)", " ", t)
+
+    # remaining standalone numbers → words
+    t = re.sub(r"\d[\d.,]*\d|\d", lambda m: _number_words(m.group(0)), t)
+
+    # leftover symbols
+    for sym, rep in _SYMBOLS.items():
+        t = t.replace(sym, rep)
+    t = t.replace("-", " ").replace("_", " ")
+
+    # tidy whitespace + spaces before punctuation
+    t = re.sub(r"\s+([,.;:!?…])", r"\1", t)
+    t = re.sub(r"[ \t]+", " ", t).strip()
+    return t
+
+
+def split_segments(text: str, max_chars: int = 280) -> list[str]:
+    """Split normalized text into short, sentence-aligned segments for the TTS engine."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    # break after sentence-ending punctuation, keep the punctuation
+    sentences = re.findall(r"[^.!?…\n]+[.!?…]?(?:\n+)?", text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    segs, cur = [], ""
+    for s in sentences:
+        if cur and len(cur) + 1 + len(s) > max_chars:
+            segs.append(cur)
+            cur = s
+        else:
+            cur = f"{cur} {s}".strip()
+    if cur:
+        segs.append(cur)
+    return segs
