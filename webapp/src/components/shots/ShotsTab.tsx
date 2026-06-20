@@ -3,6 +3,8 @@ import { api, storyboard, shots as shotsApi, type Project, type Scene, type Shot
 import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
+import { useConfirm } from "../common/Confirm";
+import { creditGuard, CREDIT_COST } from "../../lib/credits";
 
 const parseRefs = (s: string | null): string[] => {
   try {
@@ -29,6 +31,7 @@ export default function ShotsTab({
   const [progress, setProgress] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<Shot | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const loadShots = async (sid: string) => {
     const r = await storyboard.sceneShots(sid);
@@ -85,6 +88,7 @@ export default function ShotsTab({
       setErr("Không có shot nào (có ảnh, chưa có video) để render.");
       return;
     }
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.video, "Render video"))) return;
     setBusy(true);
     setErr(null);
     let okN = 0;

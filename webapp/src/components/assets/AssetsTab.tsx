@@ -12,6 +12,7 @@ import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import Thumb from "../Thumb";
 import Lightbox from "../common/Lightbox";
 import { useConfirm } from "../common/Confirm";
+import { creditGuard, CREDIT_COST } from "../../lib/credits";
 
 const GROUPS: { type: Entity["type"]; label: string }[] = [
   { type: "character", label: "Nhân vật" },
@@ -102,6 +103,7 @@ export default function AssetsTab({
       setErr("Tất cả asset đã có ảnh.");
       return;
     }
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh asset"))) return;
     await runBatch(todo, "all");
   };
 

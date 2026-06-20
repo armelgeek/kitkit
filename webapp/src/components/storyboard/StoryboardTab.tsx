@@ -12,6 +12,7 @@ import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import { useConfirm } from "../common/Confirm";
+import { creditGuard, CREDIT_COST } from "../../lib/credits";
 
 const slug = (s: string) =>
   (s || "")
@@ -128,6 +129,7 @@ export default function StoryboardTab({
       setErr("Mọi frame đã có ảnh.");
       return;
     }
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
     setBusy(label);
     setErr(null);
     let okN = 0;
