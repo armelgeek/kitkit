@@ -126,7 +126,11 @@ _SINGLE_FRAME = (
     "collage, no turnaround row, no side-by-side angles, no plain white reference backdrop. "
     "Each named character must EXACTLY match its OWN reference image — never swap, blend or mix "
     "up faces, hair or costumes between characters, keep each person's identity distinct, and "
-    "do NOT add any extra people who are not named in this shot"
+    "do NOT add any extra people who are not named in this shot. The location reference shows "
+    "the place from ONE angle for identity/look only — do NOT copy its camera angle or framing; "
+    "compose THIS shot at its own specified shot size and camera angle. Render NO text, labels, "
+    "captions, annotations, callouts or watermarks, and do not reproduce any text/labels that "
+    "appear in the reference images"
 )
 
 
@@ -239,9 +243,10 @@ _SHEET = {
                  "above; show the place itself with nobody in it). Deep focus showing the whole "
                  "space with foreground, midground and background depth; precise architecture, "
                  "materials, surface textures, set dressing and props, volumetric natural "
-                 "atmospheric lighting, photoreal detail. No text or labels. It must NOT be a "
-                 "grid, 2x2, multi-panel, split screen, collage or reference sheet — one "
-                 "continuous empty scene only"),
+                 "atmospheric lighting, photoreal detail. Absolutely NO text, labels, captions, "
+                 "name tags, annotations, callouts or watermarks anywhere in the image — do not "
+                 "label the objects. It must NOT be a grid, 2x2, multi-panel, split screen, "
+                 "collage or reference sheet — one continuous empty scene only"),
 }
 
 
@@ -259,8 +264,10 @@ def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
 # make a deliberate choice on every axis below (and vary them across shots so the
 # scene doesn't read as one flat angle repeated).
 _CINE = (
-    "CINEMATOGRAPHY — the `visual_prompt` MUST explicitly specify ALL of these, and vary "
-    "them shot-to-shot so the scene has visual rhythm:\n"
+    "CINEMATOGRAPHY — BOTH the `description` (which generates the still image) and the "
+    "`visual_prompt` MUST explicitly specify ALL of these, and ADJACENT frames MUST DIFFER "
+    "(never repeat the same shot size AND angle in two consecutive frames) so the scene has "
+    "visual rhythm and the cuts don't look like the same shot repeated:\n"
     "  • Shot size / framing: extreme wide, wide/establishing, full, medium, medium close-up, "
     "close-up, or extreme close-up.\n"
     "  • Camera angle & height: eye-level, low angle, high angle, overhead/top-down, dutch "
@@ -322,9 +329,11 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
         "For each frame return:\n"
         "- `title`: short label.\n"
         "- `description`: a vivid image-generator prompt that MUST begin by naming the "
-        "location and the camera angle, e.g. \"At {Khu rừng}, camera angle from the left, "
-        "{Mai} opens the wooden door...\". Always state the place first, then the angle, "
-        "then the action.\n"
+        "location, then a SPECIFIC shot size + camera angle/height for THIS frame, then the "
+        "action — e.g. \"At {Khu rừng}, low-angle medium close-up, {Mai} opens the wooden "
+        "door...\". The shot size AND angle MUST DIFFER from the previous frame's (alternate "
+        "wide / medium / close and change the angle/height) so consecutive frames cut together "
+        "with rhythm instead of looking like the same shot repeated.\n"
         "- `visual_prompt`: the full camera setup + what is on screen for an image-to-video "
         "model — keep the SAME entity references.\n"
         "- `motion_prompt`: the camera move + the concrete action that happens during the "
@@ -411,8 +420,10 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str) -> st
         "For each beat return:\n"
         "- `text`: the verbatim voiceover slice for this beat.\n"
         "- `beat_action`: the concrete action happening on screen.\n"
-        "- `description`: image prompt beginning with the location then the shot size/angle, "
-        "e.g. \"At {Làng}, low-angle wide shot, {Tấm} scrubs the porch...\".\n"
+        "- `description`: image prompt beginning with the location then a SPECIFIC shot size + "
+        "camera angle/height (which MUST DIFFER from the previous beat's — alternate "
+        "wide/medium/close and change the angle so beats don't look like one repeated shot), "
+        "then the action, e.g. \"At {Làng}, low-angle wide shot, {Tấm} scrubs the porch...\".\n"
         "- `visual_prompt`: the full camera setup + what is on screen (same entity refs).\n"
         "- `motion_prompt`: camera move + action during the clip (same entity refs).\n"
         "- `ref_entity_names`: entity names WITHOUT braces, MUST include the location.\n"

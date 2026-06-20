@@ -549,6 +549,20 @@ function Editor({
         source: e.source,
         target: e.target,
       }));
+      // Refresh entity-bound source nodes to the entity's CURRENT image, so regenerating a
+      // location/character updates its reference node instead of keeping the stale snapshot.
+      const entById = new Map(entities.map((e) => [e.id, e]));
+      for (const n of nodes) {
+        const d = n.data as any;
+        if (n.type === "source" && d.entity_id) {
+          const e = entById.get(d.entity_id);
+          if (e && e.media_id) {
+            d.media_id = e.media_id;
+            d.web = e.image_path;
+            d.label = e.name;
+          }
+        }
+      }
       if (curSrc) {
         const outIds = new Set(nodes.filter((n) => n.type === "output").map((n) => n.id));
         const feedsOut = new Set(

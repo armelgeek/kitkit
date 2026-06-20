@@ -281,10 +281,23 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             outputs[nid] = {"text": data.get("text", "")}
 
         elif t == "source":
+            # A source node bound to an entity (entity_id) must use the entity's CURRENT image,
+            # so regenerating that entity propagates into the graph instead of using the stale
+            # media_id snapshotted when the node was created. Plain (uploaded) sources keep their
+            # stored media_id.
             mid = data.get("media_id")
-            web = data.get("web") or (await media_store.ensure_local(mid, pid) if mid else None)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
-                            "handle": data.get("label") or "source"}
+            web = data.get("web")
+            handle = data.get("label") or "source"
+            eid = data.get("entity_id")
+            if eid:
+                ent = await db.query_one(
+                    "SELECT name, media_id, image_path FROM entity WHERE id=?", (eid,))
+                if ent and ent.get("media_id"):
+                    mid, web = ent["media_id"], ent.get("image_path")
+                    handle = ent.get("name") or handle
+            if not web and mid:
+                web = await media_store.ensure_local(mid, pid)
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": handle}
 
         elif t == "refs":
             ids = data.get("entity_ids") or []
