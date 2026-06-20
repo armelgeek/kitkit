@@ -28,11 +28,16 @@ export default function ProjectSettings({
     prompt_header: project.prompt_header ?? "",
     prompt_footer: project.prompt_footer ?? "",
     image_model: project.image_model ?? "",
+    aspect_ratio: project.aspect_ratio ?? "VIDEO_ASPECT_RATIO_LANDSCAPE",
+    video_model: project.video_model ?? "",
   });
+  const [shotDuration, setShotDuration] = useState<number>(project.shot_duration ?? 8);
+  const [storytelling, setStorytelling] = useState<boolean>(!!project.storytelling);
   const [bgmPath, setBgmPath] = useState(project.bgm_path ?? null);
   const [bgmVol, setBgmVol] = useState(project.bgm_volume ?? 0.18);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voiceId, setVoiceId] = useState<number>(project.voice_id ?? 0);
+  const [ttsSpeed, setTtsSpeed] = useState<number>(project.tts_speed ?? 1.0);
   const [testing, setTesting] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +52,7 @@ export default function ProjectSettings({
     setTesting(true);
     setErr(null);
     try {
-      const r = await synthesize("Xin chào, đây là giọng đọc của dự án.", voiceId);
+      const r = await synthesize("Xin chào, đây là giọng đọc của dự án.", voiceId, ttsSpeed);
       if (r.audio && audioRef.current) {
         audioRef.current.src = base64ToAudioUrl(r.audio);
         await audioRef.current.play().catch(() => {});
@@ -69,6 +74,9 @@ export default function ProjectSettings({
         ...s,
         bgm_volume: bgmVol,
         voice_id: voiceId,
+        shot_duration: shotDuration,
+        storytelling,
+        tts_speed: ttsSpeed,
       });
       onSaved(updated);
       onClose();
@@ -174,6 +182,43 @@ export default function ProjectSettings({
             </select>
           </Field>
 
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Khung hình">
+              <select value={s.aspect_ratio} onChange={(e) => set("aspect_ratio", e.target.value)} className={inp}>
+                <option value="VIDEO_ASPECT_RATIO_LANDSCAPE">16:9 ngang</option>
+                <option value="VIDEO_ASPECT_RATIO_PORTRAIT">9:16 dọc</option>
+              </select>
+            </Field>
+            <Field label="Độ dài shot (giây)">
+              <input type="number" min={1} max={10} value={shotDuration}
+                onChange={(e) => setShotDuration(Math.min(10, Math.max(1, Number(e.target.value) || 8)))}
+                className={inp} />
+            </Field>
+          </div>
+
+          <Field label="Video model">
+            <select value={s.video_model} onChange={(e) => set("video_model", e.target.value)} className={inp}>
+              <option value="">(mặc định)</option>
+              {(opts?.video_models?.veo_tiers || []).length > 0 && (
+                <optgroup label="Veo (i2v)">
+                  {(opts?.video_models?.veo_tiers || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
+                </optgroup>
+              )}
+              {(opts?.video_models?.omni_flash_durations || []).length > 0 && (
+                <optgroup label="Omni Flash (r2v)">
+                  {(opts?.video_models?.omni_flash_durations || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </Field>
+
+          <label className="flex items-center gap-2 text-sm text-neutral-300">
+            <input type="checkbox" checked={storytelling}
+              onChange={(e) => setStorytelling(e.target.checked)}
+              className="h-4 w-4 accent-indigo-500" />
+            Chế độ Storytelling (giọng đọc dẫn dắt, đọc nguyên văn nội dung gốc)
+          </label>
+
           <Field label="🎙 Giọng đọc (lồng tiếng dự án)">
             <div className="flex gap-2">
               <select
@@ -196,6 +241,15 @@ export default function ProjectSettings({
               >
                 {testing ? "…" : "▶ Test"}
               </button>
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-xs text-neutral-500">Tốc độ đọc</span>
+              <input type="range" min={0.5} max={1.5} step={0.05} value={ttsSpeed}
+                onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                className="flex-1 accent-indigo-500" />
+              <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
+                {ttsSpeed.toFixed(2)}×
+              </span>
             </div>
             <p className="mt-1 text-xs text-neutral-600">
               Quản lý / thêm giọng trong ⚙ Settings. Cần đặt OmniVoice URL để test.

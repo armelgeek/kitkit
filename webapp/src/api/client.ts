@@ -14,6 +14,8 @@ export interface Project {
   image_model?: string | null;
   video_model?: string | null;
   voice_id?: number | null;
+  shot_duration?: number | null;
+  tts_speed?: number | null;
   prompt_header?: string | null;
   prompt_footer?: string | null;
   culture_hint?: string | null;
@@ -384,10 +386,10 @@ export const removeVoice = (voice_id: number) =>
   });
 
 /** Synthesize speech → returns base64 audio (WAV). */
-export const synthesize = (text: string, voice_id = 0) =>
+export const synthesize = (text: string, voice_id = 0, speed = 1.0) =>
   ttsReq<{ audio: string; status?: string; msg?: string }>("/synthesize", {
     method: "POST",
-    body: JSON.stringify({ text, voice_id }),
+    body: JSON.stringify({ text, voice_id, speed }),
   });
 
 /** Read a File as a bare base64 string (no data: prefix) for voice upload. */

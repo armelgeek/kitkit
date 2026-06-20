@@ -60,6 +60,7 @@ class UpdateProjectRequest(BaseModel):
     script_lang: Optional[str] = None
     image_text_lang: Optional[str] = None
     bgm_volume: Optional[float] = None
+    tts_speed: Optional[float] = None
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
     culture_hint: Optional[str] = None
@@ -1095,20 +1096,21 @@ def _concat_wav_bytes(chunks: list[bytes], dest) -> None:
             out.writeframes(f)
 
 
-async def _tts_one(text: str, voice_id: int) -> bytes:
+async def _tts_one(text: str, voice_id: int, speed: float = 1.0) -> bytes:
     """ONE TTS call for the whole text → WAV bytes. A single continuous read keeps the
     narration's emotion (no seams from stitching many short clips)."""
     import base64
     from agent.api.tts import _proxy
     res = await _proxy("POST", "/api/tts",
-                       json={"text": text, "voice_id": voice_id}, timeout=600.0)
+                       json={"text": text, "voice_id": voice_id, "speed": speed},
+                       timeout=600.0)
     b64 = res.get("audio") if isinstance(res, dict) else None
     if not b64:
         raise HTTPException(502, "OmniVoice không trả audio")
     return base64.b64decode(b64)
 
 
-async def _tts_segments(text: str, voice_id: int) -> list[bytes]:
+async def _tts_segments(text: str, voice_id: int, speed: float = 1.0) -> list[bytes]:
     """Fallback only: split VN text into short sentence-aligned segments and TTS each → WAV
     bytes (re-joined by the caller). Used when a single-shot read fails (e.g. text too long
     for the engine); per-scene narration prefers `_tts_one` to stay emotionally continuous."""
@@ -1117,7 +1119,8 @@ async def _tts_segments(text: str, voice_id: int) -> list[bytes]:
     out = []
     for seg in (vntext.split_segments(text) or [text]):
         res = await _proxy("POST", "/api/tts",
-                           json={"text": seg, "voice_id": voice_id}, timeout=600.0)
+                           json={"text": seg, "voice_id": voice_id, "speed": speed},
+                           timeout=600.0)
         b64 = res.get("audio") if isinstance(res, dict) else None
         if not b64:
             raise HTTPException(502, "OmniVoice không trả audio")
@@ -1137,7 +1140,7 @@ def _wav_bytes_duration(b: bytes) -> float:
 
 
 async def _tts_beats(texts: list[str], voice_id: int, pid: str,
-                     scene_id: str) -> tuple[str, list[float]]:
+                     scene_id: str, speed: float = 1.0) -> tuple[str, list[float]]:
     """TTS each beat's text as its OWN continuous read, then concat them into the scene WAV.
     Returns (web_path, [per-beat real durations]). One read per beat keeps the emotion within
     each visual unit AND gives the EXACT time each beat occupies, so the image changes land on
@@ -1148,7 +1151,7 @@ async def _tts_beats(texts: list[str], voice_id: int, pid: str,
         norm = vntext.normalize(txt) or txt
         if not norm.strip():
             continue
-        audio = await _tts_one(norm, voice_id)
+        audio = await _tts_one(norm, voice_id, speed)
         chunks.append(audio)
         durs.append(round(_wav_bytes_duration(audio), 3))
     if not chunks:
@@ -1207,11 +1210,12 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
 
     # 3) TTS one continuous read PER BEAT → exact per-beat durations + the scene WAV (concat).
     voice_id = project.get("voice_id") or 0
+    speed = float(project.get("tts_speed") or 1.0)
     narr_web, durs = None, None
     if body.measure and any(b.get("_say") for b in beats):
         try:
             narr_web, durs = await _tts_beats(
-                [b["_say"] for b in beats], voice_id, project["id"], sid)
+                [b["_say"] for b in beats], voice_id, project["id"], sid, speed)
         except HTTPException as e:
             logger.warning("beat TTS unavailable (%s) — dùng ước lượng theo số từ", e.detail)
         except Exception as e:  # noqa: BLE001
@@ -1770,9 +1774,10 @@ class NarrationRequest(BaseModel):
     text: Optional[str] = None     # nếu None → AI tự sinh
 
 
-async def _tts_wav(text: str, voice_id: int, project_id: str, shot_id: str) -> Optional[str]:
+async def _tts_wav(text: str, voice_id: int, project_id: str, shot_id: str,
+                   speed: float = 1.0) -> Optional[str]:
     """Normalize VN text → synthesize via OmniVoice (segmented + re-joined), save WAV."""
-    chunks = await _tts_segments(vntext.normalize(text) or text, voice_id)
+    chunks = await _tts_segments(vntext.normalize(text) or text, voice_id, speed)
     rel = f"{project_id}/narr_{shot_id}.wav"
     dest = media_store.MEDIA_DIR / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1794,7 +1799,8 @@ async def shot_narration(sid: str, body: NarrationRequest):
     if not text:
         raise HTTPException(502, "Không sinh được narrator text")
     voice_id = project.get("voice_id") or 0
-    web = await _tts_wav(text, voice_id, project["id"], sid)
+    web = await _tts_wav(text, voice_id, project["id"], sid,
+                         float(project.get("tts_speed") or 1.0))
     dur = await assembler.probe_duration(assembler._local(web)) if web else 0.0
     await db.update("shot", sid, {
         "narrator_text": text, "narration_path": web,
