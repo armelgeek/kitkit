@@ -71,9 +71,11 @@ def _number_words(token: str) -> str:
     if "," in token:                                         # 3,14 → decimal
         ip, dp = token.split(",", 1)
         ip = ip.replace(".", "")
+        dp = dp.rstrip("0") or "0"                            # 0,50 → "không phẩy năm"
         return f"{int_to_words(int(ip or 0))} phẩy {_digits_words(dp)}".strip()
-    if re.fullmatch(r"\d+\.\d+", token):                     # 3.14 → decimal
+    if re.fullmatch(r"\d+\.\d+", token):                     # 3.14 / 00.00 → decimal
         ip, dp = token.split(".", 1)
+        dp = dp.rstrip("0") or "0"                            # 00.00 → "không phẩy không"
         return f"{int_to_words(int(ip))} phẩy {_digits_words(dp)}".strip()
     if token.isdigit():
         return int_to_words(int(token))
@@ -138,11 +140,10 @@ def normalize(text: str) -> str:
     for pat, rep in sorted(_ABBREV, key=lambda x: -len(x[0])):
         t = re.sub(pat, rep, t)
 
-    # times: HH:MM / HH.MM (2-digit hour for the dot form, to avoid eating decimals like
-    # 3.14) / 8h30, with an optional trailing period word.
+    # times: HH:MM or HHhMM only (the dot form like 00.00 is a DECIMAL, not a time), with
+    # an optional trailing period word.
     period = r"(?P<p>sáng|trưa|chiều|tối|đêm)?"
     t = re.sub(rf"\b(?P<h>\d{{1,2}}):(?P<m>\d{{2}})\b\s*{period}", _time_sub, t)
-    t = re.sub(rf"\b(?P<h>\d{{2}})\.(?P<m>\d{{2}})\b\s*{period}", _time_sub, t)
     t = re.sub(rf"\b(?P<h>\d{{1,2}})h(?P<m>\d{{2}})\b\s*{period}", _time_sub, t)
 
     # dates: dd/mm/yyyy or dd/mm
