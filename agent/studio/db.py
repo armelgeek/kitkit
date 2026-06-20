@@ -84,8 +84,18 @@ CREATE TABLE IF NOT EXISTS asset (
 
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 
+-- Lịch sử media (§13#8): mỗi lần một ảnh/video được gán cho shot/entity → 1 dòng,
+-- để xem lại & khôi phục bản cũ thay vì ghi đè mất.
+CREATE TABLE IF NOT EXISTS media_history (
+  id TEXT PRIMARY KEY, project_id TEXT,
+  owner_kind TEXT, owner_id TEXT, slot TEXT,   -- shot|entity ; image|video
+  media_id TEXT, primary_media_id TEXT, path TEXT,
+  created_at REAL
+);
+
 CREATE INDEX IF NOT EXISTS idx_entity_project ON entity(project_id);
 CREATE INDEX IF NOT EXISTS idx_scene_project ON scene(project_id);
+CREATE INDEX IF NOT EXISTS idx_mhist_owner ON media_history(owner_id, slot);
 CREATE INDEX IF NOT EXISTS idx_shot_scene ON shot(scene_id);
 """
 

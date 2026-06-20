@@ -643,6 +643,23 @@ async def _maybe_set_cover(project_id: str, flow_project_id: str, media_id: str)
     await db.update("project", project_id, {"thumb_media_key": media_id})
 
 
+async def _record_media_history(project_id: str, owner_kind: str, owner_id: str,
+                                slot: str, media_id, primary_id, path) -> None:
+    """Append a media-history row (§13#8) so an overwritten image/video can be restored.
+    Skips a no-op repeat of the current latest entry for this owner+slot."""
+    if not (media_id and path):
+        return
+    last = await db.query_one(
+        "SELECT media_id FROM media_history WHERE owner_id=? AND slot=? "
+        "ORDER BY created_at DESC LIMIT 1", (owner_id, slot))
+    if last and last.get("media_id") == media_id:
+        return
+    await db.insert("media_history", {
+        "id": db.new_id(), "project_id": project_id, "owner_kind": owner_kind,
+        "owner_id": owner_id, "slot": slot, "media_id": media_id,
+        "primary_media_id": primary_id, "path": path, "created_at": db.now()})
+
+
 async def _store_media_on_entity(entity: dict, project: dict, info: dict, label: str):
     """Rename on Flow + download local + persist media fields onto the entity."""
     client = get_flow_client()
@@ -661,6 +678,8 @@ async def _store_media_on_entity(entity: dict, project: dict, info: dict, label:
         "workflow_id": info.get("workflow_id"),
         "image_path": web, "updated_at": db.now(),
     })
+    await _record_media_history(project["id"], "entity", entity["id"], "image",
+                               info.get("media_id"), info.get("primary_media_id"), web)
     await _maybe_set_cover(project["id"], project.get("flow_project_id"), info.get("media_id"))
     return await _entity_or_404(entity["id"])
 
@@ -986,6 +1005,8 @@ async def _store_media_on_shot(shot: dict, project: dict, info: dict,
         f"{kind}_path": web, "updated_at": db.now(),
     }
     await db.update("shot", shot["id"], fields)
+    await _record_media_history(project["id"], "shot", shot["id"], kind,
+                               info.get("media_id"), info.get("primary_media_id"), web)
     if kind == "image":
         await _maybe_set_cover(project["id"], project.get("flow_project_id"), info.get("media_id"))
     return await _shot_or_404(shot["id"])
@@ -1948,6 +1969,7 @@ async def apply_shot_media(sid: str, body: ApplyMediaRequest):
     await db.update("shot", sid, {
         f"{col}_media_id": body.media_id, f"{col}_primary_id": body.media_id,
         f"{col}_path": web, "updated_at": db.now()})
+    await _record_media_history(project["id"], "shot", sid, col, body.media_id, body.media_id, web)
     return {"ok": True, "path": web, "shot": await _shot_or_404(sid)}
 
 
@@ -1959,7 +1981,53 @@ async def apply_entity_media(eid: str, body: ApplyMediaRequest):
     await db.update("entity", eid, {
         "media_id": body.media_id, "primary_media_id": body.media_id,
         "image_path": web, "updated_at": db.now()})
+    await _record_media_history(project["id"], "entity", eid, "image", body.media_id, body.media_id, web)
     return {"ok": True, "path": web, "entity": await _entity_or_404(eid)}
+
+
+@router.get("/shots/{sid}/history")
+async def shot_history(sid: str, slot: str = "image"):
+    """Lịch sử các phiên bản ảnh/video đã gán cho shot (mới nhất trước)."""
+    await _shot_or_404(sid)
+    return {"history": await db.query_all(
+        "SELECT * FROM media_history WHERE owner_id=? AND slot=? ORDER BY created_at DESC",
+        (sid, slot))}
+
+
+@router.get("/entities/{eid}/history")
+async def entity_history(eid: str):
+    """Lịch sử các phiên bản ảnh đã gán cho entity (mới nhất trước)."""
+    await _entity_or_404(eid)
+    return {"history": await db.query_all(
+        "SELECT * FROM media_history WHERE owner_id=? AND slot='image' ORDER BY created_at DESC",
+        (eid,))}
+
+
+@router.post("/shots/{sid}/history/{hid}/restore")
+async def restore_shot_history(sid: str, hid: str):
+    """Khôi phục một phiên bản cũ làm media hiện tại của shot."""
+    await _shot_or_404(sid)
+    h = await db.query_one("SELECT * FROM media_history WHERE id=?", (hid,))
+    if not h or h.get("owner_id") != sid:
+        raise HTTPException(404, "Không tìm thấy phiên bản")
+    kind = h["slot"]
+    await db.update("shot", sid, {
+        f"{kind}_media_id": h["media_id"], f"{kind}_primary_id": h["primary_media_id"],
+        f"{kind}_path": h["path"], "updated_at": db.now()})
+    return await _shot_or_404(sid)
+
+
+@router.post("/entities/{eid}/history/{hid}/restore")
+async def restore_entity_history(eid: str, hid: str):
+    """Khôi phục một phiên bản ảnh cũ làm ảnh hiện tại của entity."""
+    await _entity_or_404(eid)
+    h = await db.query_one("SELECT * FROM media_history WHERE id=?", (hid,))
+    if not h or h.get("owner_id") != eid:
+        raise HTTPException(404, "Không tìm thấy phiên bản")
+    await db.update("entity", eid, {
+        "media_id": h["media_id"], "primary_media_id": h["primary_media_id"],
+        "image_path": h["path"], "updated_at": db.now()})
+    return await _entity_or_404(eid)
 
 
 class CandidatesRequest(BaseModel):

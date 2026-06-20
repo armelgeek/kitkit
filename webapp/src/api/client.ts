@@ -36,6 +36,14 @@ export interface Candidate {
   web: string;
 }
 
+export interface MediaVersion {
+  id: string;
+  slot: string; // image | video
+  media_id: string;
+  path: string;
+  created_at: number;
+}
+
 export interface FlowProject {
   flow_project_id: string;
   title: string;
@@ -151,6 +159,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ n }),
     }),
+  // Media version history (§13#8): list past versions + restore one.
+  entityHistory: (eid: string) =>
+    req<{ history: MediaVersion[] }>(`/entities/${eid}/history`),
+  shotHistory: (sid: string, slot = "image") =>
+    req<{ history: MediaVersion[] }>(`/shots/${sid}/history?slot=${slot}`),
+  restoreEntityHistory: (eid: string, hid: string) =>
+    req<Entity>(`/entities/${eid}/history/${hid}/restore`, { method: "POST" }),
+  restoreShotHistory: (sid: string, hid: string) =>
+    req<Shot>(`/shots/${sid}/history/${hid}/restore`, { method: "POST" }),
   setEntityImage: (eid: string, media_id: string) =>
     req<Entity>(`/entities/${eid}/image`, { method: "PUT", body: JSON.stringify({ media_id }) }),
   generateAllAssets: (id: string) =>

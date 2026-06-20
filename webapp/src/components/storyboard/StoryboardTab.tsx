@@ -12,6 +12,7 @@ import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import CandidatePicker from "../common/CandidatePicker";
+import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
 
@@ -67,6 +68,7 @@ export default function StoryboardTab({
   const [progress, setProgress] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [candidate, setCandidate] = useState<Shot | null>(null);
+  const [history, setHistory] = useState<Shot | null>(null);
   const confirm = useConfirm();
 
   const setAsCover = async (shot: Shot) => {
@@ -461,6 +463,18 @@ export default function StoryboardTab({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              setHistory(sh);
+                            }}
+                            title="Lịch sử phiên bản — khôi phục bản cũ"
+                            className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
+                          >
+                            🕘
+                          </button>
+                        )}
+                        {sh.image_path && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               downloadFile(
                                 sh.image_path!,
                                 `sc${pad3(sc.idx)}-s${pad3(sh.idx)}-${slug(sh.description || sh.title)}.png`
@@ -545,6 +559,24 @@ export default function StoryboardTab({
             }))
           }
           onClose={() => setCandidate(null)}
+        />
+      )}
+
+      {history && (
+        <MediaHistory
+          kind="shot"
+          id={history.id}
+          slot="image"
+          title={history.title}
+          onRestored={(updated) =>
+            setShotsByScene((m) => ({
+              ...m,
+              [updated.scene_id]: (m[updated.scene_id] || []).map((x) =>
+                x.id === updated.id ? updated : x
+              ),
+            }))
+          }
+          onClose={() => setHistory(null)}
         />
       )}
     </div>

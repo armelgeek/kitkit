@@ -12,6 +12,7 @@ import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import Thumb from "../Thumb";
 import Lightbox from "../common/Lightbox";
 import CandidatePicker from "../common/CandidatePicker";
+import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
 
@@ -36,6 +37,7 @@ export default function AssetsTab({
   const [gening, setGening] = useState<Set<string>>(new Set());
   const [lightbox, setLightbox] = useState<Entity | null>(null);
   const [candidate, setCandidate] = useState<Entity | null>(null);
+  const [history, setHistory] = useState<Entity | null>(null);
   const [picker, setPicker] = useState<
     { mode: "import" } | { mode: "link"; entity: Entity } | null
   >(null);
@@ -222,6 +224,7 @@ export default function AssetsTab({
                   onLink={() => setPicker({ mode: "link", entity: e })}
                   onGenerate={() => genOne(e)}
                   onCandidates={() => setCandidate(e)}
+                  onHistory={e.image_path ? () => setHistory(e) : undefined}
                   onCover={
                     e.media_id
                       ? () => wrap("cover", () => api.setCover(project.id, e.media_id!))
@@ -269,6 +272,18 @@ export default function AssetsTab({
         />
       )}
 
+      {history && (
+        <MediaHistory
+          kind="entity"
+          id={history.id}
+          title={history.name}
+          onRestored={(updated) =>
+            setEntities((list) => list.map((x) => (x.id === updated.id ? updated : x)))
+          }
+          onClose={() => setHistory(null)}
+        />
+      )}
+
       {picker && (
         <AssetPicker
           projectId={project.id}
@@ -302,6 +317,7 @@ function AssetCard({
   onLink,
   onGenerate,
   onCandidates,
+  onHistory,
   onCover,
   onDelete,
   onEdit,
@@ -312,6 +328,7 @@ function AssetCard({
   onLink?: () => void;
   onGenerate: () => void;
   onCandidates?: () => void;
+  onHistory?: () => void;
   onCover?: () => void;
   onDelete: () => void;
   onEdit?: () => void;
@@ -361,6 +378,15 @@ function AssetCard({
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
             >
               🎲
+            </button>
+          )}
+          {onHistory && (
+            <button
+              onClick={onHistory}
+              title="Lịch sử phiên bản — khôi phục bản cũ"
+              className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
+            >
+              🕘
             </button>
           )}
           {onLink && (
