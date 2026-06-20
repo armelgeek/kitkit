@@ -181,12 +181,19 @@ async def concat_videos(paths: list[Path], out: Path) -> None:
                     "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(out)])
 
 
+def _ff_path(p: str) -> str:
+    """Escape a filesystem path for use inside an ffmpeg filtergraph option: forward
+    slashes + escaped drive colon (e.g. C:/Fonts/arial.ttf → C\\:/Fonts/arial.ttf),
+    otherwise the `:` is read as the option separator."""
+    return p.replace("\\", "/").replace(":", "\\:")
+
+
 def _drawtext_chain(captions: list[dict], font: str, out_dir: Path, tag: str,
                     h: int) -> str:
     """Build a chain of ffmpeg drawtext filters that flash each caption during its window.
     Text is read from a sidecar file (textfile=) to avoid escaping Vietnamese/punctuation."""
     parts = []
-    fontposix = Path(font).as_posix()
+    fontposix = _ff_path(font)
     for k, c in enumerate(captions):
         txt = (c.get("text") or "").strip()
         if not txt or c.get("end", 0) <= c.get("start", 0):
@@ -194,7 +201,7 @@ def _drawtext_chain(captions: list[dict], font: str, out_dir: Path, tag: str,
         tf = out_dir / f"cap_{tag}_{k}.txt"
         tf.write_text(txt, encoding="utf-8")
         parts.append(
-            f"drawtext=fontfile='{fontposix}':textfile='{tf.as_posix()}'"
+            f"drawtext=fontfile='{fontposix}':textfile='{_ff_path(str(tf))}'"
             f":enable='between(t,{c['start']:.3f},{c['end']:.3f})'"
             f":fontsize={max(28, int(h*0.055))}:fontcolor=white:borderw=2:bordercolor=black"
             f":box=1:boxcolor=black@0.45:boxborderw=14"

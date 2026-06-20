@@ -1054,7 +1054,11 @@ def _caption_windows(beat_text: str, key_phrases: list[str],
         caps.append({"text": ph.strip(), "start": round(start, 3),
                      "end": round(min(b_start + b_dur, start + dur), 3)})
         search_from = min(n - 1, idx + len(pw))
-    return caps
+    # keep windows from overlapping (one caption on screen at a time)
+    for i in range(len(caps) - 1):
+        if caps[i]["end"] > caps[i + 1]["start"]:
+            caps[i]["end"] = round(caps[i + 1]["start"], 3)
+    return [c for c in caps if c["end"] > c["start"]]
 
 
 async def _scene_narration(text: str, voice_id: int, pid: str, scene_id: str,
