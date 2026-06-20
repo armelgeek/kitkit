@@ -156,6 +156,52 @@ export default function StoryboardTab({
     }
   };
 
+  // Rebuild ONE scene by its narration (TTS) — the escape hatch when the project-wide
+  // "Dựng theo lời đọc" misses a scene (so you don't fall back to a silent Autofill).
+  const buildSceneBeats = async (sid: string) => {
+    const ok = await confirm({
+      title: "Dựng lại scene này theo lời đọc?",
+      message:
+        "Đọc (TTS) phần nội dung gốc của RIÊNG scene này, đo thời lượng và cắt beat bám " +
+        "đúng audio. Thao tác này XOÁ các shot hiện tại của scene.",
+      confirmText: "Dựng theo lời đọc",
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy("beats:" + sid);
+    setErr(null);
+    try {
+      const r = await storyboard.buildSceneBeats(sid);
+      await loadShots(sid);
+      setScenes((cur) =>
+        cur.map((s) =>
+          s.id === sid
+            ? { ...s, narration_path: r.narration_path, narration_duration: r.scene_duration }
+            : s
+        )
+      );
+      setNotice(
+        r.measured
+          ? `Đã dựng lời đọc cho scene (audio ${Math.round(r.scene_duration)}s).`
+          : "Đã dựng beat (ước lượng — bật TTS để có audio thật)."
+      );
+      setTimeout(() => setNotice(null), 5000);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Audio status of a scene: measured = real TTS WAV exists; else estimate from beats.
+  const sceneAudio = (sc: Scene) => {
+    const list = shotsByScene[sc.id] || [];
+    const measured = !!sc.narration_path;
+    const dur = sc.narration_duration ?? list.reduce((a, s) => a + (s.narration_duration || 0), 0);
+    const hasNarr = measured || list.some((s) => s.narrator_text || s.narration_duration);
+    return { measured, dur, hasNarr };
+  };
+
   // ── Reorder (kéo-thả / mũi tên) ──
   const dragShot = useRef<{ sceneId: string; id: string } | null>(null);
 
@@ -383,6 +429,25 @@ export default function StoryboardTab({
                   <span className="mr-1.5 text-neutral-500">{String(scenePos + 1).padStart(2, "0")}</span>
                   {sc.heading}
                 </h3>
+                {(() => {
+                  const a = sceneAudio(sc);
+                  if (!a.hasNarr) return null;
+                  return a.measured ? (
+                    <span
+                      title="Scene có audio lời đọc (TTS) thật — thời lượng đo từ giọng đọc"
+                      className="rounded bg-emerald-900/50 px-1.5 py-0.5 text-[11px] text-emerald-300"
+                    >
+                      🎙 {Math.round(a.dur)}s
+                    </span>
+                  ) : (
+                    <span
+                      title="Chưa có audio TTS — thời lượng đang ƯỚC LƯỢNG theo số từ. Bấm 🎙 Lời đọc để tạo audio thật."
+                      className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[11px] text-amber-300"
+                    >
+                      ⏱ ~{Math.round(a.dur)}s
+                    </span>
+                  );
+                })()}
                 <div className="flex items-center">
                   <button
                     disabled={scenePos === 0 || !!busy}
@@ -409,6 +474,16 @@ export default function StoryboardTab({
                   >
                     {busy === "autofill:" + sc.id ? "…" : "✨ Autofill"}
                   </button>
+                  {!!project.storytelling && (
+                    <button
+                      disabled={!!busy}
+                      onClick={() => buildSceneBeats(sc.id)}
+                      title="Dựng lại CHỈ scene này theo lời đọc (TTS) — dùng khi scene bị bỏ sót / chưa có audio"
+                      className="rounded-md border border-violet-700/60 px-2.5 py-1 text-xs text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
+                    >
+                      {busy === "beats:" + sc.id ? "Đang dựng…" : "🎙 Lời đọc"}
+                    </button>
+                  )}
                   <button
                     disabled={!!busy || !!imgJob || !shots.length}
                     onClick={() => sceneAll(sc.id)}
@@ -422,6 +497,7 @@ export default function StoryboardTab({
                 {shots.map((sh) => (
                   <div
                     key={sh.id}
+                    className="relative"
                     draggable
                     onDragStart={() => (dragShot.current = { sceneId: sc.id, id: sh.id })}
                     onDragOver={(e) => e.preventDefault()}
@@ -431,6 +507,23 @@ export default function StoryboardTab({
                     }}
                     title="Kéo để đổi thứ tự shot"
                   >
+                  {(sh.narrator_text || sh.narration_duration != null) && (
+                    <span
+                      title={
+                        (sh.narrator_text ? `Lời đọc: "${sh.narrator_text}"\n` : "") +
+                        (sc.narration_path
+                          ? `Audio TTS thật (${(sh.narration_duration || 0).toFixed(1)}s)`
+                          : `Ước lượng ${(sh.narration_duration || 0).toFixed(1)}s — chưa có audio thật`)
+                      }
+                      className={`absolute left-1.5 top-1.5 z-10 rounded px-1 py-0.5 text-[10px] ${
+                        sc.narration_path
+                          ? "bg-emerald-600/85 text-white"
+                          : "bg-amber-600/80 text-white"
+                      }`}
+                    >
+                      {sc.narration_path ? "🔊" : "⏱"} {(sh.narration_duration || 0).toFixed(1)}s
+                    </span>
+                  )}
                   <MediaCard
                     imageSrc={sh.image_path}
                     title={sh.title}

@@ -270,10 +270,21 @@ export interface Shot {
   video_model: string | null;
   duration: number;
   status: string;
+  // Storytelling (§2.6): this beat's spoken slice + its share of the scene audio.
+  narrator_text?: string | null;
+  narration_duration?: number | null;
+  start_time?: number | null;
 }
 
 export const storyboard = {
   sceneShots: (sid: string) => req<{ shots: Shot[] }>(`/scenes/${sid}/shots`),
+  // Storytelling (§2.6): build beats + TTS for ONE scene (re-run a scene the project-wide
+  // pass missed). Synchronous — scoped to a single scene.
+  buildSceneBeats: (sid: string, measure = true) =>
+    req<{ shots: Shot[]; scene_duration: number; narration_path: string | null; measured: boolean }>(
+      `/scenes/${sid}/beats`,
+      { method: "POST", body: JSON.stringify({ measure }) }
+    ),
   autofill: (sid: string, n_frames?: number) =>
     req<{ shots: Shot[] }>(`/scenes/${sid}/storyboard/autofill`, {
       method: "POST",
@@ -389,6 +400,10 @@ export interface Scene {
   idx: number;
   heading: string;
   action: string;
+  // Storytelling: the scene's measured TTS narration (null = not built / estimate-only).
+  narration_path?: string | null;
+  narration_duration?: number | null;
+  narration_text?: string | null;
 }
 
 export interface ScriptResult {
