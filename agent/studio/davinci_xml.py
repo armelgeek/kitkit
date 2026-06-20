@@ -77,12 +77,34 @@ def _title_item(idx: int, text: str, start_f: int, dur_f: int) -> str:
         </clipitem>"""
 
 
+def _audio_item(idx: int, name: str, path: Path, start_f: int, dur_f: int) -> str:
+    end_f = start_f + dur_f
+    return f"""        <clipitem id="aclip{idx}">
+          <name>{escape(name)}</name>
+          <duration>{dur_f}</duration>
+          <rate><timebase>{FPS}</timebase><ntsc>FALSE</ntsc></rate>
+          <start>{start_f}</start>
+          <end>{end_f}</end>
+          <in>0</in>
+          <out>{dur_f}</out>
+          <file id="afile{idx}">
+            <name>{escape(path.name)}</name>
+            <pathurl>{_file_url(path)}</pathurl>
+            <rate><timebase>{FPS}</timebase></rate>
+            <duration>{dur_f}</duration>
+            <media><audio><channelcount>2</channelcount></audio></media>
+          </file>
+          <sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack>
+        </clipitem>"""
+
+
 async def build(project_id: str) -> dict:
     project = await db.query_one("SELECT * FROM project WHERE id=?", (project_id,))
     if not project:
         raise RuntimeError("project not found")
     shots = await db.query_all(
-        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "SELECT sh.*, sc.id AS _scene_id, sc.narration_path AS _scene_narr "
+        "FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
         "WHERE sc.project_id=? AND sh.video_path IS NOT NULL ORDER BY sc.idx, sh.idx",
         (project_id,))
     if not shots:
@@ -90,12 +112,17 @@ async def build(project_id: str) -> dict:
 
     w, h = assembler._res(project["aspect_ratio"])
     items, titles, srt, start_f, total, tnum = [], [], [], 0, 0, 0
+    audio_segs, cur_scene = [], None   # scene narration WAV placed at its timeline start
     for i, sh in enumerate(shots):
         path = assembler._local(sh["video_path"])
         if not path.exists():
             continue
         dur_s = await assembler.probe_duration(path)
         dur_f = max(1, round(dur_s * FPS))
+        if sh.get("_scene_id") != cur_scene:        # new scene → anchor its narration here
+            cur_scene = sh.get("_scene_id")
+            if sh.get("_scene_narr"):
+                audio_segs.append((sh["_scene_narr"], start_f))
         items.append(_clipitem(i, sh.get("title") or f"Shot {i+1}", path, start_f, dur_f, w, h))
         # timed keyword captions → FCP7 title track (Studio) + a sibling SRT (works on Free)
         try:
@@ -118,7 +145,22 @@ async def build(project_id: str) -> dict:
         start_f += dur_f
         total += dur_f
 
+    # narration audio track: each scene's continuous WAV at its timeline start
+    audio_items = []
+    for ai, (narr_web, sf) in enumerate(audio_segs):
+        ap = assembler._local(narr_web)
+        if not ap.exists():
+            continue
+        adur_f = max(1, round(await assembler.probe_duration(ap) * FPS))
+        audio_items.append(_audio_item(ai, "narration", ap, sf, adur_f))
+
     title_track = f"\n        <track>\n{chr(10).join(titles)}\n        </track>" if titles else ""
+    audio_media = (f"""
+      <audio>
+        <track>
+{chr(10).join(audio_items)}
+        </track>
+      </audio>""" if audio_items else "")
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xmeml>
 <xmeml version="5">
@@ -135,7 +177,7 @@ async def build(project_id: str) -> dict:
         <track>
 {chr(10).join(items)}
         </track>{title_track}
-      </video>
+      </video>{audio_media}
     </media>
   </sequence>
 </xmeml>
@@ -160,4 +202,5 @@ async def build(project_id: str) -> dict:
         "id": db.new_id(), "project_id": project_id, "kind": "davinci_xml",
         "path": str(out), "meta_json": None, "created_at": db.now()})
     return {"path": str(out), "web_path": f"/studio-media/{project_id}/timeline.xml",
-            "clips": len(items), "captions_srt": srt_web, "captions": len(srt)}
+            "clips": len(items), "captions_srt": srt_web, "captions": len(srt),
+            "audio_tracks": len(audio_items)}
