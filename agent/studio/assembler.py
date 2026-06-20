@@ -172,8 +172,9 @@ async def extract_last_frame(video: Path, out_jpg: Path) -> bool:
 async def apply_bgm(project: dict, final: Path) -> bool:
     """Mix the project's background-music file under the existing audio (narration) of
     `final`, in place. Music is looped to cover the whole video and lowered to
-    `bgm_volume` (narration stays at full level via amix normalize=0). No-op if the
-    project has no music. Failures are swallowed so assembly still completes."""
+    `bgm_volume`. With ducking on (default), the music auto-dips while the narration
+    plays and rises during pauses (sidechaincompress); narration stays at full level.
+    No-op if the project has no music. Failures are swallowed so assembly still completes."""
     bgm = (project.get("bgm_path") or "").strip()
     if not bgm:
         return False
@@ -188,10 +189,21 @@ async def apply_bgm(project: dict, final: Path) -> bool:
     vol = min(max(vol, 0.0), 1.0)
     if vol <= 0:
         return False
+    duck = project.get("bgm_duck")
+    duck = True if duck is None else bool(duck)
     tmp = final.with_name(f"{final.stem}_bgm.mp4")
     # input 0 = the assembled video (narration), input 1 = looped music (lowered).
-    filt = (f"[1:a]volume={vol:.3f}[bg];"
-            f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]")
+    if duck:
+        # music is keyed (sidechain) by the narration → dips under speech, returns in pauses.
+        filt = (
+            f"[1:a]aresample=44100,aformat=channel_layouts=stereo,volume={vol:.3f}[bg];"
+            f"[0:a]aresample=44100,aformat=channel_layouts=stereo,asplit=2[n1][n2];"
+            f"[bg][n1]sidechaincompress=threshold=0.04:ratio=10:attack=20:release=400[duck];"
+            f"[n2][duck]amix=inputs=2:duration=first:normalize=0[a]"
+        )
+    else:
+        filt = (f"[1:a]volume={vol:.3f}[bg];"
+                f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]")
     try:
         await _run(["ffmpeg", "-y", "-i", str(final), "-stream_loop", "-1", "-i", str(music),
                     "-filter_complex", filt, "-map", "0:v", "-map", "[a]",

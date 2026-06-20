@@ -60,6 +60,7 @@ class UpdateProjectRequest(BaseModel):
     script_lang: Optional[str] = None
     image_text_lang: Optional[str] = None
     bgm_volume: Optional[float] = None
+    bgm_duck: Optional[bool] = None
     tts_speed: Optional[float] = None
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
@@ -399,6 +400,8 @@ async def update_project(pid: str, body: UpdateProjectRequest):
     data = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if "storytelling" in data:
         data["storytelling"] = 1 if data["storytelling"] else 0
+    if "bgm_duck" in data:
+        data["bgm_duck"] = 1 if data["bgm_duck"] else 0
     data["updated_at"] = db.now()
     await db.update("project", pid, data)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))

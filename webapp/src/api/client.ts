@@ -23,6 +23,7 @@ export interface Project {
   image_text_lang?: string | null;
   bgm_path?: string | null;
   bgm_volume?: number | null;
+  bgm_duck?: number | null;
   status: string;
   updated_at: number;
 }

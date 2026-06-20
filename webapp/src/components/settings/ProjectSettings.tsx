@@ -35,6 +35,7 @@ export default function ProjectSettings({
   const [storytelling, setStorytelling] = useState<boolean>(!!project.storytelling);
   const [bgmPath, setBgmPath] = useState(project.bgm_path ?? null);
   const [bgmVol, setBgmVol] = useState(project.bgm_volume ?? 0.18);
+  const [bgmDuck, setBgmDuck] = useState<boolean>(project.bgm_duck == null ? true : !!project.bgm_duck);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voiceId, setVoiceId] = useState<number>(project.voice_id ?? 0);
   const [ttsSpeed, setTtsSpeed] = useState<number>(project.tts_speed ?? 1.0);
@@ -73,6 +74,7 @@ export default function ProjectSettings({
       const updated = await api.updateProject(project.id, {
         ...s,
         bgm_volume: bgmVol,
+        bgm_duck: bgmDuck,
         voice_id: voiceId,
         shot_duration: shotDuration,
         storytelling,
@@ -282,9 +284,15 @@ export default function ProjectSettings({
                 {Math.round(bgmVol * 100)}%
               </span>
             </div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-neutral-300">
+              <input type="checkbox" checked={bgmDuck}
+                onChange={(e) => setBgmDuck(e.target.checked)}
+                className="h-4 w-4 accent-indigo-500" />
+              Tự giảm nhạc khi có giọng đọc (ducking)
+            </label>
             <p className="mt-1 text-xs text-neutral-600">
-              Giọng đọc giữ nguyên âm lượng; nhạc được hạ xuống mức này và lặp cho đủ độ dài video.
-              Bỏ trống → không chèn nhạc. (Lưu cấu hình để áp dụng mức âm lượng mới.)
+              Giọng đọc giữ nguyên âm lượng. Bật ducking: nhạc tự nhỏ lại lúc đang đọc và to lên ở
+              khoảng lặng. Tắt: nhạc giữ mức cố định ở trên. Bỏ trống file → không chèn nhạc.
             </p>
           </Field>
         </div>

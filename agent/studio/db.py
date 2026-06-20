@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS project (
   prompt_header TEXT, prompt_footer TEXT, culture_hint TEXT,
   image_text_lang TEXT DEFAULT 'Vietnamese',
   script_lang TEXT DEFAULT 'Vietnamese',
-  bgm_path TEXT, bgm_volume REAL DEFAULT 0.18,
+  bgm_path TEXT, bgm_volume REAL DEFAULT 0.18, bgm_duck INTEGER DEFAULT 1,
   tts_speed REAL DEFAULT 1.0,
   thumb_media_key TEXT,
   status TEXT DEFAULT 'draft',
@@ -101,6 +101,8 @@ _MIGRATIONS = [
     # Optional background music mixed under the narration when assembling the final video.
     ("project", "bgm_path", "TEXT"),
     ("project", "bgm_volume", "REAL DEFAULT 0.18"),
+    # Auto-duck the music under the narration (1 = on).
+    ("project", "bgm_duck", "INTEGER DEFAULT 1"),
     # Narration reading speed for OmniVoice TTS (1.0 = normal).
     ("project", "tts_speed", "REAL DEFAULT 1.0"),
     # A shot has two independent node graphs: graph_json = the storyboard IMAGE graph,
