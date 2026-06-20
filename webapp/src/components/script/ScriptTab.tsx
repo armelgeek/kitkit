@@ -13,6 +13,25 @@ export default function ScriptTab({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Insert a Fountain screenplay element at the cursor (on its own line).
+  const insertSnippet = (text: string) => {
+    const ta = taRef.current;
+    const start = ta ? ta.selectionStart : script.length;
+    const end = ta ? ta.selectionEnd : script.length;
+    const before = script.slice(0, start);
+    const after = script.slice(end);
+    const lead = before.length && !before.endsWith("\n") ? "\n" : "";
+    const ins = lead + text;
+    setScript(before + ins + after);
+    setDirty(true);
+    requestAnimationFrame(() => {
+      const pos = (before + ins).length;
+      ta?.focus();
+      ta?.setSelectionRange(pos, pos);
+    });
+  };
 
   // Keep local state in sync if the parent project (script_raw) changes.
   useEffect(() => {
@@ -66,10 +85,21 @@ export default function ScriptTab({
           )}
         </div>
 
+        {/* Screenplay toolbar — chèn phần tử Fountain chuẩn ngành tại con trỏ */}
+        <div className="flex flex-wrap gap-1 px-4 pb-2">
+          <TBtn onClick={() => insertSnippet("INT. ĐỊA ĐIỂM - DAY\n")} title="Scene Heading (INT./EXT.)">🎬 Cảnh</TBtn>
+          <TBtn onClick={() => insertSnippet("Mô tả hành động đang diễn ra.\n")} title="Action — dòng mô tả">Hành động</TBtn>
+          <TBtn onClick={() => insertSnippet("TÊN NHÂN VẬT\n")} title="Character cue (in hoa)">👤 Nhân vật</TBtn>
+          <TBtn onClick={() => insertSnippet("(diễn giải)\n")} title="Parenthetical">(Diễn giải)</TBtn>
+          <TBtn onClick={() => insertSnippet("Lời thoại.\n")} title="Dialogue">💬 Thoại</TBtn>
+          <TBtn onClick={() => insertSnippet("CUT TO:\n")} title="Transition (căn phải)">Chuyển →</TBtn>
+        </div>
+
         {/* Script area — always scrollable; large bottom padding so the floating
             composer never hides the last lines of the screenplay. */}
         <div className="relative flex-1 px-4">
           <textarea
+            ref={taRef}
             value={script}
             onChange={(e) => {
               setScript(e.target.value);
@@ -236,6 +266,26 @@ function Composer({
         )}
       </div>
     </div>
+  );
+}
+
+function TBtn({
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+    >
+      {children}
+    </button>
   );
 }
 
