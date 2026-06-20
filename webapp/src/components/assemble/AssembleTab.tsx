@@ -7,6 +7,7 @@ export default function AssembleTab({ project }: { project: Project }) {
   const [progress, setProgress] = useState("");
   const [finalUrl, setFinalUrl] = useState<string | null>(null);
   const [xmlUrl, setXmlUrl] = useState<string | null>(null);
+  const [srtUrl, setSrtUrl] = useState<string | null>(null);
   const [meta, setMeta] = useState<any>(null);
   const [kenBurns, setKenBurns] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function AssembleTab({ project }: { project: Project }) {
     run("xml", async () => {
       const r = await asm.davinci(project.id);
       setXmlUrl(r.web_path);
+      setSrtUrl(r.captions_srt || null);
     });
 
   return (
@@ -140,6 +142,17 @@ export default function AssembleTab({ project }: { project: Project }) {
             ⭳ timeline.xml
           </a>
           <span className="ml-2 text-neutral-500">Import Timeline trong Resolve, media relink từ ./media</span>
+          {srtUrl && (
+            <div className="mt-2 text-neutral-300">
+              Caption từ khoá:{" "}
+              <a href={srtUrl} download className="text-indigo-400 hover:text-indigo-300">
+                ⭳ captions.srt
+              </a>
+              <span className="ml-2 text-neutral-500">
+                Kéo vào timeline Resolve → subtitle track (chạy cả bản Free; title track trong XML chỉ vào ở bản Studio)
+              </span>
+            </div>
+          )}
         </div>
       )}
 

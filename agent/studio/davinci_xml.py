@@ -22,6 +22,12 @@ def _file_url(p: Path) -> str:
     return "file://localhost" + pathname2url(str(p.resolve()))
 
 
+def _srt_ts(sec: float) -> str:
+    h = int(sec // 3600); m = int((sec % 3600) // 60)
+    s = int(sec % 60); ms = int(round((sec - int(sec)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
 def _clipitem(idx: int, name: str, path: Path, start_f: int, dur_f: int, w: int, h: int) -> str:
     end_f = start_f + dur_f
     return f"""        <clipitem id="clip{idx}">
@@ -83,7 +89,7 @@ async def build(project_id: str) -> dict:
         raise RuntimeError("Chưa có shot nào có video để export")
 
     w, h = assembler._res(project["aspect_ratio"])
-    items, titles, start_f, total, tnum = [], [], 0, 0, 0
+    items, titles, srt, start_f, total, tnum = [], [], [], 0, 0, 0
     for i, sh in enumerate(shots):
         path = assembler._local(sh["video_path"])
         if not path.exists():
@@ -91,12 +97,13 @@ async def build(project_id: str) -> dict:
         dur_s = await assembler.probe_duration(path)
         dur_f = max(1, round(dur_s * FPS))
         items.append(_clipitem(i, sh.get("title") or f"Shot {i+1}", path, start_f, dur_f, w, h))
-        # timed keyword captions → title track (offset within this clip)
+        # timed keyword captions → FCP7 title track (Studio) + a sibling SRT (works on Free)
         try:
             caps = json.loads(sh.get("captions") or "[]")
         except (json.JSONDecodeError, TypeError):
             caps = []
         base = float(sh.get("start_time") or 0)   # caption times are scene-local
+        clip_start_s = start_f / FPS
         for c in caps:
             off = max(0.0, float(c.get("start", 0)) - base)
             cs = start_f + round(off * FPS)
@@ -104,6 +111,9 @@ async def build(project_id: str) -> dict:
             cd = min(cd, max(1, start_f + dur_f - cs))  # clamp inside the clip
             if c.get("text") and cd > 0 and cs < start_f + dur_f:
                 titles.append(_title_item(tnum, c["text"], cs, cd))
+                gstart = clip_start_s + off
+                gend = min((start_f + dur_f) / FPS, gstart + (cd / FPS))
+                srt.append((gstart, gend, c["text"]))
                 tnum += 1
         start_f += dur_f
         total += dur_f
@@ -134,9 +144,20 @@ async def build(project_id: str) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / "timeline.xml"
     out.write_text(xml, encoding="utf-8")
+
+    # Sibling SRT of the keyword captions — Resolve (incl. Free) imports subtitles reliably,
+    # whereas FCP7 title generators may be dropped on XML import.
+    srt_web = None
+    if srt:
+        lines = []
+        for n, (a, b, txt) in enumerate(srt, 1):
+            lines.append(f"{n}\n{_srt_ts(a)} --> {_srt_ts(b)}\n{txt}\n")
+        (out_dir / "captions.srt").write_text("\n".join(lines), encoding="utf-8")
+        srt_web = f"/studio-media/{project_id}/captions.srt"
+
     await db.execute("DELETE FROM asset WHERE project_id=? AND kind='davinci_xml'", (project_id,))
     await db.insert("asset", {
         "id": db.new_id(), "project_id": project_id, "kind": "davinci_xml",
         "path": str(out), "meta_json": None, "created_at": db.now()})
     return {"path": str(out), "web_path": f"/studio-media/{project_id}/timeline.xml",
-            "clips": len(items)}
+            "clips": len(items), "captions_srt": srt_web, "captions": len(srt)}
