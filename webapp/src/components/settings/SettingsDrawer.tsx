@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, getTtsConfig, setTtsConfig } from "../../api/client";
+import { api, getTtsConfig, setTtsConfig, listVoices, type Voice } from "../../api/client";
 import VoiceManager from "./VoiceManager";
 
 export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
@@ -7,6 +7,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<Record<string, any>>({});
   const [ttsUrl, setTtsUrl] = useState("");
   const [fonts, setFonts] = useState<{ name: string; path: string }[]>([]);
+  const [voices, setVoices] = useState<Voice[]>([]);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -16,6 +17,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
     // Show the currently-saved OmniVoice URL so it doesn't look lost on reopen.
     getTtsConfig().then((c) => setTtsUrl(c.base_url || "")).catch(() => {});
     api.listFonts().then((r) => setFonts(r.fonts)).catch(() => {});
+    listVoices().then(setVoices).catch(() => {});
   }, []);
 
   const set = (k: string, v: any) => {
@@ -79,6 +81,69 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </Field>
+
+          <div className="border-t border-neutral-800 pt-4">
+            <div className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+              Mặc định cho project mới
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Khung hình">
+                <select value={s.aspect_ratio || "VIDEO_ASPECT_RATIO_LANDSCAPE"}
+                  onChange={(e) => set("aspect_ratio", e.target.value)} className={inp}>
+                  <option value="VIDEO_ASPECT_RATIO_LANDSCAPE">16:9 ngang</option>
+                  <option value="VIDEO_ASPECT_RATIO_PORTRAIT">9:16 dọc</option>
+                </select>
+              </Field>
+              <Field label="Độ dài shot (giây)">
+                <input type="number" min={1} max={10} value={s.shot_duration ?? 8}
+                  onChange={(e) => set("shot_duration", Math.min(10, Math.max(1, Number(e.target.value) || 8)))}
+                  className={inp} />
+              </Field>
+            </div>
+            <Field label="Video model">
+              <select value={s.video_model || ""} onChange={(e) => set("video_model", e.target.value)} className={inp}>
+                <option value="">(mặc định)</option>
+                {(opts?.video_models?.veo_tiers || []).length > 0 && (
+                  <optgroup label="Veo (i2v)">
+                    {(opts?.video_models?.veo_tiers || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
+                  </optgroup>
+                )}
+                {(opts?.video_models?.omni_flash_durations || []).length > 0 && (
+                  <optgroup label="Omni Flash (r2v)">
+                    {(opts?.video_models?.omni_flash_durations || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </Field>
+            <Field label="Ngôn ngữ kịch bản / lời đọc">
+              <input value={s.script_lang || ""} onChange={(e) => set("script_lang", e.target.value)}
+                placeholder="Tiếng Việt" className={inp} />
+            </Field>
+            <Field label="Giọng đọc mặc định">
+              <select value={s.voice_id ?? 0} onChange={(e) => set("voice_id", Number(e.target.value))} className={inp}>
+                <option value={0}>Mặc định (id 0)</option>
+                {voices.map((v) => (
+                  <option key={v.voice_id} value={v.voice_id}>{v.title} (id {v.voice_id})</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tốc độ đọc mặc định">
+              <div className="flex items-center gap-3">
+                <input type="range" min={0.5} max={1.5} step={0.05} value={s.tts_speed ?? 1.0}
+                  onChange={(e) => set("tts_speed", parseFloat(e.target.value))}
+                  className="flex-1 accent-indigo-500" />
+                <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
+                  {(s.tts_speed ?? 1.0).toFixed(2)}×
+                </span>
+              </div>
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-neutral-300">
+              <input type="checkbox" checked={s.storytelling ?? true}
+                onChange={(e) => set("storytelling", e.target.checked)}
+                className="h-4 w-4 accent-indigo-500" />
+              Bật Storytelling mặc định
+            </label>
+          </div>
 
           <Field label="OmniVoice base URL (TTS)">
             <input value={ttsUrl} onChange={(e) => setTtsUrl(e.target.value)}

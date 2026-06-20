@@ -372,16 +372,33 @@ async def create_project(body: CreateProjectRequest):
 
     pid = db.new_id()
     ts = db.now()
-    await db.insert("project", {
+    # Global defaults (Settings §2.7A): used for fields the create form doesn't ask about,
+    # so a new project inherits the studio-wide preferences. Order: per-project (form) →
+    # global (kv) → hard default.
+    kv = await db.kv_get_all()
+    row = {
         "id": pid, "title": body.title, "flow_project_id": flow_id,
-        "style": body.style, "aspect_ratio": body.aspect_ratio,
+        "style": (body.style or kv.get("style") or "Realistic"),
+        "aspect_ratio": (body.aspect_ratio or kv.get("aspect_ratio")
+                         or "VIDEO_ASPECT_RATIO_LANDSCAPE"),
         "paygate_tier": await _current_tier(),   # từ /api/flow/credits, không do user chọn
         "storytelling": 1 if body.storytelling else 0,
         "script_lang": (body.script_lang or "Vietnamese").strip() or "Vietnamese",
         "image_text_lang": (body.image_text_lang or "Vietnamese").strip() or "Vietnamese",
         "thumb_media_key": thumb,
         "status": "draft", "created_at": ts, "updated_at": ts,
-    })
+    }
+    if kv.get("image_model"):
+        row["image_model"] = kv["image_model"]
+    if kv.get("video_model"):
+        row["video_model"] = kv["video_model"]
+    for key, cast in (("shot_duration", int), ("voice_id", int), ("tts_speed", float)):
+        if kv.get(key) not in (None, ""):
+            try:
+                row[key] = cast(kv[key])
+            except (TypeError, ValueError):
+                pass
+    await db.insert("project", row)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
 
 

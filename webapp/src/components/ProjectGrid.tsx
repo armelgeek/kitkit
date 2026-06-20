@@ -218,6 +218,16 @@ function CreateModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Pre-fill from global defaults (Settings §2.7A) so new projects inherit them.
+  useEffect(() => {
+    api.getSettings().then((g) => {
+      if (g.aspect_ratio) setAspect(g.aspect_ratio);
+      if (g.style) setStyle(g.style);
+      if (g.script_lang) setScriptLang(g.script_lang);
+      if (g.storytelling != null) setStorytelling(!!g.storytelling);
+    }).catch(() => {});
+  }, []);
+
   const submit = async () => {
     if (!title.trim()) return;
     setBusy(true);
