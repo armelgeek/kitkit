@@ -15,6 +15,7 @@ import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
+import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
 const GROUPS: { type: Entity["type"]; label: string }[] = [
   { type: "character", label: "Nhân vật" },
@@ -43,12 +44,24 @@ export default function AssetsTab({
   >(null);
   const [err, setErr] = useState<string | null>(null);
   const confirm = useConfirm();
+  const { jobFor } = useJobs();
 
   const load = () =>
     api.listEntities(project.id).then((r) => setEntities(r.entities)).catch(() => {});
   useEffect(() => {
     load();
   }, [project.id]);
+
+  // Refetch entities as the server batch advances so new images appear live, even if
+  // this tab was closed/reopened mid-batch (§9).
+  const assetsJob = jobFor("assets");
+  useJobWatcher("assets", {
+    onAdvance: load,
+    onDone: (j) => {
+      load();
+      if (j.errors.length) setErr(`Auto gen: ${j.done}/${j.total} xong, ${j.errors.length} lỗi.`);
+    },
+  });
 
   const wrap = async (label: string, fn: () => Promise<any>) => {
     setBusy(label);
@@ -82,25 +95,8 @@ export default function AssetsTab({
     }
   };
 
-  // Run gen over a list on the client so each image shows its "Đang tạo…" overlay live
-  // and we can report progress + which ones failed (backend already verifies + retries).
-  const runBatch = async (todo: Entity[], label: string) => {
-    setBusy(label);
-    setErr(null);
-    let okN = 0;
-    const failed: string[] = [];
-    for (let i = 0; i < todo.length; i++) {
-      setProgress(`Đang tạo ${i + 1}/${todo.length}: ${todo[i].name}`);
-      const ok = await genOne(todo[i]);
-      ok ? okN++ : failed.push(todo[i].name);
-      if (i < todo.length - 1) await sleep(2000 + Math.random() * 4000);
-    }
-    setProgress(null);
-    setBusy(null);
-    if (failed.length) setErr(`Xong ${okN}/${todo.length}. Lỗi: ${failed.join(", ")}`);
-  };
-
-  // Auto gen only the assets that don't have an image yet.
+  // Auto gen the assets without an image, as a server-side background job (§9): it
+  // survives tab close and streams progress to the floating banner.
   const autoGen = async () => {
     const todo = entities.filter((e) => !e.image_path);
     if (!todo.length) {
@@ -108,7 +104,12 @@ export default function AssetsTab({
       return;
     }
     if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh asset"))) return;
-    await runBatch(todo, "all");
+    setErr(null);
+    try {
+      await api.generateAllAssets(project.id);
+    } catch (e: any) {
+      setErr(e.message);
+    }
   };
 
   // Wipe the current entities and re-extract fresh ones from the script. Destructive
@@ -168,11 +169,11 @@ export default function AssetsTab({
             {busy === "extract" ? "Đang trích…" : "Trích từ kịch bản"}
           </button>
           <button
-            disabled={!!busy}
+            disabled={!!busy || !!assetsJob}
             onClick={autoGen}
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
           >
-            {busy === "all" ? "Đang tạo…" : "✦ Auto gen"}
+            {assetsJob ? `Đang tạo ${assetsJob.done}/${assetsJob.total}…` : "✦ Auto gen"}
           </button>
           <button
             disabled={!!busy}

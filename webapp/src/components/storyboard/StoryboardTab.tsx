@@ -15,6 +15,7 @@ import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
+import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
 const slug = (s: string) =>
   (s || "")
@@ -70,6 +71,7 @@ export default function StoryboardTab({
   const [candidate, setCandidate] = useState<Shot | null>(null);
   const [history, setHistory] = useState<Shot | null>(null);
   const confirm = useConfirm();
+  const { jobFor } = useJobs();
 
   const setAsCover = async (shot: Shot) => {
     if (!shot.image_media_id) return;
@@ -126,29 +128,6 @@ export default function StoryboardTab({
     }
   };
 
-  // Generate a list of frames one-by-one on the client → live per-frame "Đang tạo…"
-  // overlay + progress; backend verifies the image was created and retries policy blocks.
-  const genSequential = async (label: string, todo: Shot[]) => {
-    if (!todo.length) {
-      setErr("Mọi frame đã có ảnh.");
-      return;
-    }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
-    setBusy(label);
-    setErr(null);
-    let okN = 0;
-    const failed: string[] = [];
-    for (let i = 0; i < todo.length; i++) {
-      setProgress(`Đang tạo ${i + 1}/${todo.length}: ${todo[i].title}`);
-      const ok = await genImage(todo[i]);
-      ok ? okN++ : failed.push(todo[i].title);
-      if (i < todo.length - 1) await sleep(2000 + Math.random() * 4000);
-    }
-    setProgress(null);
-    setBusy(null);
-    if (failed.length) setErr(`Xong ${okN}/${todo.length}. Lỗi: ${failed.join(", ")}`);
-  };
-
   const autofill = async (sid: string) => {
     setBusy("autofill:" + sid);
     setErr(null);
@@ -164,7 +143,17 @@ export default function StoryboardTab({
 
   const sceneAll = async (sid: string) => {
     const todo = (shotsByScene[sid] || []).filter((s) => !s.image_path);
-    await genSequential("all:" + sid, todo);
+    if (!todo.length) {
+      setErr("Mọi frame trong scene đã có ảnh.");
+      return;
+    }
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
+    setErr(null);
+    try {
+      await storyboard.genSceneAll(sid);
+    } catch (e: any) {
+      setErr(e.message);
+    }
   };
 
   // ── Reorder (kéo-thả / mũi tên) ──
@@ -207,6 +196,17 @@ export default function StoryboardTab({
   const reloadAll = async () => {
     for (const s of scenes) await loadShots(s.id);
   };
+
+  // Refetch frames as the server storyboard batch advances (§9) — images fill in live
+  // and survive tab close / reload.
+  const imgJob = jobFor("storyboard");
+  useJobWatcher("storyboard", {
+    onAdvance: reloadAll,
+    onDone: (j) => {
+      reloadAll();
+      if (j.errors.length) setErr(`Auto gen ảnh: ${j.done}/${j.total} xong, ${j.errors.length} lỗi.`);
+    },
+  });
 
   const autofillAll = async () => {
     setBusy("autofill-all");
@@ -276,9 +276,20 @@ export default function StoryboardTab({
     }
   };
 
+  // Server-side background job (§9): generate every frame without an image.
   const projectAll = async () => {
     const todo = scenes.flatMap((sc) => (shotsByScene[sc.id] || []).filter((s) => !s.image_path));
-    await genSequential("gen-all", todo);
+    if (!todo.length) {
+      setErr("Mọi frame đã có ảnh.");
+      return;
+    }
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
+    setErr(null);
+    try {
+      await storyboard.genProjectAll(project.id);
+    } catch (e: any) {
+      setErr(e.message);
+    }
   };
 
   return (
@@ -317,12 +328,12 @@ export default function StoryboardTab({
               </button>
             )}
             <button
-              disabled={!!busy || !scenes.length}
+              disabled={!!busy || !!imgJob || !scenes.length}
               onClick={projectAll}
               title="Tạo ảnh cho mọi frame chưa có ảnh trong dự án"
               className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
             >
-              {busy === "gen-all" ? "Đang tạo…" : "✦ Auto gen all"}
+              {imgJob ? `Đang tạo ${imgJob.done}/${imgJob.total}…` : "✦ Auto gen all"}
             </button>
             <button
               onClick={() => downloadFile(storyboardExportUrl(project.id), "storyboard.zip")}
@@ -390,11 +401,11 @@ export default function StoryboardTab({
                     {busy === "autofill:" + sc.id ? "…" : "✨ Autofill"}
                   </button>
                   <button
-                    disabled={!!busy || !shots.length}
+                    disabled={!!busy || !!imgJob || !shots.length}
                     onClick={() => sceneAll(sc.id)}
                     className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
                   >
-                    {busy === "all:" + sc.id ? "…" : "✦ Auto gen"}
+                    {imgJob ? "…" : "✦ Auto gen"}
                   </button>
                 </div>
               </div>

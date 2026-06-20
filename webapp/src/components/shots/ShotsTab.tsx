@@ -5,6 +5,7 @@ import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
+import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
 const parseRefs = (s: string | null): string[] => {
   try {
@@ -32,10 +33,16 @@ export default function ShotsTab({
   const [lightbox, setLightbox] = useState<Shot | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const confirm = useConfirm();
+  const { jobFor } = useJobs();
 
   const loadShots = async (sid: string) => {
     const r = await storyboard.sceneShots(sid);
     setByScene((m) => ({ ...m, [sid]: r.shots }));
+  };
+
+  const reloadAllShots = async () => {
+    const sc = scenes.length ? scenes : (await api.listScenes(project.id)).scenes;
+    for (const s of sc) await loadShots(s.id);
   };
 
   useEffect(() => {
@@ -45,6 +52,16 @@ export default function ShotsTab({
       for (const s of sc) await loadShots(s.id);
     })().catch((e) => setErr(e.message));
   }, [project.id]);
+
+  // Refetch shots as the server video batch advances (§9) — videos fill in live.
+  const videoJob = jobFor("videos");
+  useJobWatcher("videos", {
+    onAdvance: reloadAllShots,
+    onDone: (j) => {
+      reloadAllShots();
+      if (j.errors.length) setErr(`Auto gen video: ${j.done}/${j.total} xong, ${j.errors.length} lỗi.`);
+    },
+  });
 
   const setShot = (u: Shot) => {
     setByScene((m) => ({
@@ -79,8 +96,8 @@ export default function ShotsTab({
     }
   };
 
-  // Render videos one-by-one on the client so each shot shows its "Đang render…"
-  // overlay live + progress; backend verifies the clip and retries failures.
+  // Render all shots (have image, no video) as a server-side background job (§9):
+  // survives tab close, throttled + verified server-side, streams to the banner.
   const genAll = async () => {
     const all = scenes.flatMap((sc) => byScene[sc.id] || []);
     const todo = all.filter((s) => s.image_media_id && !s.video_path);
@@ -89,19 +106,12 @@ export default function ShotsTab({
       return;
     }
     if (!(await creditGuard(confirm, todo.length, CREDIT_COST.video, "Render video"))) return;
-    setBusy(true);
     setErr(null);
-    let okN = 0;
-    const failed: string[] = [];
-    for (let i = 0; i < todo.length; i++) {
-      setProgress(`Đang render ${i + 1}/${todo.length}: ${todo[i].title}`);
-      const ok = await genVideo(todo[i]);
-      ok ? okN++ : failed.push(todo[i].title);
-      if (i < todo.length - 1) await sleep(15000 + Math.random() * 15000);
+    try {
+      await shotsApi.genAllVideos(project.id);
+    } catch (e: any) {
+      setErr(e.message);
     }
-    setProgress(null);
-    setBusy(false);
-    if (failed.length) setErr(`Xong ${okN}/${todo.length}. Lỗi: ${failed.join(", ")}`);
   };
 
   return (
@@ -113,11 +123,11 @@ export default function ShotsTab({
             <p className="text-sm text-neutral-500">Render video từ ảnh storyboard</p>
           </div>
           <button
-            disabled={busy}
+            disabled={busy || !!videoJob}
             onClick={genAll}
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
           >
-            {busy ? "Đang render…" : "✦ Auto gen video"}
+            {videoJob ? `Đang render ${videoJob.done}/${videoJob.total}…` : "✦ Auto gen video"}
           </button>
         </div>
         {progress && (

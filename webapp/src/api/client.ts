@@ -44,6 +44,30 @@ export interface MediaVersion {
   created_at: number;
 }
 
+// Background batch job (§9). Mirrors agent/studio/jobs.py Job.to_dict().
+export interface Job {
+  id: string;
+  project_id: string;
+  type: "assets" | "storyboard" | "videos" | string;
+  label: string;
+  total: number;
+  done: number;
+  errors: { item: string; error: string }[];
+  status: "running" | "done" | "error" | "cancelled";
+  message: string;
+  current: string;
+  progress: number; // 0..1
+  created_at: number;
+  updated_at: number;
+}
+
+// WebSocket URL for the realtime job feed (/api/studio/ws), same-origin in prod,
+// proxied by Vite in dev.
+export function studioWsUrl(): string {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${location.host}/api/studio/ws`;
+}
+
 export interface FlowProject {
   flow_project_id: string;
   title: string;
@@ -171,10 +195,15 @@ export const api = {
   setEntityImage: (eid: string, media_id: string) =>
     req<Entity>(`/entities/${eid}/image`, { method: "PUT", body: JSON.stringify({ media_id }) }),
   generateAllAssets: (id: string) =>
-    req<{ requested: number; done: number; errors: any[] }>(
+    req<{ job_id: string; total: number }>(
       `/projects/${id}/assets/generate-all`,
       { method: "POST" }
     ),
+  // Background jobs (§9): list active + cancel.
+  listJobs: (project_id?: string) =>
+    req<{ jobs: Job[] }>(`/jobs${project_id ? `?project_id=${project_id}` : ""}`),
+  cancelJob: (jid: string) =>
+    req<{ ok: boolean }>(`/jobs/${jid}/cancel`, { method: "POST" }),
   libraryEntities: (excludeProject?: string) =>
     req<{ entities: LibraryEntity[] }>(
       `/library/entities${excludeProject ? `?exclude_project=${excludeProject}` : ""}`
@@ -280,9 +309,9 @@ export const storyboard = {
   deleteShot: (sid: string) => req<{ ok: boolean }>(`/shots/${sid}`, { method: "DELETE" }),
   genImage: (sid: string) => req<Shot>(`/shots/${sid}/image`, { method: "POST" }),
   genSceneAll: (sid: string) =>
-    req<any>(`/scenes/${sid}/storyboard/generate-all`, { method: "POST" }),
+    req<{ job_id: string; total: number }>(`/scenes/${sid}/storyboard/generate-all`, { method: "POST" }),
   genProjectAll: (pid: string) =>
-    req<any>(`/projects/${pid}/storyboard/generate-all`, { method: "POST" }),
+    req<{ job_id: string; total: number }>(`/projects/${pid}/storyboard/generate-all`, { method: "POST" }),
 };
 
 export const shots = {
@@ -290,7 +319,7 @@ export const shots = {
   genVideo: (sid: string) => req<Shot>(`/shots/${sid}/video`, { method: "POST" }),
   upscale: (sid: string) => req<Shot>(`/shots/${sid}/upscale`, { method: "POST" }),
   genAllVideos: (pid: string) =>
-    req<any>(`/projects/${pid}/shots/generate-all`, { method: "POST" }),
+    req<{ job_id: string; total: number }>(`/projects/${pid}/shots/generate-all`, { method: "POST" }),
   narration: (sid: string, language = "Vietnamese") =>
     req<Shot>(`/shots/${sid}/narration`, { method: "POST", body: JSON.stringify({ language }) }),
 };

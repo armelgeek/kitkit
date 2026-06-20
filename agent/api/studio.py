@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -22,6 +22,7 @@ from agent.config import (
 )
 from agent.services.flow_client import get_flow_client
 from agent.studio import db, media_store, brain, assembler, davinci_xml, vntext, graph as graph_mod
+from agent.studio.jobs import get_job_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/studio", tags=["studio"])
@@ -890,20 +891,19 @@ async def set_entity_image(eid: str, body: SetMediaRequest):
 
 @router.post("/projects/{pid}/assets/generate-all")
 async def generate_all_assets(pid: str, force: bool = False):
-    """✦ Auto gen: sinh ảnh cho asset CHƯA có ảnh (idempotent). Tuần tự + throttle."""
+    """✦ Auto gen ảnh cho asset CHƯA có ảnh → job nền (§9). Trả job_id ngay."""
     project = await _project_or_404(pid)
     rows = await db.query_all("SELECT * FROM entity WHERE project_id=?", (pid,))
     todo = [e for e in rows if force or not e.get("image_path")]
-    done, errors = 0, []
-    for i, e in enumerate(todo):
-        try:
-            await _generate_entity_image(e, project)
-            done += 1
-        except Exception as ex:
-            errors.append({"entity": e["name"], "error": str(ex)[:200]})
-        if i < len(todo) - 1:
-            await asyncio.sleep(random.uniform(2, 6))  # rate-limit
-    return {"requested": len(todo), "done": done, "errors": errors}
+
+    async def _worker(e):
+        await _generate_entity_image(e, project)
+
+    job = get_job_manager().start(
+        project_id=pid, type_="assets", items=todo, worker=_worker,
+        label=f"Sinh ảnh asset ({len(todo)})", throttle=(2, 6),
+        item_label=lambda e: e.get("name") or e["id"])
+    return {"job_id": job.id, "total": len(todo)}
 
 
 # ─── Storyboard (shots = frames) ────────────────────────────
@@ -1594,9 +1594,9 @@ async def set_shot_image(sid: str, body: SetMediaRequest):
 
 @router.post("/scenes/{sid}/storyboard/generate-all")
 async def generate_scene_images(sid: str, force: bool = False):
-    await _scene_or_404(sid)
+    scene = await _scene_or_404(sid)
     shots = await db.query_all("SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))
-    return await _batch_generate_images(shots, force)
+    return _start_image_job(scene["project_id"], shots, force, "storyboard")
 
 
 def _slug(s: str) -> str:
@@ -1655,21 +1655,21 @@ async def generate_project_images(pid: str, force: bool = False):
     shots = await db.query_all(
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
         "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
-    return await _batch_generate_images(shots, force)
+    return _start_image_job(pid, shots, force, "storyboard")
 
 
-async def _batch_generate_images(shots: list[dict], force: bool) -> dict:
+def _start_image_job(pid: str, shots: list[dict], force: bool, type_: str) -> dict:
+    """Enqueue a background job that generates storyboard frame images (§9)."""
     todo = [s for s in shots if force or not s.get("image_path")]
-    done, errors = 0, []
-    for i, s in enumerate(todo):
-        try:
-            await _generate_frame_image(s)
-            done += 1
-        except Exception as ex:
-            errors.append({"shot": s["id"], "error": str(ex)[:200]})
-        if i < len(todo) - 1:
-            await asyncio.sleep(random.uniform(2, 6))
-    return {"requested": len(todo), "done": done, "errors": errors}
+
+    async def _worker(s):
+        await _generate_frame_image(s)
+
+    job = get_job_manager().start(
+        project_id=pid, type_=type_, items=todo, worker=_worker,
+        label=f"Sinh ảnh storyboard ({len(todo)})", throttle=(2, 6),
+        item_label=lambda s: s.get("title") or s["id"])
+    return {"job_id": job.id, "total": len(todo)}
 
 
 # ─── Shots (video) ──────────────────────────────────────────
@@ -1864,22 +1864,21 @@ async def upscale_shot(sid: str, resolution: str = "VIDEO_RESOLUTION_4K"):
 
 @router.post("/projects/{pid}/shots/generate-all")
 async def generate_all_videos(pid: str, force: bool = False):
-    """✦ Auto gen video cho shot CÓ ảnh, CHƯA có video. Tuần tự + throttle 15–30s."""
+    """✦ Auto gen video cho shot CÓ ảnh, CHƯA có video → job nền (§9). Throttle 15–30s."""
     await _project_or_404(pid)
     shots = await db.query_all(
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
         "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
     todo = [s for s in shots if s.get("image_media_id") and (force or not s.get("video_path"))]
-    done, errors = 0, []
-    for i, s in enumerate(todo):
-        try:
-            await _generate_shot_video(s)
-            done += 1
-        except Exception as ex:
-            errors.append({"shot": s["id"], "error": str(ex)[:200]})
-        if i < len(todo) - 1:
-            await asyncio.sleep(random.uniform(15, 30))
-    return {"requested": len(todo), "done": done, "errors": errors}
+
+    async def _worker(s):
+        await _generate_shot_video(s)
+
+    job = get_job_manager().start(
+        project_id=pid, type_="videos", items=todo, worker=_worker,
+        label=f"Sinh video ({len(todo)})", throttle=(15, 30),
+        item_label=lambda s: s.get("title") or s["id"])
+    return {"job_id": job.id, "total": len(todo)}
 
 
 # ─── Node Editor graphs ─────────────────────────────────────
@@ -2257,3 +2256,42 @@ async def ensure_media(media_id: str, project_id: str, ext: str = "png"):
     if not web:
         raise HTTPException(404, "Không tải được media")
     return {"path": web}
+
+
+# ─── Jobs: realtime batch progress (§9) ─────────────────────
+
+@router.get("/jobs")
+async def list_jobs(project_id: Optional[str] = None):
+    """Các job đang/ vừa chạy (trong bộ nhớ). Dùng để dựng lại trạng thái khi mở tab."""
+    return {"jobs": get_job_manager().active(project_id)}
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Dừng một batch đang chạy (sau item hiện tại)."""
+    ok = get_job_manager().cancel(job_id)
+    if not ok:
+        raise HTTPException(404, "Job không tồn tại hoặc đã kết thúc")
+    return {"ok": True}
+
+
+@router.websocket("/ws")
+async def jobs_ws(ws: WebSocket):
+    """Kênh realtime: server đẩy {type:'job', job:{…}} mỗi khi job thay đổi.
+
+    Khi vừa kết nối, gửi snapshot toàn bộ job hiện có để client dựng lại banner.
+    """
+    await ws.accept()
+    mgr = get_job_manager()
+    mgr.subscribe(ws)
+    try:
+        await ws.send_json({"type": "snapshot", "jobs": mgr.active()})
+        while True:
+            # Không cần dữ liệu từ client; giữ kết nối mở (và phát hiện ngắt).
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        mgr.unsubscribe(ws)

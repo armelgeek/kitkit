@@ -8,6 +8,8 @@ import AssembleTab from "./assemble/AssembleTab";
 import AllImages from "./AllImages";
 import NodeEditor, { type EditorTarget } from "./nodeeditor/NodeEditor";
 import ProjectSettings from "./settings/ProjectSettings";
+import { JobsProvider } from "../jobs/JobsContext";
+import JobProgress from "./common/JobProgress";
 
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble", "Ảnh"] as const;
 type Tab = (typeof TABS)[number];
@@ -61,6 +63,7 @@ export default function ProjectWorkspace({
     ) : null;
 
   return (
+    <JobsProvider projectId={project.id}>
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-4 border-b border-neutral-800 px-6 py-3">
         <button
@@ -149,6 +152,9 @@ export default function ProjectWorkspace({
           }}
         />
       )}
+
+      <JobProgress />
     </div>
+    </JobsProvider>
   );
 }
