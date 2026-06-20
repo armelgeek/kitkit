@@ -304,6 +304,23 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str) -> st
     )
 
 
+def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
+                      clip_s: int = 8) -> str:
+    """A beat's video is longer than one clip (~clip_s s) → split into `n_parts` continuous
+    sub-clips. Each sub-clip starts from the previous one's last frame (chained), so the
+    motion must flow on. Returns a continuation motion prompt for each part."""
+    return (
+        f"This action lasts longer than one {clip_s}-second video clip, so it is rendered as "
+        f"{n_parts} consecutive sub-clips that play back-to-back as ONE continuous shot. Each "
+        "sub-clip begins on the LAST frame of the previous one, so the motion must continue "
+        "smoothly without resetting or repeating.\n\n"
+        f"FULL ACTION: {beat_action}\nFULL MOTION: {motion_prompt}\n\n"
+        f"Write {n_parts} motion prompts, one per sub-clip in order, each describing only the "
+        f"portion of the action in that ~{clip_s}s window (continuous, no repetition).\n"
+        "Return ONLY JSON: {\"parts\":[{\"part_idx\":0,\"motion_prompt\":\"...\"}, ...]}"
+    )
+
+
 def shot_prompts_prompt(description: str, style: str) -> str:
     return (
         "For this storyboard frame, write two prompts for an image-to-video model:\n"

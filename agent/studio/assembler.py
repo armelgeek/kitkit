@@ -103,9 +103,82 @@ async def _image_clip(img: Path, narration: Path | None, out: Path,
     await _run(args)
 
 
-def _caption_font() -> str | None:
-    cand = os.environ.get("STUDIO_CAPTION_FONT") or "C:/Windows/Fonts/arial.ttf"
-    return cand if Path(cand).exists() else None
+# Common font locations per-OS so captions work outside Windows too.
+_FONT_DIRS = [
+    Path("C:/Windows/Fonts"),
+    Path("/usr/share/fonts"), Path("/usr/local/share/fonts"),
+    Path.home() / ".fonts", Path.home() / ".local/share/fonts",
+    Path("/Library/Fonts"), Path("/System/Library/Fonts"), Path.home() / "Library/Fonts",
+]
+_FONT_FALLBACKS = [
+    "C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/segoeui.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/Library/Fonts/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial.ttf",
+]
+
+
+def _caption_font(preferred: str | None = None) -> str | None:
+    """Resolve a usable .ttf/.otf: explicit choice (path, or a font name found in the font
+    dirs) → STUDIO_CAPTION_FONT env → per-OS fallbacks. None if nothing is found."""
+    cands: list[str] = []
+    if preferred:
+        cands.append(preferred)
+        if not preferred.lower().endswith((".ttf", ".otf")) or "/" not in preferred.replace("\\", "/"):
+            # a bare name like "Arial" — look it up in the font dirs
+            for d in _FONT_DIRS:
+                if d.exists():
+                    for ext in ("ttf", "otf"):
+                        cands += [str(p) for p in d.glob(f"**/*{preferred}*.{ext}")]
+    if os.environ.get("STUDIO_CAPTION_FONT"):
+        cands.append(os.environ["STUDIO_CAPTION_FONT"])
+    cands += _FONT_FALLBACKS
+    for c in cands:
+        if c and Path(c).exists():
+            return c
+    return None
+
+
+def list_fonts(limit: int = 300) -> list[dict]:
+    """Scan the OS font dirs → [{name, path}] for the caption-font picker."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for d in _FONT_DIRS:
+        if not d.exists():
+            continue
+        for ext in ("ttf", "otf"):
+            for p in sorted(d.glob(f"**/*.{ext}")):
+                key = p.stem.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append({"name": p.stem, "path": str(p)})
+                if len(out) >= limit:
+                    return out
+    return out
+
+
+async def extract_last_frame(video: Path, out_jpg: Path) -> bool:
+    """Grab the last frame of a clip as a JPEG (start image for the next chained clip)."""
+    try:
+        await _run(["ffmpeg", "-y", "-sseof", "-0.2", "-i", str(video),
+                    "-frames:v", "1", "-q:v", "2", str(out_jpg)])
+        return out_jpg.exists() and out_jpg.stat().st_size > 0
+    except RuntimeError as e:
+        logger.warning("extract_last_frame failed: %s", e)
+        return False
+
+
+async def concat_videos(paths: list[Path], out: Path) -> None:
+    """Concatenate clips (same codec params from Flow) into one mp4."""
+    lst = out.with_name(f"{out.stem}_concat.txt")
+    lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in paths), encoding="utf-8")
+    try:
+        await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
+                    "-c", "copy", str(out)])
+    except RuntimeError:  # params differ → re-encode
+        await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
+                    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(out)])
 
 
 def _drawtext_chain(captions: list[dict], font: str, out_dir: Path, tag: str,
@@ -189,7 +262,8 @@ async def _scene_clip(parts: list[dict], scene: dict, out: Path, w: int, h: int,
 
 
 async def assemble_from_images(project_id: str, ken_burns: bool = True,
-                               default_duration: float = 4.0) -> dict:
+                               default_duration: float = 4.0,
+                               caption_font: str | None = None) -> dict:
     """Build ONE long video from the shot IMAGES, grouped BY SCENE.
 
     Storytelling (§2.6): each scene has ONE continuous narration (kept whole for emotional
@@ -205,7 +279,7 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
     out_dir = STUDIO_MEDIA_DIR / project_id
     out_dir.mkdir(parents=True, exist_ok=True)
     w, h = _res(project["aspect_ratio"])
-    font = _caption_font()
+    font = _caption_font(caption_font)
 
     clip_paths, total = [], 0.0
     for si, sc in enumerate(scenes):

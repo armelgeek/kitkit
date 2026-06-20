@@ -5,6 +5,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
   const [opts, setOpts] = useState<any>(null);
   const [s, setS] = useState<Record<string, any>>({});
   const [ttsUrl, setTtsUrl] = useState("");
+  const [fonts, setFonts] = useState<{ name: string; path: string }[]>([]);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -13,6 +14,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
     api.getSettings().then(setS).catch(() => {});
     // Show the currently-saved OmniVoice URL so it doesn't look lost on reopen.
     getTtsConfig().then((c) => setTtsUrl(c.base_url || "")).catch(() => {});
+    api.listFonts().then((r) => setFonts(r.fonts)).catch(() => {});
   }, []);
 
   const set = (k: string, v: any) => {
@@ -80,6 +82,15 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
           <Field label="OmniVoice base URL (TTS)">
             <input value={ttsUrl} onChange={(e) => setTtsUrl(e.target.value)}
               placeholder="https://xxxx.ngrok-free.app" className={inp} />
+          </Field>
+
+          <Field label="Font caption (vẽ chữ lên video)">
+            <select value={s.caption_font || ""} onChange={(e) => set("caption_font", e.target.value)} className={inp}>
+              <option value="">(tự dò theo hệ điều hành)</option>
+              {fonts.map((f) => (
+                <option key={f.path} value={f.path}>{f.name}</option>
+              ))}
+            </select>
           </Field>
 
           <div>

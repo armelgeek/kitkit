@@ -71,6 +71,8 @@ export const api = {
   getSettings: () => req<Record<string, any>>("/settings"),
   putSettings: (body: Record<string, any>) =>
     req<Record<string, any>>("/settings", { method: "PUT", body: JSON.stringify(body) }),
+  listFonts: () =>
+    req<{ fonts: { name: string; path: string }[]; current: string }>("/fonts"),
 
   getProject: (id: string) => req<Project>(`/projects/${id}`),
   listScenes: (id: string) => req<{ scenes: Scene[] }>(`/projects/${id}/scenes`),

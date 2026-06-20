@@ -6,6 +6,7 @@ settings, health. Heavier pipeline endpoints land in later phases.
 import asyncio
 import json
 import logging
+import math
 import random
 import shutil
 from typing import Optional
@@ -215,6 +216,13 @@ async def options():
         "voices": voices,
         "agents": agents,
     }
+
+
+@router.get("/fonts")
+async def list_fonts():
+    """Các font có trên máy để chọn cho caption (vẽ chữ lên video)."""
+    fonts = await asyncio.to_thread(assembler.list_fonts)
+    return {"fonts": fonts, "current": (await db.kv_get_all()).get("caption_font") or ""}
 
 
 @router.get("/settings")
@@ -1368,21 +1376,19 @@ async def _poll_video(client, op: dict, timeout: float = 240, interval: float = 
     return None
 
 
-async def _generate_shot_video(shot: dict) -> dict:
-    scene = await _scene_or_404(shot["scene_id"])
-    project = await _project_or_404(scene["project_id"])
-    client = _require_extension()
-    if not shot.get("image_media_id"):
-        raise HTTPException(400, "Shot chưa có ảnh frame — tạo ảnh ở Storyboard trước")
-    motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
-    tier = await _current_tier()
-    await db.update("shot", shot["id"], {"status": "running", "updated_at": db.now()})
+CLIP_MAX_S = 8  # one Veo i2v clip ≈ 8s; longer beats are rendered as chained sub-clips
 
+
+async def _render_i2v_clip(client, project: dict, shot_id: str,
+                           start_media_id: str, prompt: str, name: str) -> dict:
+    """Submit one i2v clip, poll, download to media/<pid>/<media_id>.mp4. Retries on
+    block/transient. Returns {media_id, primary_media_id, workflow_id, web, local}."""
+    tier = await _current_tier()
     last = ""
     for attempt in range(VIDEO_GEN_RETRIES):
         res = await client.generate_video(
-            start_image_media_id=shot["image_media_id"], prompt=motion,
-            project_id=project["flow_project_id"], scene_id=shot["id"],
+            start_image_media_id=start_media_id, prompt=prompt,
+            project_id=project["flow_project_id"], scene_id=shot_id,
             aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier)
         if res.get("error"):
             last = str(res["error"])
@@ -1391,8 +1397,7 @@ async def _generate_shot_video(shot: dict) -> dict:
             if not info.get("media_id"):
                 last = _image_block_reason(res.get("data", res)) or "Flow không trả media"
             else:
-                op = {"operation": {"name": info["media_id"]}, "sceneId": shot["id"]}
-                await db.update("shot", shot["id"], {"operation_json": json.dumps(op)})
+                op = {"operation": {"name": info["media_id"]}, "sceneId": shot_id}
                 url = await _poll_video(client, op)
                 if not url:
                     last = "video chưa xong trong thời gian chờ"
@@ -1400,27 +1405,95 @@ async def _generate_shot_video(shot: dict) -> dict:
                     if info.get("workflow_id"):
                         try:
                             await client.change_display_name(
-                                info["workflow_id"], project["flow_project_id"],
-                                f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_vid")
+                                info["workflow_id"], project["flow_project_id"], name)
                         except Exception:
                             pass
                     web = await media_store.save_from_url(
                         info["media_id"], project["id"], "mp4", url)
                     if web:
-                        await db.update("shot", shot["id"], {
-                            "video_media_id": info["media_id"],
-                            "video_primary_id": info["primary_media_id"],
-                            "video_workflow_id": info["workflow_id"], "video_path": web,
-                            "status": "done", "updated_at": db.now()})
-                        return await _shot_or_404(shot["id"])
+                        return {**info, "web": web, "local": assembler._local(web)}
                     last = "tải video về lỗi"
-        logger.warning("video shot %s hỏng (lần %d/%d): %s",
-                       shot["id"][:6], attempt + 1, VIDEO_GEN_RETRIES, last)
+        logger.warning("clip %s hỏng (lần %d/%d): %s",
+                       shot_id[:6], attempt + 1, VIDEO_GEN_RETRIES, last)
         if attempt < VIDEO_GEN_RETRIES - 1:
             await asyncio.sleep(random.uniform(5, 10))
+    raise HTTPException(502, f"Tạo clip thất bại sau {VIDEO_GEN_RETRIES} lần: {last}")
 
-    await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
-    raise HTTPException(502, f"Tạo video thất bại sau {VIDEO_GEN_RETRIES} lần: {last}")
+
+async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int) -> dict:
+    """Storytelling beat > one clip: render `n` chained i2v sub-clips (each starts on the
+    previous clip's last frame, motion flows on) and concat them into the shot's video."""
+    motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
+    motions = [motion]
+    try:
+        pp = await brain.run_json(brain.beat_parts_prompt(
+            shot.get("beat_action") or motion, motion, n, CLIP_MAX_S))
+        parts = pp.get("parts") if isinstance(pp, dict) else None
+        if parts:
+            motions = [p.get("motion_prompt") or motion
+                       for p in sorted(parts, key=lambda x: x.get("part_idx", 0))]
+    except Exception as ex:  # noqa: BLE001
+        logger.warning("beat_parts failed: %s", ex)
+    while len(motions) < n:
+        motions.append(motion)
+
+    out_dir = assembler.STUDIO_MEDIA_DIR / project["id"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    start_media = shot["image_media_id"]
+    clips, first = [], None
+    for k in range(n):
+        name = f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_p{k+1}_vid"
+        info = await _render_i2v_clip(client, project, shot["id"], start_media, motions[k], name)
+        first = first or info
+        clips.append(info["local"])
+        if k < n - 1:  # chain: last frame of this clip → uploaded start image for the next
+            frame = out_dir / f"chain_{shot['id']}_{k}.jpg"
+            if await assembler.extract_last_frame(info["local"], frame):
+                import base64
+                up = await client.upload_image(
+                    base64.b64encode(frame.read_bytes()).decode(), "image/jpeg",
+                    project["flow_project_id"], frame.name)
+                if up.get("_mediaId"):
+                    start_media = up["_mediaId"]
+                else:
+                    logger.warning("upload_image cho chain thất bại — dùng lại frame gốc")
+
+    final = out_dir / f"shot_{shot['id']}_chain.mp4"
+    await assembler.concat_videos(clips, final)
+    web = f"/studio-media/{project['id']}/{final.name}"
+    await db.update("shot", shot["id"], {
+        "video_media_id": first["media_id"], "video_primary_id": first.get("primary_media_id"),
+        "video_workflow_id": first.get("workflow_id"), "video_path": web,
+        "status": "done", "updated_at": db.now()})
+    return await _shot_or_404(shot["id"])
+
+
+async def _generate_shot_video(shot: dict) -> dict:
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    client = _require_extension()
+    if not shot.get("image_media_id"):
+        raise HTTPException(400, "Shot chưa có ảnh frame — tạo ảnh ở Storyboard trước")
+    await db.update("shot", shot["id"], {"status": "running", "updated_at": db.now()})
+
+    # Storytelling beat longer than one clip → chained sub-clips covering the beat.
+    dur = float(shot.get("duration") or 0)
+    n = max(1, math.ceil(dur / CLIP_MAX_S)) if dur > CLIP_MAX_S else 1
+    try:
+        if n > 1:
+            return await _chained_video(shot, scene, project, client, n)
+        motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
+        info = await _render_i2v_clip(
+            client, project, shot["id"], shot["image_media_id"], motion,
+            f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_vid")
+        await db.update("shot", shot["id"], {
+            "video_media_id": info["media_id"], "video_primary_id": info.get("primary_media_id"),
+            "video_workflow_id": info.get("workflow_id"), "video_path": info["web"],
+            "status": "done", "updated_at": db.now()})
+        return await _shot_or_404(shot["id"])
+    except HTTPException:
+        await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
+        raise
 
 
 @router.post("/shots/{sid}/prompts")
@@ -1640,11 +1713,15 @@ async def assemble_project(pid: str):
 
 
 @router.post("/projects/{pid}/assemble-images")
-async def assemble_project_images(pid: str, ken_burns: bool = True):
-    """Ghép 1 video dài từ ẢNH các shot, mỗi ảnh dài đúng bằng narration của shot."""
+async def assemble_project_images(pid: str, ken_burns: bool = True,
+                                  font: Optional[str] = None):
+    """Ghép 1 video dài từ ẢNH các shot (theo scene), narration cả scene + caption từ khoá.
+    `font` (hoặc setting `caption_font`) chọn font vẽ chữ; bỏ trống → tự dò theo OS."""
     await _project_or_404(pid)
+    caption_font = font or (await db.kv_get_all()).get("caption_font") or None
     try:
-        return await assembler.assemble_from_images(pid, ken_burns=ken_burns)
+        return await assembler.assemble_from_images(
+            pid, ken_burns=ken_burns, caption_font=caption_font)
     except RuntimeError as e:
         raise HTTPException(400, str(e))
 
