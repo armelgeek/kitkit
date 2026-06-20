@@ -123,7 +123,10 @@ _SINGLE_FRAME = (
     "& expression sheets, prop multi-angle sheets, a location establishing shot) are there ONLY "
     "to keep identity, costume, architecture, materials, colour and lighting consistent. Do NOT "
     "reproduce any reference-sheet layout: no grid, no 2x2, no multi-panel or split screen, no "
-    "collage, no turnaround row, no side-by-side angles, no plain white reference backdrop"
+    "collage, no turnaround row, no side-by-side angles, no plain white reference backdrop. "
+    "Each named character must EXACTLY match its OWN reference image — never swap, blend or mix "
+    "up faces, hair or costumes between characters, keep each person's identity distinct, and "
+    "do NOT add any extra people who are not named in this shot"
 )
 
 
@@ -230,12 +233,15 @@ _SHEET = {
     # wholesale into shot frames, tiling four angles into one image. One clean, ultra-detailed
     # wide view doubles as a usable scene backdrop and a stable identity reference.
     "location": ("a SINGLE ultra-detailed establishing WIDE shot of this place as ONE unified "
-                 "cinematic photograph, full-bleed edge to edge. Deep focus showing the whole "
+                 "cinematic photograph, full-bleed edge to edge. The set is COMPLETELY EMPTY and "
+                 "DESERTED: absolutely NO people, NO characters, NO animals, NO crowds — an "
+                 "unpopulated empty location only (ignore any people mentioned in the description "
+                 "above; show the place itself with nobody in it). Deep focus showing the whole "
                  "space with foreground, midground and background depth; precise architecture, "
                  "materials, surface textures, set dressing and props, volumetric natural "
-                 "atmospheric lighting, photoreal detail. NO people, no text or labels, and it "
-                 "must NOT be a grid, 2x2, multi-panel, split screen, collage or reference "
-                 "sheet — one continuous scene only"),
+                 "atmospheric lighting, photoreal detail. No text or labels. It must NOT be a "
+                 "grid, 2x2, multi-panel, split screen, collage or reference sheet — one "
+                 "continuous empty scene only"),
 }
 
 
