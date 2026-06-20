@@ -287,7 +287,8 @@ class FlowClient:
                                user_paygate_tier: str = "PAYGATE_TIER_TWO",
                                character_media_ids: list[str] = None,
                                references: list[dict] = None,
-                               image_model: str = None) -> dict:
+                               image_model: str = None,
+                               seed: int = None) -> dict:
         """Generate image(s).
 
         Two ways to attach character/entity references:
@@ -320,7 +321,9 @@ class FlowClient:
 
         request_item = {
             "clientContext": {**ctx, "sessionId": f";{ts}"},
-            "seed": ts % 1000000,
+            # a fixed seed (project seed-lock) reproduces the same image for the same
+            # prompt+refs; None → random per call.
+            "seed": (seed % 1000000) if seed is not None else (ts % 1000000),
             "structuredPrompt": {"parts": parts},
             "imageAspectRatio": aspect_ratio,
             "imageModelName": model_key,

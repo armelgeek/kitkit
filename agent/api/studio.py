@@ -63,6 +63,7 @@ class UpdateProjectRequest(BaseModel):
     bgm_volume: Optional[float] = None
     bgm_duck: Optional[bool] = None
     tts_speed: Optional[float] = None
+    seed: Optional[int] = None
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
     culture_hint: Optional[str] = None
@@ -420,6 +421,8 @@ async def update_project(pid: str, body: UpdateProjectRequest):
         data["storytelling"] = 1 if data["storytelling"] else 0
     if "bgm_duck" in data:
         data["bgm_duck"] = 1 if data["bgm_duck"] else 0
+    if "seed" in data and (data["seed"] is None or data["seed"] <= 0):
+        data["seed"] = None   # ≤0 / trống = bỏ khoá seed (ngẫu nhiên)
     data["updated_at"] = db.now()
     await db.update("project", pid, data)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
@@ -675,7 +678,7 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
     return await _generate_image_verified(
         gen_call=lambda: client.generate_images(
             prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
-            user_paygate_tier=tier, image_model=model),
+            user_paygate_tier=tier, image_model=model, seed=project.get("seed")),
         store_call=lambda info: _store_media_on_entity(
             entity, project, info, f"{entity['type']}_{entity['name']}"),
         label_for_err=f"asset {entity['name']}")
@@ -1001,7 +1004,8 @@ async def _generate_frame_image(shot: dict) -> dict:
     return await _generate_image_verified(
         gen_call=lambda: client.generate_images(
             prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
-            user_paygate_tier=tier, references=refs or None, image_model=model),
+            user_paygate_tier=tier, references=refs or None, image_model=model,
+            seed=project.get("seed")),
         store_call=lambda info: _store_media_on_shot(
             shot, project, info, "image", f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_img"),
         label_for_err=f"frame {shot.get('title') or shot['id'][:6]}")

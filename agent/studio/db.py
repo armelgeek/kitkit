@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS project (
   script_lang TEXT DEFAULT 'Vietnamese',
   bgm_path TEXT, bgm_volume REAL DEFAULT 0.18, bgm_duck INTEGER DEFAULT 1,
   tts_speed REAL DEFAULT 1.0,
+  seed INTEGER,
   thumb_media_key TEXT,
   status TEXT DEFAULT 'draft',
   created_at REAL, updated_at REAL
@@ -105,6 +106,8 @@ _MIGRATIONS = [
     ("project", "bgm_duck", "INTEGER DEFAULT 1"),
     # Narration reading speed for OmniVoice TTS (1.0 = normal).
     ("project", "tts_speed", "REAL DEFAULT 1.0"),
+    # Seed-lock: when set, image generation reuses this seed (reproducible). NULL = random.
+    ("project", "seed", "INTEGER"),
     # A shot has two independent node graphs: graph_json = the storyboard IMAGE graph,
     # video_graph_json = the shots-tab VIDEO graph. They must not share storage.
     ("shot", "video_graph_json", "TEXT"),

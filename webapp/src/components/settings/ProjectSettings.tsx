@@ -34,6 +34,7 @@ export default function ProjectSettings({
   });
   const [shotDuration, setShotDuration] = useState<number>(project.shot_duration ?? 8);
   const [storytelling, setStorytelling] = useState<boolean>(!!project.storytelling);
+  const [seed, setSeed] = useState<number>(project.seed ?? 0);
   const [bgmPath, setBgmPath] = useState(project.bgm_path ?? null);
   const [bgmVol, setBgmVol] = useState(project.bgm_volume ?? 0.18);
   const [bgmDuck, setBgmDuck] = useState<boolean>(project.bgm_duck == null ? true : !!project.bgm_duck);
@@ -80,6 +81,7 @@ export default function ProjectSettings({
         shot_duration: shotDuration,
         storytelling,
         tts_speed: ttsSpeed,
+        seed,
       });
       onSaved(updated);
       onClose();
@@ -221,6 +223,16 @@ export default function ProjectSettings({
               className="h-4 w-4 accent-indigo-500" />
             Chế độ Storytelling (giọng đọc dẫn dắt, đọc nguyên văn nội dung gốc)
           </label>
+
+          <Field label="🔒 Seed (khóa để tái lập ảnh giống hệt)">
+            <input type="number" min={0} value={seed}
+              onChange={(e) => setSeed(Math.max(0, Number(e.target.value) || 0))}
+              placeholder="0 = ngẫu nhiên" className={inp} />
+            <p className="mt-1 text-xs text-neutral-600">
+              Đặt số &gt; 0 để mọi lần tạo ảnh dùng cùng seed → tái tạo giống nhau (cùng prompt/ref).
+              0 hoặc trống = ngẫu nhiên. (Tạo nhiều mẫu 🎲 vẫn random để có lựa chọn.)
+            </p>
+          </Field>
 
           <Field label="🎙 Giọng đọc (lồng tiếng dự án)">
             <div className="flex gap-2">
