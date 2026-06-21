@@ -1449,8 +1449,7 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     #    subtitle covers the spoken read; the gap is a silent pause (less tiring, natural cut).
     voice_id = project.get("voice_id") or 0
     speed = float(project.get("tts_speed") or 1.0)
-    gap = float(await db.kv_get("tts_gap", 0.4) or 0.0)
-    gap = min(max(gap, 0.0), 2.0)
+    gap = min(max(float(project.get("tts_gap") if project.get("tts_gap") is not None else 0.4), 0.0), 2.0)
     narr_web, reads = None, None
     if body.measure and any(b.get("_say") for b in beats):
         try:

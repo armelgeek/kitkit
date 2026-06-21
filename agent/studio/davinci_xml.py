@@ -141,23 +141,35 @@ def _title_item(idx: int, text: str, start_f: int, dur_f: int) -> str:
         </clipitem>"""
 
 
-def _audio_item(idx: int, name: str, path: Path, start_f: int, dur_f: int) -> str:
+def _audio_item(idx: int, name: str, path: Path, start_f: int, dur_f: int,
+                src_in_f: int = 0, file_dur_f: int | None = None,
+                file_id: str | None = None, define_file: bool = True) -> str:
+    """One audio clipitem. `src_in_f`/`file_dur_f` let several clips play different slices of
+    the SAME file (per-beat narration sliced from the scene WAV) — the first shares `file_id`
+    with define_file=True, the rest reference it with define_file=False."""
     end_f = start_f + dur_f
+    out_f = src_in_f + dur_f
+    fdur = file_dur_f if file_dur_f is not None else dur_f
+    fid = file_id or f"afile{idx}"
+    if define_file:
+        file_xml = (f'<file id="{fid}">\n'
+                    f'            <name>{escape(path.name)}</name>\n'
+                    f'            <pathurl>{_file_url(path)}</pathurl>\n'
+                    f'            <rate><timebase>{FPS}</timebase></rate>\n'
+                    f'            <duration>{fdur}</duration>\n'
+                    f'            <media><audio><channelcount>2</channelcount></audio></media>\n'
+                    f'          </file>')
+    else:
+        file_xml = f'<file id="{fid}"/>'
     return f"""        <clipitem id="aclip{idx}">
           <name>{escape(name)}</name>
           <duration>{dur_f}</duration>
           <rate><timebase>{FPS}</timebase><ntsc>FALSE</ntsc></rate>
           <start>{start_f}</start>
           <end>{end_f}</end>
-          <in>0</in>
-          <out>{dur_f}</out>
-          <file id="afile{idx}">
-            <name>{escape(path.name)}</name>
-            <pathurl>{_file_url(path)}</pathurl>
-            <rate><timebase>{FPS}</timebase></rate>
-            <duration>{dur_f}</duration>
-            <media><audio><channelcount>2</channelcount></audio></media>
-          </file>
+          <in>{src_in_f}</in>
+          <out>{out_f}</out>
+          {file_xml}
           <sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack>
         </clipitem>"""
 
@@ -184,7 +196,8 @@ async def build(project_id: str) -> dict:
     dv_dir.mkdir(parents=True, exist_ok=True)
 
     items, titles, srt, start_f, total, tnum = [], [], [], 0, 0, 0
-    audio_segs = []   # (scene narration WAV, timeline start frame)
+    audio_segs = []   # single-clip scenes: (scene narration WAV, timeline start frame)
+    audio_runs = []   # per-beat scenes: (scene narration WAV, scene start frame, [(start_f, dur_f)])
     skipped = []      # shots with media in the DB but no usable file (even after re-download)
     i = 0
     for sc in scenes:
@@ -235,16 +248,14 @@ async def build(project_id: str) -> dict:
             durs = base
 
         scene_start_f = start_f                        # frame where this scene begins
-        if sc.get("narration_path"):                   # anchor scene narration here
-            audio_segs.append((sc["narration_path"], scene_start_f))
-
-        scene_caps = []
+        scene_caps, beat_spans = [], []                # beat_spans: (timeline_start_f, dur_f)
         for (sh, path, is_img), dur_s in zip(usable, durs):
             dur_f = max(1, round(dur_s * FPS))
             name = f"clip{_alpha(i)}"
             staged = await asyncio.to_thread(_stage_image_jpg, path, name, dv_dir) if is_img \
                 else _stage(path, name, dv_dir)
             items.append(_clipitem(i, sh.get("title") or f"Shot {i+1}", staged, start_f, dur_f, w, h))
+            beat_spans.append((start_f, dur_f))
             try:
                 scene_caps.extend(json.loads(sh.get("captions") or "[]"))
             except (json.JSONDecodeError, TypeError):
@@ -253,6 +264,15 @@ async def build(project_id: str) -> dict:
             total += dur_f
             i += 1
         scene_end_f = start_f
+
+        # Narration audio. When the images use the beats' MEASURED durations, slice the scene
+        # WAV into one audio clip per beat (Cách A) so each spoken segment sits under its own
+        # image (editable, dissolve-friendly). Otherwise keep one continuous scene clip.
+        if sc.get("narration_path"):
+            if have_measured:
+                audio_runs.append((sc["narration_path"], scene_start_f, beat_spans))
+            else:
+                audio_segs.append((sc["narration_path"], scene_start_f))
 
         # Captions are timed against the SCENE NARRATION (scene-local seconds), which plays
         # continuously from scene_start_f — NOT against the scaled image-clip starts. Place
@@ -270,15 +290,33 @@ async def build(project_id: str) -> dict:
     if not items:
         raise RuntimeError("Chưa có shot nào có ảnh hoặc video để export")
 
-    # narration audio track: each scene's continuous WAV at its timeline start
+    # narration audio track
     audio_items = []
-    for ai, (narr_web, sf) in enumerate(audio_segs):
+    aid = 0
+    # single-clip scenes: one continuous WAV at the scene start
+    for narr_web, sf in audio_segs:
         ap = assembler._local(narr_web)
         if not ap.exists():
             continue
         adur_f = max(1, round(await assembler.probe_duration(ap) * FPS))
-        staged_ap = _stage(ap, f"narr{_alpha(ai)}", dv_dir)
-        audio_items.append(_audio_item(ai, "narration", staged_ap, sf, adur_f))
+        staged_ap = _stage(ap, f"narr{_alpha(aid)}", dv_dir)
+        audio_items.append(_audio_item(aid, "narration", staged_ap, sf, adur_f))
+        aid += 1
+    # per-beat scenes (Cách A): slice the scene WAV into one clip per beat via in/out points
+    for narr_web, scene_sf, spans in audio_runs:
+        ap = assembler._local(narr_web)
+        if not ap.exists():
+            continue
+        file_dur_f = max(1, round(await assembler.probe_duration(ap) * FPS))
+        staged_ap = _stage(ap, f"narr{_alpha(aid)}", dv_dir)
+        fid = f"afile{aid}"
+        for k, (cs_f, cdur_f) in enumerate(spans):
+            src_in = max(0, cs_f - scene_sf)
+            cdur = min(cdur_f, max(1, file_dur_f - src_in))   # clamp inside the WAV
+            audio_items.append(_audio_item(
+                aid, "narration", staged_ap, cs_f, cdur, src_in_f=src_in,
+                file_dur_f=file_dur_f, file_id=fid, define_file=(k == 0)))
+            aid += 1
 
     # background-music track: the project's music tiled across the whole timeline (Resolve
     # has no loop in XML, so repeat the clip) on its OWN audio track, under the narration.

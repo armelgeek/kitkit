@@ -41,6 +41,7 @@ export default function ProjectSettings({
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voiceId, setVoiceId] = useState<number>(project.voice_id ?? 0);
   const [ttsSpeed, setTtsSpeed] = useState<number>(project.tts_speed ?? 1.0);
+  const [ttsGap, setTtsGap] = useState<number>(project.tts_gap ?? 0.4);
   const [testing, setTesting] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,6 +82,7 @@ export default function ProjectSettings({
         shot_duration: shotDuration,
         storytelling,
         tts_speed: ttsSpeed,
+        tts_gap: ttsGap,
         seed,
       });
       onSaved(updated);
@@ -266,6 +268,19 @@ export default function ProjectSettings({
                 {ttsSpeed.toFixed(2)}×
               </span>
             </div>
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-xs text-neutral-500">Nghỉ giữa đoạn</span>
+              <input type="range" min={0} max={2} step={0.05} value={ttsGap}
+                onChange={(e) => setTtsGap(parseFloat(e.target.value))}
+                className="flex-1 accent-indigo-500" />
+              <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
+                {ttsGap.toFixed(2)}s
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-neutral-600">
+              Khoảng lặng nghỉ lấy hơi giữa các đoạn đọc. Đặt ≈1.0s (24 frame) nếu dùng
+              cross-dissolve để hiệu ứng nằm trọn trong khoảng lặng. Cần "Dựng theo lời đọc" lại.
+            </p>
             <p className="mt-1 text-xs text-neutral-600">
               Quản lý / thêm giọng trong ⚙ Settings. Cần đặt OmniVoice URL để test.
             </p>
