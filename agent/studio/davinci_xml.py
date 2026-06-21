@@ -267,13 +267,32 @@ async def build(project_id: str) -> dict:
         staged_ap = _stage(ap, f"narr{_alpha(ai)}", dv_dir)
         audio_items.append(_audio_item(ai, "narration", staged_ap, sf, adur_f))
 
+    # background-music track: the project's music tiled across the whole timeline (Resolve
+    # has no loop in XML, so repeat the clip) on its OWN audio track, under the narration.
+    bgm_items = []
+    bgm = (project.get("bgm_path") or "").strip()
+    if bgm and Path(bgm).exists() and total > 0:
+        bgm_src = Path(bgm)
+        bgm_secs = await assembler.probe_duration(bgm_src)
+        if bgm_secs > 0.5:
+            bgm_dur_f = max(1, round(bgm_secs * FPS))
+            staged_bgm = _stage(bgm_src, "bgmtrack", dv_dir)
+            pos, k = 0, 0
+            while pos < total and k < 2000:
+                seg = min(bgm_dur_f, total - pos)
+                bgm_items.append(_audio_item(1000 + k, "bgm", staged_bgm, pos, seg))
+                pos += seg
+                k += 1
+
     title_track = f"\n        <track>\n{chr(10).join(titles)}\n        </track>" if titles else ""
+    audio_tracks_xml = ""
+    if audio_items:
+        audio_tracks_xml += f"\n        <track>\n{chr(10).join(audio_items)}\n        </track>"
+    if bgm_items:
+        audio_tracks_xml += f"\n        <track>\n{chr(10).join(bgm_items)}\n        </track>"
     audio_media = (f"""
-      <audio>
-        <track>
-{chr(10).join(audio_items)}
-        </track>
-      </audio>""" if audio_items else "")
+      <audio>{audio_tracks_xml}
+      </audio>""" if audio_tracks_xml else "")
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xmeml>
 <xmeml version="5">
@@ -316,5 +335,5 @@ async def build(project_id: str) -> dict:
         "path": str(out), "meta_json": None, "created_at": db.now()})
     return {"path": str(out), "web_path": f"/studio-media/{project_id}/timeline.xml",
             "clips": len(items), "captions_srt": srt_web, "captions": len(srt),
-            "audio_tracks": len(audio_items), "missing": len(skipped),
-            "missing_titles": skipped[:20]}
+            "audio_tracks": len(audio_items), "bgm": bool(bgm_items),
+            "missing": len(skipped), "missing_titles": skipped[:20]}
