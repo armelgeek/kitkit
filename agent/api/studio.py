@@ -2442,12 +2442,16 @@ def _ts(sec: float) -> str:
 # ─── Thumbnail / media resolve ──────────────────────────────
 
 @router.get("/thumb/{media_key}")
-async def thumb(media_key: str):
-    """Trả thumbnail (tải về cache local 1 lần) cho ảnh đại diện project/media."""
-    path = await media_store.ensure_thumb(media_key)
+async def thumb(media_key: str, pid: Optional[str] = None):
+    """Trả thumbnail cho ảnh đại diện project/media.
+
+    Ưu tiên file local đã tải (cache theo project) — chỉ gọi Flow khi máy chưa có ảnh.
+    `pid` (project_id) giúp tìm đúng thư mục local trước."""
+    path = await media_store.ensure_thumb(media_key, pid)
     if not path:
         raise HTTPException(404, "Không lấy được thumbnail (id sai hoặc chưa sẵn sàng)")
-    return FileResponse(path, media_type="image/png")
+    media_type = "image/jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+    return FileResponse(path, media_type=media_type)
 
 
 @router.post("/media/ensure/{media_id}")

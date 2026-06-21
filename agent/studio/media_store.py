@@ -94,11 +94,36 @@ async def save_from_url(media_id: str, project_id: str, ext: str, url: str) -> s
     return None
 
 
-async def ensure_thumb(media_key: str) -> Path | None:
-    """Ensure a cached thumbnail for a Flow media key; return local file path."""
+_LOCAL_EXTS = ("png", "jpg", "jpeg", "webp")
+
+
+def find_local(media_key: str, project_id: str | None = None) -> Path | None:
+    """An already-downloaded copy of this media on disk, if any — checked before any
+    online resolve so a gallery serves from the per-project cache instead of hitting
+    Flow's rate-limited /media/{id}. Looks in <project_id>/ first, then any project."""
+    if project_id:
+        for ext in _LOCAL_EXTS:
+            p = MEDIA_DIR / project_id / f"{media_key}.{ext}"
+            if p.exists() and p.stat().st_size > 0:
+                return p
+    for ext in _LOCAL_EXTS:
+        for p in MEDIA_DIR.glob(f"*/{media_key}.{ext}"):
+            if p.is_file() and p.stat().st_size > 0:
+                return p
+    return None
+
+
+async def ensure_thumb(media_key: str, project_id: str | None = None) -> Path | None:
+    """Ensure a cached thumbnail for a Flow media key; return local file path.
+
+    Prefers any existing local copy (per-project cache) over an online resolve, so the
+    gallery only hits Flow for images that were never downloaded."""
     dest = THUMB_DIR / f"{media_key}.png"
     if dest.exists() and dest.stat().st_size > 0:
         return dest
+    local = find_local(media_key, project_id)
+    if local:
+        return local
     url = await resolve_url(media_key)
     if not url:
         return None

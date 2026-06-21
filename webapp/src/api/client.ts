@@ -420,8 +420,10 @@ export interface ScriptResult {
   estimated_duration?: number;
 }
 
-// Thumbnail URL for a Flow media key (backend caches locally).
-export const thumbUrl = (key: string) => `/api/studio/thumb/${key}`;
+// Thumbnail URL for a Flow media key (backend caches locally). Pass the studio
+// project id so the backend serves an already-downloaded copy instead of hitting Flow.
+export const thumbUrl = (key: string, pid?: string) =>
+  pid ? `/api/studio/thumb/${key}?pid=${pid}` : `/api/studio/thumb/${key}`;
 
 // Direct URL to download a project backup (.zip: DB rows + media).
 export const projectExportUrl = (pid: string) =>

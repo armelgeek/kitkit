@@ -79,7 +79,7 @@ export default function AllImages({ project }: { project: Project }) {
               onClick={() => setLightbox(m)}
               className="group overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left transition hover:border-indigo-500"
             >
-              <Thumb src={thumbUrl(m.media_id)} alt={m.name} rounded="rounded-none" className="aspect-square w-full" />
+              <Thumb src={thumbUrl(m.media_id, project.id)} alt={m.name} rounded="rounded-none" className="aspect-square w-full" />
               <div className="p-2">
                 <div className="truncate text-xs font-medium">{m.name || "—"}</div>
               </div>
@@ -90,7 +90,7 @@ export default function AllImages({ project }: { project: Project }) {
 
       {lightbox && (
         <Lightbox
-          imageSrc={thumbUrl(lightbox.media_id)}
+          imageSrc={thumbUrl(lightbox.media_id, project.id)}
           title={lightbox.name}
           onClose={() => setLightbox(null)}
         />
