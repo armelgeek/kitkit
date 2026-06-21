@@ -7,6 +7,7 @@ when the narration reaches each phrase.
 """
 import json
 import os
+import shutil
 from pathlib import Path
 from urllib.request import pathname2url
 from xml.sax.saxutils import escape
@@ -16,6 +17,31 @@ from agent.studio import assembler, db, media_store
 
 FPS = 24
 STUDIO_MEDIA_DIR = Path(os.environ.get("STUDIO_OUT_DIR", BASE_DIR / "studio_media"))
+
+
+def _alpha(i: int) -> str:
+    """0,1,2… → a,b,…,z,aa,ab… — a LETTERS-ONLY id. Media is staged under these names so
+    Resolve can't read a digit run in the filename as an image-sequence frame number (UUID
+    names like ...eea0e7a3310e.png get collapsed to a phantom '[3310-3621]' sequence)."""
+    s = ""
+    i += 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        s = chr(97 + r) + s
+    return s
+
+
+def _stage(src: Path, name: str, dv_dir: Path) -> Path:
+    """Hardlink (or copy across volumes) `src` into dv_dir/<name><ext>; return the staged path.
+    Lets the timeline reference sequence-safe filenames in one self-contained folder."""
+    dst = dv_dir / f"{name}{src.suffix.lower()}"
+    try:
+        if dst.exists():
+            dst.unlink()
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+    return dst
 
 
 def _file_url(p: Path) -> str:
@@ -116,6 +142,12 @@ async def build(project_id: str) -> dict:
         "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (project_id,))
 
     w, h = assembler._res(project["aspect_ratio"])
+    # Stage media under sequence-safe (letters-only) names in one folder next to the XML, so
+    # Resolve never mis-reads a UUID's digits as an image-sequence frame range.
+    dv_dir = STUDIO_MEDIA_DIR / project_id / "dv_media"
+    shutil.rmtree(dv_dir, ignore_errors=True)
+    dv_dir.mkdir(parents=True, exist_ok=True)
+
     items, titles, srt, start_f, total, tnum = [], [], [], 0, 0, 0
     audio_segs = []   # (scene narration WAV, timeline start frame)
     i = 0
@@ -157,7 +189,8 @@ async def build(project_id: str) -> dict:
 
         for (sh, path, _is_img), dur_s in zip(usable, durs):
             dur_f = max(1, round(dur_s * FPS))
-            items.append(_clipitem(i, sh.get("title") or f"Shot {i+1}", path, start_f, dur_f, w, h))
+            staged = _stage(path, f"clip{_alpha(i)}", dv_dir)
+            items.append(_clipitem(i, sh.get("title") or f"Shot {i+1}", staged, start_f, dur_f, w, h))
             # timed keyword captions → FCP7 title track (Studio) + a sibling SRT (works on Free)
             try:
                 caps = json.loads(sh.get("captions") or "[]")
@@ -190,7 +223,8 @@ async def build(project_id: str) -> dict:
         if not ap.exists():
             continue
         adur_f = max(1, round(await assembler.probe_duration(ap) * FPS))
-        audio_items.append(_audio_item(ai, "narration", ap, sf, adur_f))
+        staged_ap = _stage(ap, f"narr{_alpha(ai)}", dv_dir)
+        audio_items.append(_audio_item(ai, "narration", staged_ap, sf, adur_f))
 
     title_track = f"\n        <track>\n{chr(10).join(titles)}\n        </track>" if titles else ""
     audio_media = (f"""
