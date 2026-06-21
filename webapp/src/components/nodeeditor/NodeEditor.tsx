@@ -25,8 +25,19 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { api, graphApi, type Entity } from "../../api/client";
+import { api, graphApi, storyboard, type Entity, type Shot } from "../../api/client";
 import Lightbox from "../common/Lightbox";
+
+// A picture the "Nguồn ảnh" node can reference: project assets (entities) AND every
+// storyboard shot image — so any generated frame can feed back in as a reference.
+export interface RefImage {
+  key: string; // "e:<id>" | "s:<id>"
+  kind: "entity" | "shot";
+  label: string;
+  media_id: string;
+  web: string;
+  entity_id?: string; // entities only — lets the source node refresh to the current art
+}
 
 export interface EditorTarget {
   kind: "shot" | "entity";
@@ -71,6 +82,7 @@ const NodeOps = createContext<{
   // Output node mirror its input live, even after a single upstream node is regenerated.
   inputResults: Record<string, { web: string; ext: string }>;
   entities: Entity[];
+  images: RefImage[];
   imageModels: string[];
 }>({
   update: () => {},
@@ -81,6 +93,7 @@ const NodeOps = createContext<{
   results: {},
   inputResults: {},
   entities: [],
+  images: [],
   imageModels: [],
 });
 
@@ -219,21 +232,41 @@ function Slider({
 
 // ─── Node components ────────────────────────────────────────
 function SourceNode({ id, data }: NodeProps) {
-  const { update, entities } = useContext(NodeOps);
+  const { update, images } = useContext(NodeOps);
   const d = data as any;
-  const withImg = entities.filter((e) => e.media_id && e.image_path);
-  const pick = (eid: string) => {
-    const e = withImg.find((x) => x.id === eid);
-    if (e) update(id, { entity_id: e.id, media_id: e.media_id, web: e.image_path, label: e.name });
+  const pick = (key: string) => {
+    const img = images.find((x) => x.key === key);
+    if (img)
+      update(id, {
+        src_key: img.key,
+        entity_id: img.entity_id || null,
+        media_id: img.media_id,
+        web: img.web,
+        label: img.label,
+      });
   };
+  const entImgs = images.filter((x) => x.kind === "entity");
+  const shotImgs = images.filter((x) => x.kind === "shot");
+  const selected = d.src_key || (d.entity_id ? `e:${d.entity_id}` : "");
   return (
     <Shell type="source" id={id} inputs={false}>
       <Preview nodeId={id} src={d.web} label="Chọn ảnh bên dưới" />
-      <select className={fieldCls} value={d.entity_id || ""} onChange={(e) => pick(e.target.value)}>
-        <option value="">{d.web ? "(ảnh hiện tại)" : "— chọn ảnh asset —"}</option>
-        {withImg.map((e) => (
-          <option key={e.id} value={e.id}>{e.name}</option>
-        ))}
+      <select className={fieldCls} value={selected} onChange={(e) => pick(e.target.value)}>
+        <option value="">{d.web ? "(ảnh hiện tại)" : "— chọn ảnh —"}</option>
+        {entImgs.length > 0 && (
+          <optgroup label="Ảnh asset">
+            {entImgs.map((x) => (
+              <option key={x.key} value={x.key}>{x.label}</option>
+            ))}
+          </optgroup>
+        )}
+        {shotImgs.length > 0 && (
+          <optgroup label="Ảnh storyboard">
+            {shotImgs.map((x) => (
+              <option key={x.key} value={x.key}>{x.label}</option>
+            ))}
+          </optgroup>
+        )}
       </select>
       {d.label && <div className="truncate text-[10px] text-neutral-500">↳ {d.label}</div>}
     </Shell>
@@ -489,17 +522,20 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
 function Editor({
   target,
   entities,
+  projectId,
   onClose,
   onApplied,
 }: {
   target: EditorTarget;
   entities: Entity[];
+  projectId: string;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [imageModels, setImageModels] = useState<string[]>([]);
+  const [shots, setShots] = useState<Shot[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -545,6 +581,30 @@ function Editor({
   useEffect(() => {
     api.options().then((o) => setImageModels(o.image_models || [])).catch(() => {});
   }, []);
+
+  // All storyboard shot images of the project — so the "Nguồn ảnh" node can reference
+  // generated frames, not just assets. Skip the shot being edited (can't reference itself).
+  useEffect(() => {
+    if (!projectId) return;
+    storyboard.projectShots(projectId).then((r) => setShots(r.shots)).catch(() => {});
+  }, [projectId]);
+
+  // Unified reference list: project assets first, then every shot image with art.
+  const images = useMemo<RefImage[]>(() => {
+    const out: RefImage[] = [];
+    for (const e of entities) {
+      if (e.media_id && e.image_path)
+        out.push({ key: `e:${e.id}`, kind: "entity", label: e.name,
+                   media_id: e.media_id, web: e.image_path, entity_id: e.id });
+    }
+    shots.forEach((s, i) => {
+      if (s.id === target.id || !s.image_media_id || !s.image_path) return;
+      out.push({ key: `s:${s.id}`, kind: "shot",
+                 label: s.title || `Shot ${i + 1}`,
+                 media_id: s.image_media_id, web: s.image_path });
+    });
+    return out;
+  }, [entities, shots, target.id]);
 
   // A shot has separate image (storyboard) and video (shots-tab) graphs — keep them apart.
   const goal: "image" | "video" =
@@ -836,8 +896,8 @@ function Editor({
   };
 
   const ops = useMemo(
-    () => ({ update, remove, preview, genNode, genningId, results, inputResults, entities, imageModels }),
-    [update, remove, preview, genNode, genningId, results, inputResults, entities, imageModels]
+    () => ({ update, remove, preview, genNode, genningId, results, inputResults, entities, images, imageModels }),
+    [update, remove, preview, genNode, genningId, results, inputResults, entities, images, imageModels]
   );
 
   return (
@@ -927,6 +987,7 @@ function Editor({
 export default function NodeEditor(props: {
   target: EditorTarget;
   entities: Entity[];
+  projectId: string;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {

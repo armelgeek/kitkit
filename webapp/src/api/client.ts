@@ -294,6 +294,7 @@ export interface Shot {
 
 export const storyboard = {
   sceneShots: (sid: string) => req<{ shots: Shot[] }>(`/scenes/${sid}/shots`),
+  projectShots: (pid: string) => req<{ shots: Shot[] }>(`/projects/${pid}/shots`),
   // Storytelling (§2.6): build beats + TTS for ONE scene (re-run a scene the project-wide
   // pass missed) as a background job (§9) so the UI doesn't block on slow TTS.
   buildSceneBeats: (sid: string, measure = true) =>

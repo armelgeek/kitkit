@@ -137,6 +137,7 @@ export default function ProjectWorkspace({
         <NodeEditor
           target={editor}
           entities={entities}
+          projectId={project.id}
           onClose={() => setEditor(null)}
           onApplied={() => setReload((r) => r + 1)}
         />
