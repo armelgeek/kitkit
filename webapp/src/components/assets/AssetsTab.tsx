@@ -580,7 +580,9 @@ function StudioSource({
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api.libraryEntities(projectId).then((r) => setItems(r.entities)).catch((e) => setErr(e.message));
+    // Include EVERY studio project (the current one too) so you can reference this project's
+    // own assets here as well, not only other projects'.
+    api.libraryEntities().then((r) => setItems(r.entities)).catch((e) => setErr(e.message));
   }, [projectId]);
 
   const filtered = (items || []).filter((e) =>
@@ -588,6 +590,11 @@ function StudioSource({
   );
   const byProject: Record<string, LibraryEntity[]> = {};
   for (const e of filtered) (byProject[e.project_title] ??= []).push(e);
+  // current project's section first (labelled), then the rest
+  const isCurrent = (list: LibraryEntity[]) => list[0]?.project_id === projectId;
+  const sections = Object.entries(byProject).sort(
+    ([, a], [, b]) => Number(isCurrent(b)) - Number(isCurrent(a))
+  );
 
   return (
     <>
@@ -600,11 +607,13 @@ function StudioSource({
       {err && <p className="text-sm text-rose-300">{err}</p>}
       {items === null && <p className="text-sm text-neutral-500">Đang tải…</p>}
       {items !== null && !filtered.length && (
-        <p className="text-sm text-neutral-500">Không có asset nào ở dự án Studio khác.</p>
+        <p className="text-sm text-neutral-500">Chưa có asset nào (dự án này lẫn dự án khác).</p>
       )}
-      {Object.entries(byProject).map(([proj, list]) => (
+      {sections.map(([proj, list]) => (
         <section key={proj} className="mb-6">
-          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{proj}</h4>
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+            {proj}{isCurrent(list) ? " · dự án này" : ""}
+          </h4>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {list.map((e) => (
               <PickCard
