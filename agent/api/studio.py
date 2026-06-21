@@ -727,7 +727,7 @@ async def _generate_location_views(entity: dict, project: dict) -> None:
     tier = await _current_tier()
     refs = [{"handle": entity["name"], "media_id": primary_id}]
     extras: list[dict] = []
-    for view in brain._LOCATION_EXTRA_VIEWS:
+    for label, view in brain._LOCATION_EXTRA_VIEWS:
         prompt = brain.compose_prompt(project, brain.location_view_prompt(entity["name"], base, view))
         try:
             res = await client.generate_images(
@@ -744,12 +744,76 @@ async def _generate_location_views(entity: dict, project: dict) -> None:
                 if web:
                     extras.append({"media_id": mid,
                                    "primary_media_id": info.get("primary_media_id") or mid,
-                                   "path": web})
+                                   "path": web, "label": label})
         except Exception as ex:  # noqa: BLE001
             logger.warning("location view exception (%s): %s", entity["name"], ex)
         await asyncio.sleep(random.uniform(2, 5))
     await db.update("entity", entity["id"],
-                    {"extra_media": json.dumps(extras), "updated_at": db.now()})
+                    {"extra_media": json.dumps(extras, ensure_ascii=False), "updated_at": db.now()})
+
+    # For MANAGEMENT, the location shows ONE image: a labeled 2x2 contact sheet of all views.
+    # The individual clean images (primary + extras) remain the shot references, so we get easy
+    # management without re-introducing the grid-copy bug.
+    cells = [{"path": entity.get("image_path"), "label": brain._LOCATION_PRIMARY_LABEL}]
+    cells += [{"path": x["path"], "label": x.get("label") or ""} for x in extras]
+    sheet = await _build_location_contact_sheet(entity, project, cells)
+    if sheet:
+        await db.update("entity", entity["id"], {"image_path": sheet, "updated_at": db.now()})
+
+
+async def _build_location_contact_sheet(entity: dict, project: dict, cells: list[dict]):
+    """Compose a location's views into ONE labeled 2x2 contact sheet (display image only).
+    Returns its web path, or None on failure (keeps the primary image)."""
+    items: list[tuple] = []
+    for c in cells:
+        p = c.get("path")
+        if not p:
+            continue
+        local = media_store.MEDIA_DIR / p.replace("/media/", "", 1)
+        if local.exists():
+            items.append((local, c.get("label") or ""))
+    if len(items) < 2:
+        return None
+    out_rel = f"{project['id']}/loc_{entity['id']}_sheet.png"
+    out_abs = media_store.MEDIA_DIR / out_rel
+    font_path = assembler._caption_font()
+
+    def _compose():
+        from PIL import Image, ImageDraw, ImageFont, ImageOps
+        cw, ih, lh, gap, pad = 512, 288, 36, 10, 12
+        ch = ih + lh
+        cols = 2
+        rows = (min(len(items), 4) + 1) // 2
+        W = pad * 2 + cols * cw + (cols - 1) * gap
+        H = pad * 2 + rows * ch + (rows - 1) * gap
+        canvas = Image.new("RGB", (W, H), (12, 12, 14))
+        draw = ImageDraw.Draw(canvas)
+        try:
+            font = ImageFont.truetype(font_path, 22) if font_path else ImageFont.load_default()
+        except Exception:
+            font = ImageFont.load_default()
+        for idx, (lp, label) in enumerate(items[:4]):
+            r, c = divmod(idx, cols)
+            x = pad + c * (cw + gap)
+            y = pad + r * (ch + gap)
+            try:
+                im = ImageOps.fit(Image.open(lp).convert("RGB"), (cw, ih), Image.LANCZOS)
+                canvas.paste(im, (x, y))
+            except Exception:
+                pass
+            if label:
+                tw = draw.textlength(label, font=font)
+                draw.text((x + (cw - tw) / 2, y + ih + (lh - 24) / 2), label,
+                          font=font, fill=(232, 232, 236))
+        out_abs.parent.mkdir(parents=True, exist_ok=True)
+        canvas.save(out_abs, "PNG")
+
+    try:
+        await asyncio.to_thread(_compose)
+    except Exception as ex:  # noqa: BLE001
+        logger.warning("contact sheet failed (%s): %s", entity["name"], ex)
+        return None
+    return f"/media/{out_rel}"
 
 
 @router.get("/projects/{pid}/entities")

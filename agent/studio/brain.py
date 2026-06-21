@@ -254,10 +254,11 @@ _SHEET = {
 # primary as a reference (same place), so a shot has several distinct angles to draw on
 # instead of copying one fixed framing — but each is a clean single full-frame image (NOT a
 # tiled grid, which the model would otherwise copy wholesale).
+_LOCATION_PRIMARY_LABEL = "Toàn cảnh"
 _LOCATION_EXTRA_VIEWS = [
-    "the REVERSE angle, looking back across the space from the opposite side",
-    "a HIGH overhead / bird's-eye angle looking down on the space",
-    "an EYE-LEVEL closer detail of one key part or corner of the space",
+    ("Góc ngược", "the REVERSE angle, looking back across the space from the opposite side"),
+    ("Trên cao", "a HIGH overhead / bird's-eye angle looking down on the space"),
+    ("Cận cảnh", "an EYE-LEVEL closer detail of one key part or corner of the space"),
 ]
 
 
