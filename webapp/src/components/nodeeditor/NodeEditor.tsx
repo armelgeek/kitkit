@@ -742,8 +742,11 @@ function Editor({
       const r = results[n.id];
       if (r?.web) return r;
       const d = n.data as any;
-      if (d.result_web) return { web: d.result_web, ext: d.result_ext || "png" };
+      // Prefer _result (the current display/seed value, refreshed to the committed image on
+      // load) over result_web (the durable stored result) so the Output node doesn't show a
+      // stale image after a quick-gen done outside the editor. After a run they're equal.
       if (d._result) return { web: d._result, ext: d._ext || "png" };
+      if (d.result_web) return { web: d.result_web, ext: d.result_ext || "png" };
       if (d.web) return { web: d.web, ext: "png" }; // source node
       return null;
     };
