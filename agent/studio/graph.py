@@ -309,8 +309,11 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
 
         elif t == "image":
             body = inp["text"] or data.get("text") or ""
+            # Same single-frame guard as the storyboard quick-gen (don't copy the location
+            # reference's angle / sheet layout) so a node-built shot frame matches the table.
             mid, web = await _img_gen_retry(lambda: client.generate_images(
-                prompt=brain.compose_prompt(project, body), project_id=flow_pid,
+                prompt=brain.compose_prompt(project, body, single_frame=(kind == "shot")),
+                project_id=flow_pid,
                 aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
                 references=inp["references"] or None,

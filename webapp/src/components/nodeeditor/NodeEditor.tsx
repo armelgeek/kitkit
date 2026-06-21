@@ -421,7 +421,7 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
   const goal = seed.goal || (seed.kind === "shot" ? "video" : "image");
   const byId = new Map(entities.map((e) => [e.id, e]));
 
-  const nodes: Node[] = [mk("p", "prompt", 0, 20, { text: prompt })];
+  const nodes: Node[] = [mk("p", "prompt", 0, 20, { text: prompt, seed_prompt: prompt })];
   const edges: Edge[] = [];
 
   if (goal === "video") {
@@ -560,6 +560,17 @@ function Editor({
             d.media_id = e.media_id;
             d.web = e.image_path;
             d.label = e.name;
+          }
+        }
+        // Sync the prompt node to the target's CURRENT description (e.g. after "Đa dạng góc
+        // máy" / an edit) so the node editor and the storyboard table use the same prompt.
+        // Only when it was untouched since seeding, so manual prompt edits are preserved.
+        // Legacy nodes have no seed_prompt → treat as unedited so old stale graphs refresh.
+        if (n.type === "prompt" && target.prompt != null) {
+          const unedited = d.seed_prompt == null || d.text === d.seed_prompt;
+          if (unedited && d.text !== target.prompt) {
+            d.text = target.prompt;
+            d.seed_prompt = target.prompt;
           }
         }
       }
