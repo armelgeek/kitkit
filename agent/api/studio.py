@@ -9,6 +9,7 @@ import logging
 import math
 import os
 import random
+import re
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -1076,31 +1077,88 @@ async def list_project_shots(pid: str):
         "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))}
 
 
+# ─── Shot reference resolution (location + entities actually in the prompt) ──
+
+_BRACE_RE = re.compile(r"\{([^{}]+)\}")
+_HEADING_PREFIX_RE = re.compile(r"^\s*(INT\.?/?EXT\.?|INT\.|EXT\.|NỘI\.|NGOẠI\.|I/E\.)\s*", re.I)
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip().lower())
+
+
+def _brace_names(text: str) -> set[str]:
+    """Entity names the AI actually wrapped in {curly braces} (the binding tokens)."""
+    return {m.strip() for m in _BRACE_RE.findall(text or "") if m.strip()}
+
+
+def _location_from_heading(heading: str) -> str:
+    """'INT. BẾP CỦA THIÊN ÂN - NGÀY' → 'BẾP CỦA THIÊN ÂN'."""
+    h = _HEADING_PREFIX_RE.sub("", (heading or "").strip())
+    return re.split(r"\s+[-–—]\s+", h)[0].strip()
+
+
+def _match_location_entity(heading: str, locations: list[dict]) -> Optional[dict]:
+    """The location entity named in the scene heading (exact, else containment)."""
+    target = _norm(_location_from_heading(heading))
+    if not target or not locations:
+        return None
+    for e in locations:
+        if _norm(e["name"]) == target:
+            return e
+    for e in locations:
+        n = _norm(e["name"])
+        if n and (n in target or target in n):
+            return e
+    return None
+
+
+def _first_location_id(frames: list[dict], by_name: dict) -> Optional[str]:
+    """Fallback when the heading matches no location entity: the first location the AI named."""
+    for f in frames:
+        text = " ".join(filter(None, [f.get("description"), f.get("visual_prompt"), f.get("motion_prompt")]))
+        for n in (set(f.get("ref_entity_names") or []) | _brace_names(text)):
+            e = by_name.get(_norm(n))
+            if e and e["type"] == "location":
+                return e["id"]
+    return None
+
+
+def _resolve_shot_refs(text: str, ref_names, by_name: dict, scene_loc_id: Optional[str]) -> list[str]:
+    """A shot references EXACTLY one location (the scene's) plus every NON-location entity
+    actually named in the prompt ({braces}) or ref_entity_names. Any other location is dropped
+    so a shot never mixes places, and an entity mentioned in the prompt is always referenced."""
+    names = set(ref_names or []) | _brace_names(text)
+    other_ids: list[str] = []
+    for n in names:
+        e = by_name.get(_norm(n))
+        if e and e["type"] != "location" and e["id"] not in other_ids:
+            other_ids.append(e["id"])
+    return ([scene_loc_id] if scene_loc_id else []) + other_ids
+
+
 @router.post("/scenes/{sid}/storyboard/autofill")
 async def autofill_storyboard(sid: str, body: AutofillRequest):
     scene = await _scene_or_404(sid)
     project = await _project_or_404(scene["project_id"])
-    entities = await db.query_all(
-        "SELECT name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    erows = await db.query_all(
+        "SELECT id, name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    by_name = {_norm(r["name"]): r for r in erows}
+    # The scene's location is fixed by its heading — every shot uses ONLY this place.
+    scene_loc = _match_location_entity(scene["heading"], [r for r in erows if r["type"] == "location"])
+    scene_loc_id = scene_loc["id"] if scene_loc else None
     frames = await brain.run_json(brain.storyboard_autofill_prompt(
-        scene["heading"], scene.get("action") or "", entities, project["style"], body.n_frames))
+        scene["heading"], scene.get("action") or "", erows, project["style"], body.n_frames,
+        location=(scene_loc["name"] if scene_loc else None)))
     if not isinstance(frames, list):
         raise HTTPException(502, "AI không trả về danh sách frame")
-    erows = await db.query_all(
-        "SELECT id, name, type FROM entity WHERE project_id=?", (scene["project_id"],))
-    name_to_id = {r["name"].lower(): r["id"] for r in erows}
-    # scene location = first location-type entity referenced by any frame
-    used_names = {n.lower() for f in frames for n in f.get("ref_entity_names", [])}
-    loc_id = next((r["id"] for r in erows
-                   if r["type"] == "location" and r["name"].lower() in used_names), None)
+    if not scene_loc_id:                      # heading matched no entity → use the AI's pick
+        scene_loc_id = _first_location_id(frames, by_name)
     await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
     ts = db.now()
     for i, f in enumerate(frames):
-        ref_names = list(f.get("ref_entity_names", []))
-        ref_ids = [name_to_id[n.lower()] for n in ref_names if n.lower() in name_to_id]
-        # ensure the scene location is always referenced by every frame
-        if loc_id and loc_id not in ref_ids:
-            ref_ids = [loc_id] + ref_ids
+        text = " ".join(filter(None, [f.get("description"), f.get("visual_prompt"), f.get("motion_prompt")]))
+        ref_ids = _resolve_shot_refs(text, f.get("ref_entity_names"), by_name, scene_loc_id)
         await db.insert("shot", {
             "id": db.new_id(), "scene_id": sid, "idx": i,
             "title": f.get("title", f"Shot {i+1}"),
@@ -1112,8 +1170,8 @@ async def autofill_storyboard(sid: str, body: AutofillRequest):
             "ref_entity_ids": json.dumps(ref_ids),
             "duration": project["shot_duration"] or 8,
             "status": "pending", "created_at": ts, "updated_at": ts})
-    if loc_id:
-        await db.update("scene", sid, {"location_entity_id": loc_id})
+    if scene_loc_id:
+        await db.update("scene", sid, {"location_entity_id": scene_loc_id})
     return {"shots": await db.query_all(
         "SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))}
 
@@ -1273,8 +1331,12 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     windows. If TTS is off/unreachable, beat durations fall back to a word-count estimate."""
     scene = await _scene_or_404(sid)
     project = await _project_or_404(scene["project_id"])
-    entities = await db.query_all(
-        "SELECT name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    erows = await db.query_all(
+        "SELECT id, name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    by_name = {_norm(r["name"]): r for r in erows}
+    # The scene's location is fixed by its heading — every beat/shot uses ONLY this place.
+    scene_loc = _match_location_entity(scene["heading"], [r for r in erows if r["type"] == "location"])
+    scene_loc_id = scene_loc["id"] if scene_loc else None
 
     # 1) the scene's narration = its VERBATIM slice of the user's ORIGINAL input
     #    (project.idea), read in full — NOT an AI rewrite of the screenplay. Storytelling
@@ -1300,9 +1362,13 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     # 2) segment the verbatim narration into visual beats (AI = visual structure + key
     #    phrases). The SPOKEN text per beat is re-derived verbatim from the narration so the
     #    audio always covers the whole scene in order — no AI drift, no dropped sentences.
-    beats = await brain.run_json(brain.scene_segment_prompt(voiceover, entities, project["style"]))
+    beats = await brain.run_json(brain.scene_segment_prompt(
+        voiceover, erows, project["style"],
+        location=(scene_loc["name"] if scene_loc else None)))
     if not isinstance(beats, list) or not beats:
         beats = [{"description": scene["heading"], "ref_entity_names": [], "key_phrases": []}]
+    if not scene_loc_id:                      # heading matched no entity → use the AI's pick
+        scene_loc_id = _first_location_id(beats, by_name)
     say = brain.partition_text(voiceover, len(beats))   # verbatim contiguous slices, complete
     if len(say) < len(beats):                            # fewer sentences than beats → trim
         beats = beats[:len(say)]
@@ -1328,26 +1394,17 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
         durs = [max(0.8, round(scene_est * w / total_wc, 3)) for w in wc]
     scene_dur = round(sum(durs), 3)
 
-    erows = await db.query_all(
-        "SELECT id, name, type FROM entity WHERE project_id=?", (scene["project_id"],))
-    name_to_id = {r["name"].lower(): r["id"] for r in erows}
-    used = {n.lower() for b in beats for n in b.get("ref_entity_names", [])}
-    loc_id = next((r["id"] for r in erows
-                   if r["type"] == "location" and r["name"].lower() in used), None)
-
     await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
     await db.update("scene", sid, {
         "narration_text": voiceover, "narration_path": narr_web,
-        "narration_duration": scene_dur, "location_entity_id": loc_id})
+        "narration_duration": scene_dur, "location_entity_id": scene_loc_id})
     ts = db.now()
     t = 0.0
     for i, b in enumerate(beats):
         b_dur = durs[i]
         caps = _caption_windows(b.get("_say") or "", b.get("key_phrases") or [], t, b_dur)
-        ref_names = list(b.get("ref_entity_names", []))
-        ref_ids = [name_to_id[n.lower()] for n in ref_names if n.lower() in name_to_id]
-        if loc_id and loc_id not in ref_ids:
-            ref_ids = [loc_id] + ref_ids
+        text = " ".join(filter(None, [b.get("description"), b.get("visual_prompt"), b.get("motion_prompt")]))
+        ref_ids = _resolve_shot_refs(text, b.get("ref_entity_names"), by_name, scene_loc_id)
         await db.insert("shot", {
             "id": db.new_id(), "scene_id": sid, "idx": i,
             "beat_id": db.new_id(), "part_idx": 0, "is_chained": 0,

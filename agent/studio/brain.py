@@ -311,19 +311,30 @@ _MOTION = (
 
 def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
                                entities: list[dict], style: str,
-                               n_frames: int | None = None) -> str:
+                               n_frames: int | None = None,
+                               location: str | None = None) -> str:
     roster = "\n".join(
         f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
     ) or "(none)"
     locations = [e["name"] for e in entities if e.get("type") == "location"]
-    loc_line = (
-        "The location entities available are: "
-        + ", ".join("{" + n + "}" for n in locations)
-        + ". Pick the single location this scene happens at."
-    ) if locations else (
-        "No location entity exists yet — invent a consistent place name and wrap it in "
-        "curly braces, reusing the SAME name for every frame of this scene."
-    )
+    if location:
+        loc_line = (
+            f"This scene takes place at ONE fixed location: {{{location}}}. EVERY frame is at "
+            f"this SAME place — begin each `description` with {{{location}}}, use ONLY "
+            f"{{{location}}} and NO other location anywhere, and put {{{location}}} (and no "
+            "other place) in ref_entity_names. Do NOT invent or switch to any other location."
+        )
+    elif locations:
+        loc_line = (
+            "The location entities available are: "
+            + ", ".join("{" + n + "}" for n in locations)
+            + ". Pick the single location this scene happens at and use ONLY it in every frame."
+        )
+    else:
+        loc_line = (
+            "No location entity exists yet — invent a consistent place name and wrap it in "
+            "curly braces, reusing the SAME name for every frame of this scene."
+        )
     count = f"about {n_frames} frames" if n_frames else "as many frames as the action needs (2–6)"
     return (
         "Break this scene into storyboard FRAMES (still shots). Every frame in this scene "
@@ -398,7 +409,8 @@ def partition_text(text: str, n: int) -> list[str]:
     return parts
 
 
-def scene_segment_prompt(voiceover: str, entities: list[dict], style: str) -> str:
+def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
+                         location: str | None = None) -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
     verbatim CONTIGUOUS slice of the voiceover (in order, concatenating back to the whole),
     so each beat's share of the audio time can be derived from its word count. Also pick the
@@ -407,13 +419,22 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str) -> st
         f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
     ) or "(none)"
     locations = [e["name"] for e in entities if e.get("type") == "location"]
-    loc_line = (
-        "Location entities available: " + ", ".join("{" + n + "}" for n in locations)
-        + ". Every beat is at the ONE location of this scene."
-    ) if locations else (
-        "No location entity yet — invent ONE consistent place name in curly braces and "
-        "reuse it for every beat."
-    )
+    if location:
+        loc_line = (
+            f"This scene is at ONE fixed location: {{{location}}}. EVERY beat is at this SAME "
+            f"place — begin each `description` with {{{location}}}, use ONLY {{{location}}} and "
+            f"NO other location, and put {{{location}}} (and no other place) in ref_entity_names."
+        )
+    elif locations:
+        loc_line = (
+            "Location entities available: " + ", ".join("{" + n + "}" for n in locations)
+            + ". Every beat is at the ONE location of this scene; use ONLY that one."
+        )
+    else:
+        loc_line = (
+            "No location entity yet — invent ONE consistent place name in curly braces and "
+            "reuse it for every beat."
+        )
     return (
         "Split this scene VOICEOVER into visual BEATS (one beat = one on-screen moment). "
         "Do NOT rewrite the narration — each beat's `text` MUST be a verbatim, contiguous "
