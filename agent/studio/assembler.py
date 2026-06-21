@@ -118,6 +118,37 @@ _FONT_FALLBACKS = [
 ]
 
 
+def label_quadrants(src: Path, out: Path, labels: list[str], font: str | None) -> bool:
+    """Overlay a label at the bottom of each 2x2 quadrant of an image (used to tag the four
+    angles of a location grid: Toàn cảnh / Góc ngược / Trên cao / Cận cảnh). Writes a labeled
+    copy to `out`. Returns True on success, False on any failure (caller keeps the original)."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        im = Image.open(src).convert("RGB")
+        W, H = im.size
+        hw, hh = W // 2, H // 2
+        draw = ImageDraw.Draw(im, "RGBA")
+        size = max(16, W // 38)
+        try:
+            f = ImageFont.truetype(font, size) if font else ImageFont.load_default()
+        except Exception:
+            f = ImageFont.load_default()
+        for (qx, qy), label in zip([(0, 0), (hw, 0), (0, hh), (hw, hh)], labels):
+            if not label:
+                continue
+            tw = draw.textlength(label, font=f)
+            bx = qx + (hw - tw) / 2
+            by = qy + hh - size - 16
+            pad = 6
+            draw.rectangle([bx - pad, by - pad, bx + tw + pad, by + size + pad], fill=(0, 0, 0, 150))
+            draw.text((bx, by), label, font=f, fill=(245, 245, 248))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        im.save(out, "PNG")
+        return True
+    except Exception:
+        return False
+
+
 def _caption_font(preferred: str | None = None) -> str | None:
     """Resolve a usable .ttf/.otf: explicit choice (path, or a font name found in the font
     dirs) → STUDIO_CAPTION_FONT env → per-OS fallbacks. None if nothing is found."""

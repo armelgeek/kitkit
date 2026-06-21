@@ -582,15 +582,16 @@ function Editor({
         const GEN = ["image", "editImage", "video"];
         for (const n of nodes) {
           const d = n.data as any;
-          // restore a node's own previously-generated result (durable, incl. locked ones)
-          if (d.result_web && !d._result) {
-            d._result = d.result_web;
-            d._ext = d.result_ext || "png";
-          }
           const seedHere = outIds.has(n.id) || (GEN.includes(n.type!) && feedsOut.has(n.id));
-          if (seedHere && !d._result) {
+          if (seedHere) {
+            // The Output (and the gen node feeding it) shows the target's CURRENT committed
+            // image, so a quick-gen done outside the editor isn't shown as the stale old one.
             d._result = curSrc;
             d._ext = curExt;
+          } else if (d.result_web && !d._result) {
+            // intermediate nodes keep their own last produced result
+            d._result = d.result_web;
+            d._ext = d.result_ext || "png";
           }
         }
       }

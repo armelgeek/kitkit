@@ -13,7 +13,7 @@ import time as _t
 
 from agent.config import IMAGE_MODELS
 from agent.services.flow_client import get_flow_client
-from agent.studio import db, media_store, brain
+from agent.studio import db, media_store, brain, assembler
 
 logger = logging.getLogger(__name__)
 
@@ -309,10 +309,18 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
 
         elif t == "image":
             body = inp["text"] or data.get("text") or ""
-            # Same single-frame guard as the storyboard quick-gen (don't copy the location
-            # reference's angle / sheet layout) so a node-built shot frame matches the table.
+            if kind == "entity" and target.get("type"):
+                # Entity reference: apply the SAME per-type sheet rule as quick-gen so a
+                # node-built reference matches (e.g. a location comes out as the 2x2 grid,
+                # not a single plain view).
+                img_prompt = brain.compose_prompt(project, brain.ref_image_prompt(
+                    target["type"], target.get("name") or "", body))
+            else:
+                # Shot frame: single-frame guard (don't copy the location grid layout) so a
+                # node-built frame matches the storyboard table.
+                img_prompt = brain.compose_prompt(project, body, single_frame=(kind == "shot"))
             mid, web = await _img_gen_retry(lambda: client.generate_images(
-                prompt=brain.compose_prompt(project, body, single_frame=(kind == "shot")),
+                prompt=img_prompt,
                 project_id=flow_pid,
                 aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
@@ -393,6 +401,17 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
         await db.update("entity", target["id"], {
             "media_id": final["media_id"], "primary_media_id": final["media_id"],
             "image_path": web, "updated_at": db.now()})
+        # A location's reference is a 2x2 grid → overlay the position labels for display,
+        # same as the quick-gen path (media_id stays the clean grid).
+        if target.get("type") == "location" and web:
+            src = media_store.MEDIA_DIR / web.replace("/media/", "", 1)
+            if src.exists():
+                out_rel = f"{pid}/loc_{target['id']}_labeled.png"
+                ok = await asyncio.to_thread(
+                    assembler.label_quadrants, src, media_store.MEDIA_DIR / out_rel,
+                    brain.LOCATION_GRID_LABELS, assembler._caption_font())
+                if ok:
+                    await db.update("entity", target["id"], {"image_path": f"/media/{out_rel}"})
     else:
         col = "video" if final.get("ext") == "mp4" else "image"
         await db.update("shot", target["id"], {

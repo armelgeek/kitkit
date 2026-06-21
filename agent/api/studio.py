@@ -725,35 +725,12 @@ async def _label_location_grid(entity: dict, project: dict) -> None:
         return
     out_rel = f"{project['id']}/loc_{entity['id']}_labeled.png"
     out_abs = media_store.MEDIA_DIR / out_rel
-    font_path = assembler._caption_font()
-    labels = brain.LOCATION_GRID_LABELS
-
-    def _draw():
-        from PIL import Image, ImageDraw, ImageFont
-        im = Image.open(src).convert("RGB")
-        W, H = im.size
-        hw, hh = W // 2, H // 2
-        draw = ImageDraw.Draw(im, "RGBA")
-        size = max(16, W // 38)
-        try:
-            font = ImageFont.truetype(font_path, size) if font_path else ImageFont.load_default()
-        except Exception:
-            font = ImageFont.load_default()
-        quads = [(0, 0), (hw, 0), (0, hh), (hw, hh)]  # TL, TR, BL, BR
-        for (qx, qy), label in zip(quads, labels):
-            tw = draw.textlength(label, font=font)
-            bx = qx + (hw - tw) / 2
-            by = qy + hh - size - 16
-            pad = 6
-            draw.rectangle([bx - pad, by - pad, bx + tw + pad, by + size + pad],
-                           fill=(0, 0, 0, 150))
-            draw.text((bx, by), label, font=font, fill=(245, 245, 248))
-        out_abs.parent.mkdir(parents=True, exist_ok=True)
-        im.save(out_abs, "PNG")
-
-    await asyncio.to_thread(_draw)
-    await db.update("entity", entity["id"],
-                    {"image_path": f"/media/{out_rel}", "updated_at": db.now()})
+    ok = await asyncio.to_thread(
+        assembler.label_quadrants, src, out_abs, brain.LOCATION_GRID_LABELS,
+        assembler._caption_font())
+    if ok:
+        await db.update("entity", entity["id"],
+                        {"image_path": f"/media/{out_rel}", "updated_at": db.now()})
 
 
 @router.get("/projects/{pid}/entities")
