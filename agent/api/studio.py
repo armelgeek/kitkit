@@ -318,6 +318,27 @@ def _flow_media_items(raw: dict) -> list[dict]:
     return out
 
 
+def _flow_existing_media_ids(raw: dict) -> set[str]:
+    """Every media id that still lives in a Flow project — raw media[] names, each
+    workflow's primaryMediaId, and uploaded references. Used to detect deletions: a
+    local media id absent from this set was removed on Flow. Includes videos (unlike
+    `_flow_media_items`, which is image-only) so video sync works too."""
+    data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    ids: set[str] = set()
+    for m in (_deep_find(data, "media") or []):
+        if isinstance(m, dict) and m.get("name"):
+            ids.add(m["name"])
+    for w in (_deep_find(data, "workflows") or []):
+        if isinstance(w, dict):
+            mid = (w.get("metadata") or {}).get("primaryMediaId")
+            if mid:
+                ids.add(mid)
+    for e in (_deep_find(data, "externalReferenceMedia") or []):
+        if isinstance(e, dict) and e.get("mediaId"):
+            ids.add(e["mediaId"])
+    return ids
+
+
 @router.get("/flow-projects/{flow_id}/media")
 async def flow_project_media(flow_id: str, images_only: bool = True):
     """Media (ảnh) bên trong một project Flow — để tham chiếu/đồng bộ làm asset."""
@@ -2461,6 +2482,106 @@ async def ensure_media(media_id: str, project_id: str, ext: str = "png"):
     if not web:
         raise HTTPException(404, "Không tải được media")
     return {"path": web}
+
+
+def _media_abs(path: Optional[str]):
+    """Web media path (/media/...) → file trên đĩa, hoặc None nếu rỗng/ngoài kho."""
+    if not path or "/media/" not in path:
+        return None
+    return media_store.MEDIA_DIR / path.replace("/media/", "", 1)
+
+
+@router.post("/projects/{pid}/sync-media")
+async def sync_project_media(pid: str):
+    """Đồng bộ ảnh/video với Flow (Flow là nguồn chuẩn).
+
+    Media nào đã bị xoá trên Flow thì chắc chắn không còn → gỡ tham chiếu ở mục tương
+    ứng (entity / shot ảnh / shot video / các view phụ / lịch sử media) và xoá file cache
+    local. Một media coi là CÒN nếu media_id HOẶC primary_media_id của nó còn trên Flow
+    (đối chiếu rộng để tránh xoá nhầm)."""
+    project = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+    if not project:
+        raise HTTPException(404, "Không tìm thấy project")
+    flow_id = project.get("flow_project_id")
+    if not flow_id:
+        raise HTTPException(400, "Project chưa gắn với project trên Flow")
+
+    client = _require_extension()
+    raw = await client.get_project(flow_id)
+    existing = _flow_existing_media_ids(raw)
+    if not existing:
+        # Không đọc được media nào → có thể lỗi tạm thời. Không xoá gì (tránh phá dữ liệu).
+        raise HTTPException(502, "Không đọc được media từ Flow — thử lại, chưa xoá gì.")
+
+    def present(*ids) -> bool:
+        return any(i in existing for i in ids if i)
+
+    def rm_file(path: Optional[str]) -> None:
+        f = _media_abs(path)
+        if f and f.is_file():
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+    removed: dict = {"entities": [], "shot_images": [], "shot_videos": [],
+                     "extra_views": 0, "history": 0}
+
+    # Entities (ảnh chính + các view phụ trong extra_media)
+    for e in await db.query_all("SELECT * FROM entity WHERE project_id=?", (pid,)):
+        upd: dict = {}
+        if (e.get("media_id") or e.get("primary_media_id")) and \
+                not present(e.get("media_id"), e.get("primary_media_id")):
+            rm_file(e.get("image_path"))
+            upd.update(media_id=None, primary_media_id=None, image_path=None, image_url=None)
+            removed["entities"].append(e.get("name") or e["id"])
+        if e.get("extra_media"):
+            try:
+                views = json.loads(e["extra_media"]) or []
+            except (json.JSONDecodeError, TypeError):
+                views = []
+            kept = [v for v in views if present(v.get("media_id"), v.get("primary_media_id"))]
+            for v in views:
+                if v not in kept:
+                    rm_file(v.get("path"))
+                    removed["extra_views"] += 1
+            if len(kept) != len(views):
+                upd["extra_media"] = json.dumps(kept) if kept else None
+        if upd:
+            upd["updated_at"] = db.now()
+            await db.update("entity", e["id"], upd)
+
+    # Shots (ảnh + video) trong mọi scene của project
+    scenes = await db.query_all("SELECT id FROM scene WHERE project_id=?", (pid,))
+    for sc in scenes:
+        for sh in await db.query_all("SELECT * FROM shot WHERE scene_id=?", (sc["id"],)):
+            upd = {}
+            if (sh.get("image_media_id") or sh.get("image_primary_id")) and \
+                    not present(sh.get("image_media_id"), sh.get("image_primary_id")):
+                rm_file(sh.get("image_path"))
+                upd.update(image_media_id=None, image_primary_id=None,
+                           image_workflow_id=None, image_path=None)
+                removed["shot_images"].append(sh.get("title") or sh["id"])
+            if (sh.get("video_media_id") or sh.get("video_primary_id")) and \
+                    not present(sh.get("video_media_id"), sh.get("video_primary_id")):
+                rm_file(sh.get("video_path"))
+                upd.update(video_media_id=None, video_primary_id=None,
+                           video_workflow_id=None, video_path=None)
+                removed["shot_videos"].append(sh.get("title") or sh["id"])
+            if upd:
+                upd["updated_at"] = db.now()
+                await db.update("shot", sh["id"], upd)
+
+    # Lịch sử media — bỏ các bản đã biến mất khỏi Flow
+    for h in await db.query_all("SELECT * FROM media_history WHERE project_id=?", (pid,)):
+        if not present(h.get("media_id"), h.get("primary_media_id")):
+            rm_file(h.get("path"))
+            await db.delete("media_history", h["id"])
+            removed["history"] += 1
+
+    total = (len(removed["entities"]) + len(removed["shot_images"]) +
+             len(removed["shot_videos"]) + removed["extra_views"] + removed["history"])
+    return {"flow_media": len(existing), "removed": removed, "total_removed": total}
 
 
 # ─── Jobs: realtime batch progress (§9) ─────────────────────

@@ -227,7 +227,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  syncProjectMedia: (pid: string) =>
+    req<SyncMediaResult>(`/projects/${pid}/sync-media`, { method: "POST" }),
 };
+
+export interface SyncMediaResult {
+  flow_media: number;
+  total_removed: number;
+  removed: {
+    entities: string[];
+    shot_images: string[];
+    shot_videos: string[];
+    extra_views: number;
+    history: number;
+  };
+}
 
 export interface FlowMedia {
   media_id: string;
