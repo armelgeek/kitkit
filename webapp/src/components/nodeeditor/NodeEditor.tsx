@@ -243,13 +243,32 @@ function SourceNode({ id, data }: NodeProps) {
 function PromptNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
+  // Local state for the textarea so typing updates synchronously and the caret stays put.
+  // Binding `value` straight to node data round-trips through React Flow's store, which
+  // reverts the value for a frame on each keystroke and jumps the cursor to the end.
+  // We still adopt an external change (re-seed / "Đa dạng góc máy") via the effect below,
+  // distinguished from our own edits by `lastPushed`.
+  const [text, setText] = useState<string>(d.text ?? "");
+  const lastPushed = useRef<string>(d.text ?? "");
+  useEffect(() => {
+    const incoming = d.text ?? "";
+    if (incoming !== lastPushed.current) {
+      setText(incoming);
+      lastPushed.current = incoming;
+    }
+  }, [d.text]);
   return (
     <Shell type="prompt" id={id} inputs={false}>
       <textarea
         className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
-        value={d.text || ""}
+        value={text}
         placeholder="Nhập prompt…"
-        onChange={(e) => update(id, { text: e.target.value })}
+        onChange={(e) => {
+          const v = e.target.value;
+          setText(v);
+          lastPushed.current = v;
+          update(id, { text: v });
+        }}
       />
       <div className="text-[10px] text-neutral-500">ⓘ viết prompt chi tiết để AI hiểu rõ hơn</div>
     </Shell>
