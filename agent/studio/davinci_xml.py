@@ -223,36 +223,38 @@ async def build(project_id: str) -> dict:
         else:
             durs = base
 
-        if sc.get("narration_path"):                 # anchor scene narration at its start
-            audio_segs.append((sc["narration_path"], start_f))
+        scene_start_f = start_f                        # frame where this scene begins
+        if sc.get("narration_path"):                   # anchor scene narration here
+            audio_segs.append((sc["narration_path"], scene_start_f))
 
+        scene_caps = []
         for (sh, path, is_img), dur_s in zip(usable, durs):
             dur_f = max(1, round(dur_s * FPS))
             name = f"clip{_alpha(i)}"
             staged = await asyncio.to_thread(_stage_image_jpg, path, name, dv_dir) if is_img \
                 else _stage(path, name, dv_dir)
             items.append(_clipitem(i, sh.get("title") or f"Shot {i+1}", staged, start_f, dur_f, w, h))
-            # timed keyword captions → FCP7 title track (Studio) + a sibling SRT (works on Free)
             try:
-                caps = json.loads(sh.get("captions") or "[]")
+                scene_caps.extend(json.loads(sh.get("captions") or "[]"))
             except (json.JSONDecodeError, TypeError):
-                caps = []
-            base_t = float(sh.get("start_time") or 0)   # caption times are scene-local
-            clip_start_s = start_f / FPS
-            for c in caps:
-                off = max(0.0, float(c.get("start", 0)) - base_t)
-                cs = start_f + round(off * FPS)
-                cd = max(1, round((float(c.get("end", 0)) - float(c.get("start", 0))) * FPS))
-                cd = min(cd, max(1, start_f + dur_f - cs))  # clamp inside the clip
-                if c.get("text") and cd > 0 and cs < start_f + dur_f:
-                    titles.append(_title_item(tnum, c["text"], cs, cd))
-                    gstart = clip_start_s + off
-                    gend = min((start_f + dur_f) / FPS, gstart + (cd / FPS))
-                    srt.append((gstart, gend, c["text"]))
-                    tnum += 1
+                pass
             start_f += dur_f
             total += dur_f
             i += 1
+        scene_end_f = start_f
+
+        # Captions are timed against the SCENE NARRATION (scene-local seconds), which plays
+        # continuously from scene_start_f — NOT against the scaled image-clip starts. Place
+        # them absolutely so they stay in sync with the audio (same as the burned-in video).
+        for c in scene_caps:
+            cstart, cend = float(c.get("start", 0)), float(c.get("end", 0))
+            cs = scene_start_f + round(cstart * FPS)
+            cd = max(1, round((cend - cstart) * FPS))
+            cd = min(cd, max(1, scene_end_f - cs))     # clamp inside the scene span
+            if c.get("text") and scene_start_f <= cs < scene_end_f:
+                titles.append(_title_item(tnum, c["text"], cs, cd))
+                srt.append((cs / FPS, (cs + cd) / FPS, c["text"]))
+                tnum += 1
 
     if not items:
         raise RuntimeError("Chưa có shot nào có ảnh hoặc video để export")
