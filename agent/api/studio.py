@@ -1431,22 +1431,27 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
 
 
 async def _revary_scene(sid: str) -> int:
-    """Rewrite EXISTING shots' camera (description/visual/motion) for varied angles, keeping
-    order/count/entities/action — and crucially NOT touching narration text, timing or audio.
-    The fast way to fix monotonous framing without re-segmenting or re-running TTS."""
+    """Rewrite EXISTING shots' camera (description/visual/motion) for varied angles AND fix the
+    location/refs — without touching narration text, timing or audio. The fast way to repair a
+    scene (monotonous framing, wrong location, missing/extra entity refs) without re-TTS."""
     scene = await _scene_or_404(sid)
     project = await _project_or_404(scene["project_id"])
     shots = await db.query_all("SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))
     if not shots:
         return 0
-    entities = await db.query_all(
-        "SELECT name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    erows = await db.query_all(
+        "SELECT id, name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    by_name = {_norm(r["name"]): r for r in erows}
+    scene_loc = _match_location_entity(scene["heading"], [r for r in erows if r["type"] == "location"])
+    scene_loc_id = scene_loc["id"] if scene_loc else None
     # Retry the AI step until we get a usable list (covers agent errors, bad JSON AND a
     # valid-but-wrong-shape reply, which run_json's own retry doesn't catch).
     out = None
     for attempt in range(3):
         try:
-            cand = await brain.run_json(brain.revary_shots_prompt(shots, entities, project["style"]))
+            cand = await brain.run_json(brain.revary_shots_prompt(
+                shots, erows, project["style"],
+                location=(scene_loc["name"] if scene_loc else None)))
             if isinstance(cand, list) and cand:
                 out = cand
                 break
@@ -1456,6 +1461,8 @@ async def _revary_scene(sid: str) -> int:
         await asyncio.sleep(1.0 + attempt)
     if not out:
         raise HTTPException(502, "AI không trả về danh sách góc máy (đã thử lại nhiều lần)")
+    if not scene_loc_id:                       # heading matched no entity → keep AI's pick
+        scene_loc_id = _first_location_id(out, by_name)
     mapped: dict[int, dict] = {}
     for pos, o in enumerate(out):
         if not isinstance(o, dict):
@@ -1468,12 +1475,17 @@ async def _revary_scene(sid: str) -> int:
         o = mapped.get(i)
         if not o:
             continue
-        upd = {f: o[f] for f in ("description", "visual_prompt", "motion_prompt")
-               if o.get(f)}
+        upd = {f: o[f] for f in ("description", "visual_prompt", "motion_prompt") if o.get(f)}
         if upd:
+            # Re-resolve refs from the new prompt's {braces}: one location (the scene's) +
+            # every non-location entity actually named.
+            text = " ".join(filter(None, [o.get("description"), o.get("visual_prompt"), o.get("motion_prompt")]))
+            upd["ref_entity_ids"] = json.dumps(_resolve_shot_refs(text, None, by_name, scene_loc_id))
             upd["updated_at"] = db.now()
             await db.update("shot", s["id"], upd)
             n += 1
+    if scene_loc_id:
+        await db.update("scene", sid, {"location_entity_id": scene_loc_id})
     return n
 
 
