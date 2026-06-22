@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -369,7 +370,7 @@ function SourceNode({ id, data }: NodeProps) {
 }
 
 function PromptNode({ id, data }: NodeProps) {
-  const { update } = useContext(NodeOps);
+  const { update, entities } = useContext(NodeOps);
   const d = data as any;
   // Local state for the textarea so typing updates synchronously and the caret stays put.
   // Binding `value` straight to node data round-trips through React Flow's store, which
@@ -378,6 +379,12 @@ function PromptNode({ id, data }: NodeProps) {
   // distinguished from our own edits by `lastPushed`.
   const [text, setText] = useState<string>(d.text ?? "");
   const lastPushed = useRef<string>(d.text ?? "");
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const caretRef = useRef<number | null>(null); // caret to restore after a programmatic insert
+  // Entity autocomplete: open when the caret sits inside an unclosed "{…".
+  const [menu, setMenu] = useState<{ start: number; query: string } | null>(null);
+  const [hi, setHi] = useState(0);
+
   useEffect(() => {
     const incoming = d.text ?? "";
     if (incoming !== lastPushed.current) {
@@ -385,20 +392,93 @@ function PromptNode({ id, data }: NodeProps) {
       lastPushed.current = incoming;
     }
   }, [d.text]);
+
+  useLayoutEffect(() => {
+    if (caretRef.current != null && taRef.current) {
+      taRef.current.selectionStart = taRef.current.selectionEnd = caretRef.current;
+      caretRef.current = null;
+    }
+  });
+
+  // The "{…" being typed right before the caret (no closing "}" / newline in between), else null.
+  const detect = (val: string, caret: number) => {
+    const before = val.slice(0, caret);
+    const brace = before.lastIndexOf("{");
+    if (brace < 0) return null;
+    const between = before.slice(brace + 1);
+    if (/[}{\n]/.test(between)) return null;
+    return { start: brace, query: between };
+  };
+
+  const setAll = (v: string) => {
+    setText(v);
+    lastPushed.current = v;
+    update(id, { text: v });
+  };
+
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value;
+    setAll(v);
+    setMenu(entities.length ? detect(v, e.target.selectionStart ?? v.length) : null);
+    setHi(0);
+  };
+
+  const matches = useMemo(() => {
+    if (!menu) return [];
+    const q = menu.query.trim().toLowerCase();
+    return entities.filter((e) => !q || e.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [menu, entities]);
+
+  // Replace the "{query" with "{Name}" and drop the caret just after the "}".
+  const pick = (name: string) => {
+    if (!menu) return;
+    const caret = taRef.current?.selectionStart ?? text.length;
+    const next = text.slice(0, menu.start) + "{" + name + "}" + text.slice(caret);
+    setAll(next);
+    caretRef.current = menu.start + name.length + 2;
+    setMenu(null);
+    requestAnimationFrame(() => taRef.current?.focus());
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!menu || !matches.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => (h + 1) % matches.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => (h - 1 + matches.length) % matches.length); }
+    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[hi].name); }
+    else if (e.key === "Escape") { e.preventDefault(); setMenu(null); }
+  };
+
   return (
     <Shell type="prompt" id={id} inputs={false}>
-      <textarea
-        className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
-        value={text}
-        placeholder="Nhập prompt…"
-        onChange={(e) => {
-          const v = e.target.value;
-          setText(v);
-          lastPushed.current = v;
-          update(id, { text: v });
-        }}
-      />
-      <div className="text-[10px] text-neutral-500">ⓘ viết prompt chi tiết để AI hiểu rõ hơn</div>
+      <div className="relative">
+        <textarea
+          ref={taRef}
+          className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
+          value={text}
+          placeholder="Nhập prompt…"
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          onBlur={() => setTimeout(() => setMenu(null), 150)}
+        />
+        {menu && matches.length > 0 && (
+          <div className="nodrag nowheel absolute left-0 right-0 top-full z-20 mt-1 max-h-40 overflow-auto rounded-md border border-neutral-700 bg-neutral-900 shadow-xl">
+            {matches.map((e, i) => (
+              <button
+                key={e.id}
+                type="button"
+                onMouseDown={(ev) => { ev.preventDefault(); pick(e.name); }}
+                className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] ${
+                  i === hi ? "bg-indigo-600 text-white" : "text-neutral-300 hover:bg-neutral-800"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${e.media_id ? "bg-emerald-400" : "bg-neutral-600"}`} />
+                <span className="truncate">{e.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="text-[10px] text-neutral-500">{'ⓘ gõ "{" để chèn tên entity'}</div>
     </Shell>
   );
 }
