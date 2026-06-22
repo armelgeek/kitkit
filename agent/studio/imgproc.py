@@ -198,6 +198,103 @@ def vignette(img, d: dict):
     return Image.blend(img, faded, strength)
 
 
+def _mul_channels(img, rf: float, gf: float, bf: float):
+    r, g, b = img.split()
+    r = r.point(lambda v: min(255, int(v * rf)))
+    g = g.point(lambda v: min(255, int(v * gf)))
+    b = b.point(lambda v: min(255, int(v * bf)))
+    from PIL import Image
+    return Image.merge("RGB", (r, g, b))
+
+
+# preset -> (channel mults, saturation, contrast, brightness)
+_GRADE = {
+    "warm": ((1.10, 1.02, 0.90), 1.05, 1.03, 1.0),
+    "cold": ((0.92, 1.0, 1.12), 1.05, 1.03, 1.0),
+    "teal_orange": ((1.08, 1.0, 0.96), 1.12, 1.12, 1.0),
+    "vintage": ((1.06, 1.0, 0.90), 0.7, 0.92, 1.03),
+    "noir": ((1.0, 1.0, 1.0), 0.0, 1.28, 1.0),
+    "vibrant": ((1.0, 1.0, 1.0), 1.45, 1.12, 1.0),
+    "muted": ((1.0, 1.0, 1.0), 0.6, 0.95, 1.02),
+}
+
+
+def color_grade(img, d: dict):
+    """Cinematic colour preset. d.preset ∈ warm/cold/teal_orange/vintage/noir/vibrant/muted.
+    d.intensity (0–1) blends the graded look back toward the original."""
+    from PIL import Image, ImageEnhance
+
+    img = img.convert("RGB")
+    preset = (d.get("preset") or "teal_orange").lower()
+    mults, sat, con, bri = _GRADE.get(preset, _GRADE["teal_orange"])
+    graded = _mul_channels(img, *mults)
+    if abs(sat - 1.0) > 1e-3:
+        graded = ImageEnhance.Color(graded).enhance(sat)
+    if abs(con - 1.0) > 1e-3:
+        graded = ImageEnhance.Contrast(graded).enhance(con)
+    if abs(bri - 1.0) > 1e-3:
+        graded = ImageEnhance.Brightness(graded).enhance(bri)
+    intensity = _clamp(d.get("intensity", 1.0), 0.0, 1.0, 1.0)
+    if intensity < 0.999:
+        graded = Image.blend(img, graded, intensity)
+    return graded
+
+
+def collage(imgs: list, d: dict):
+    """Arrange images in a grid. d.cols (auto = ceil(sqrt n)), d.gap (px), d.bg (#hex). Each
+    cell is filled cover-style (ImageOps.fit) using the first image's size as the cell."""
+    import math
+
+    from PIL import Image, ImageOps
+
+    imgs = [im.convert("RGB") for im in imgs if im is not None]
+    n = len(imgs)
+    if n == 0:
+        raise ValueError("collage: no images")
+    if n == 1:
+        return imgs[0]
+    cols = int(_clamp(d.get("cols", 0), 0, 8, 0)) or max(1, math.ceil(math.sqrt(n)))
+    rows = math.ceil(n / cols)
+    cw, ch = imgs[0].size
+    gap = int(_clamp(d.get("gap", 8), 0, 200, 8))
+    bg = d.get("bg") or "#000000"
+    W = cols * cw + gap * (cols + 1)
+    H = rows * ch + gap * (rows + 1)
+    canvas = Image.new("RGB", (W, H), bg)
+    for i, im in enumerate(imgs):
+        cell = ImageOps.fit(im, (cw, ch), method=Image.LANCZOS)
+        r, c = divmod(i, cols)
+        x = gap + c * (cw + gap)
+        y = gap + r * (ch + gap)
+        canvas.paste(cell, (x, y))
+    return canvas
+
+
+def watermark(base, logo, d: dict):
+    """Overlay `logo` onto `base` at a corner. d.scale = logo width as fraction of base width
+    (0.05–0.5), d.opacity (0–1), d.position (top-left/top-right/bottom-left/bottom-right/
+    center), d.margin (fraction of base width)."""
+    from PIL import Image
+
+    base = base.convert("RGBA")
+    logo = logo.convert("RGBA")
+    W, H = base.size
+    scale = _clamp(d.get("scale", 0.18), 0.03, 0.6, 0.18)
+    lw = max(1, int(W * scale))
+    lh = max(1, int(logo.height * lw / logo.width))
+    logo = logo.resize((lw, lh), Image.LANCZOS)
+    opacity = _clamp(d.get("opacity", 0.85), 0.05, 1.0, 0.85)
+    if opacity < 0.999:
+        alpha = logo.split()[3].point(lambda v: int(v * opacity))
+        logo.putalpha(alpha)
+    m = int(W * _clamp(d.get("margin", 0.03), 0.0, 0.2, 0.03))
+    pos = (d.get("position") or "bottom-right").lower()
+    x = m if "left" in pos else (W - lw) // 2 if "center" in pos else W - lw - m
+    y = m if "top" in pos else (H - lh) // 2 if "center" in pos else H - lh - m
+    base.alpha_composite(logo, (max(0, x), max(0, y)))
+    return base.convert("RGB")
+
+
 def blend(img_a, img_b, d: dict):
     """Combine two images. mode 'alpha' = cross-fade (alpha 0–1, b over a); mode 'side' =
     place side by side (horizontal) on matched height."""

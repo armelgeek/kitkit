@@ -121,9 +121,11 @@ _GRAPH_VID_RETRIES = 2
 
 # Node types that PRODUCE media (so they support lock/reuse + refresh on propagate). The
 # local-processing ones (filter/text/upscale/blend) run with Pillow then re-upload to Flow.
-_GEN_TYPES = ("image", "editImage", "removebg", "video",
-              "filter", "text", "upscale", "blend", "crop", "vignette", "border")
-_LOCAL_TYPES = ("filter", "text", "upscale", "blend", "crop", "vignette", "border")
+_GEN_TYPES = ("image", "editImage", "removebg", "replacebg", "video",
+              "filter", "text", "upscale", "blend", "crop", "vignette", "border",
+              "colorgrade", "collage", "watermark")
+_LOCAL_TYPES = ("filter", "text", "upscale", "blend", "crop", "vignette", "border",
+                "colorgrade", "collage", "watermark")
 
 
 def _deep_find(obj, key):
@@ -240,17 +242,26 @@ async def _save_and_upload(img, pid: str, flow_pid: str) -> tuple[str, str]:
 async def _run_local_node(t: str, data: dict, inp: dict, pid: str):
     """Produce a PIL image for a local-processing node (filter/text/upscale/blend) from its
     upstream image(s). Raises GraphError with a clear message if inputs are missing."""
-    if t == "blend":
+    # multi-input nodes read the distinct upstream images (in connection order)
+    if t in ("blend", "watermark", "collage"):
         seen: list[str] = []
         for r in inp.get("references", []):
             mid = r.get("media_id")
             if mid and mid not in seen:
                 seen.append(mid)
+        if t == "collage":
+            if len(seen) < 2:
+                raise GraphError("Node Ghép lưới cần ít nhất 2 ảnh đầu vào.")
+            imgs = [await _load_local_image(m, pid) for m in seen]
+            return await asyncio.to_thread(imgproc.collage, imgs, data)
         if len(seen) < 2:
-            raise GraphError("Node Ghép/Blend cần 2 ảnh đầu vào (nối 2 nguồn ảnh).")
+            raise GraphError(
+                "Node Ghép/Blend cần 2 ảnh đầu vào." if t == "blend"
+                else "Node Watermark cần 2 ảnh: nối ảnh nền TRƯỚC, logo SAU.")
         a = await _load_local_image(seen[0], pid)
         b = await _load_local_image(seen[1], pid)
-        return await asyncio.to_thread(imgproc.blend, a, b, data)
+        fn = imgproc.blend if t == "blend" else imgproc.watermark
+        return await asyncio.to_thread(fn, a, b, data)
 
     src = inp.get("media_id")
     if not src:
@@ -266,6 +277,8 @@ async def _run_local_node(t: str, data: dict, inp: dict, pid: str):
         return await asyncio.to_thread(imgproc.vignette, img, data)
     if t == "border":
         return await asyncio.to_thread(imgproc.border, img, data)
+    if t == "colorgrade":
+        return await asyncio.to_thread(imgproc.color_grade, img, data)
     if t == "text":
         font = await asyncio.to_thread(assembler._caption_font)
         return await asyncio.to_thread(imgproc.overlay_text, img, data, font)
@@ -508,6 +521,34 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 prompt, src, flow_pid, aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"]), pid, exclude=src)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+
+        elif t == "replacebg":
+            # AI background SWAP with a background IMAGE: composite the subject (1st input) onto
+            # the background scene (2nd input) via a 2-reference generate. Order = subject, bg.
+            seen_rb: list[dict] = []
+            ids_rb: set[str] = set()
+            for r in inp["references"]:
+                if r.get("media_id") and r["media_id"] not in ids_rb:
+                    seen_rb.append({"handle": r.get("handle", "ref"), "media_id": r["media_id"]})
+                    ids_rb.add(r["media_id"])
+            if len(seen_rb) < 2:
+                raise GraphError("Thay nền (ảnh) cần 2 ảnh: chủ thể TRƯỚC, ảnh nền SAU.")
+            seen_rb[0]["handle"], seen_rb[1]["handle"] = "subject", "background"
+            extra = (inp["text"] or data.get("text") or "").strip()
+            rb_prompt = (
+                "Composite the SUBJECT from the first reference image onto the BACKGROUND scene "
+                "from the second reference image. Keep the subject's identity, pose and colours "
+                "intact; match the subject's lighting, perspective and scale to the new "
+                "background for a believable result. " + extra).strip()
+            mid, web = await _img_gen_retry(lambda: client.generate_images(
+                prompt=brain.compose_prompt(project, rb_prompt),
+                project_id=flow_pid, aspect_ratio=_img_aspect(project, data),
+                user_paygate_tier=project["paygate_tier"],
+                references=seen_rb[:10], image_model=_img_model(project, data)), pid)
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+
+        elif t == "note":
+            pass  # a canvas comment/label — produces nothing, ignored by the executor
 
         elif t == "video":
             prompt = inp["text"] or data.get("text") or ""

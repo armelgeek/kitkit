@@ -2395,6 +2395,40 @@ async def upload_image(pid: str, file: UploadFile = File(...)):
     return {"media_id": mid, "web": f"/media/{rel}", "name": file.filename or mid}
 
 
+class SaveTemplateRequest(BaseModel):
+    name: str
+    goal: Optional[str] = None
+    graph: dict
+
+
+@router.get("/graph-templates")
+async def list_graph_templates():
+    """Các preset (template) sơ đồ node đã lưu — tái dùng nhanh giữa các shot/asset."""
+    return {"templates": await db.kv_get("graph_templates", []) or []}
+
+
+@router.post("/graph-templates")
+async def save_graph_template(body: SaveTemplateRequest):
+    """Lưu sơ đồ node hiện tại thành preset (ghi đè nếu trùng tên)."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Thiếu tên preset")
+    templates = await db.kv_get("graph_templates", []) or []
+    templates = [t for t in templates if t.get("name") != name]
+    templates.append({"id": db.new_id(), "name": name, "goal": body.goal,
+                      "graph": body.graph, "created_at": db.now()})
+    await db.kv_set("graph_templates", templates)
+    return {"templates": templates}
+
+
+@router.delete("/graph-templates/{tid}")
+async def delete_graph_template(tid: str):
+    templates = await db.kv_get("graph_templates", []) or []
+    templates = [t for t in templates if t.get("id") != tid]
+    await db.kv_set("graph_templates", templates)
+    return {"templates": templates}
+
+
 class ApplyMediaRequest(BaseModel):
     media_id: str
     ext: str = "png"

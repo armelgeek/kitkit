@@ -414,7 +414,24 @@ export const graphApi = {
       method: "POST",
       body: JSON.stringify({ media_id, ext }),
     }),
+  // Reusable node-graph presets (templates), shared across shots/assets.
+  listTemplates: () => req<{ templates: GraphTemplate[] }>(`/graph-templates`),
+  saveTemplate: (name: string, graph: any, goal?: string) =>
+    req<{ templates: GraphTemplate[] }>(`/graph-templates`, {
+      method: "POST",
+      body: JSON.stringify({ name, graph, goal }),
+    }),
+  deleteTemplate: (id: string) =>
+    req<{ templates: GraphTemplate[] }>(`/graph-templates/${id}`, { method: "DELETE" }),
 };
+
+export interface GraphTemplate {
+  id: string;
+  name: string;
+  goal?: string | null;
+  graph: { nodes: any[]; edges: any[] };
+  created_at?: string;
+}
 
 export const assemble = {
   build: (pid: string) =>
