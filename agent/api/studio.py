@@ -1362,34 +1362,44 @@ async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
                      speed: float = 1.0, gap: float = 0.0) -> tuple[str, list[float]]:
     """TTS each beat's text as its OWN continuous read, then concat them into the scene WAV
     with `gap` seconds of silence between beats (a natural breath at each beat boundary).
-    Returns (web_path, [per-beat READ durations] — excluding the trailing gap). One read per
-    beat keeps the emotion within each visual unit AND gives the EXACT spoken time each beat
-    occupies, so images + subtitles land on the narration. Raises if OmniVoice is unreachable
-    (caller falls back to a word-count estimate)."""
-    chunks, durs = [], []
+    Returns (web_path, [per-beat READ durations] — one per input text, excluding the trailing
+    gap). One read per beat keeps the emotion within each visual unit AND gives the EXACT
+    spoken time each beat occupies, so images + subtitles land on the narration.
+
+    Fault-tolerant: a beat whose TTS fails becomes a silence of its estimated length (so the
+    rest of the scene's real audio is still saved + stays aligned). Raises only if EVERY beat
+    failed (caller then falls back to a word-count estimate for the whole scene)."""
+    pieces: list[tuple[bytes | None, float]] = []   # (audio | None for failed, read seconds)
+    template: bytes | None = None                   # a real WAV to clone silence params from
     for txt in texts:
-        norm = vntext.normalize(txt) or txt
-        if not norm.strip():
+        norm = (vntext.normalize(txt) or txt).strip()
+        if not norm:
+            pieces.append((None, 0.8))
             continue
-        audio = await _tts_one(norm, voice_id, speed)
-        chunks.append(audio)
-        durs.append(round(_wav_bytes_duration(audio), 3))
-    if not chunks:
+        try:
+            audio = await _tts_one(norm, voice_id, speed)
+        except Exception as e:  # noqa: BLE001 — one bad beat must not sink the whole scene
+            logger.warning("beat TTS lỗi, ước lượng beat này: %s", e)
+            audio = None
+        if audio:
+            template = template or audio
+            pieces.append((audio, round(_wav_bytes_duration(audio), 3)))
+        else:
+            pieces.append((None, max(0.8, round(_estimate_narration_secs(norm), 3))))
+    if template is None:
         raise HTTPException(502, "Không tạo được audio cho beat nào")
-    # weave a silence pad between consecutive beats (not after the last one)
-    if gap > 0 and len(chunks) > 1:
-        sil = _silence_wav_bytes(chunks[0], gap)
-        woven = []
-        for k, ch in enumerate(chunks):
-            woven.append(ch)
-            if k < len(chunks) - 1:
-                woven.append(sil)
-        chunks = woven
+    # Assemble: real audio where we have it, silence (estimated length) for failed beats, and
+    # a gap pad between consecutive beats (not after the last one).
+    out: list[bytes] = []
+    for k, (audio, dur) in enumerate(pieces):
+        out.append(audio if audio is not None else _silence_wav_bytes(template, dur))
+        if gap > 0 and k < len(pieces) - 1:
+            out.append(_silence_wav_bytes(template, gap))
     rel = f"{pid}/narr_scene_{scene_id}.wav"
     dest = media_store.MEDIA_DIR / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(_concat_wav_bytes, chunks, dest)
-    return f"/media/{rel}", durs
+    await asyncio.to_thread(_concat_wav_bytes, out, dest)
+    return f"/media/{rel}", [dur for _, dur in pieces]
 
 
 @router.post("/scenes/{sid}/beats")
