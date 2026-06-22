@@ -12,6 +12,7 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
+  MiniMap,
   Handle,
   Position,
   addEdge,
@@ -940,6 +941,13 @@ function Editor({
   const [genningId, setGenningId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<GraphTemplate[]>([]);
   const [presetSel, setPresetSel] = useState("");
+  // Undo/redo history of durable graph snapshots (structure + settings + positions),
+  // ignoring transient run-result previews so a generation doesn't pollute history.
+  const histRef = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const histIdx = useRef(-1);
+  const lastSig = useRef("");
+  const skipHist = useRef(false);
+  const [histVer, setHistVer] = useState(0);
 
   // Thick edges + arrow markers; edges touching the active node animate (marching arrows)
   // so connections are easy to follow on a touch screen.
@@ -991,6 +999,76 @@ function Editor({
     },
     [setNodes]
   );
+
+  // ── Undo / redo ──
+  // A signature of the DURABLE graph (ignores transient previews) so result injections
+  // don't create history entries; positions are rounded so a drag = one coalesced entry.
+  const sigOf = useCallback((ns: Node[], es: Edge[]) => {
+    const strip = (d: any) => {
+      const { _result, _ext, preview, result_media_id, result_web, result_ext, ...r } = d || {};
+      return r;
+    };
+    return JSON.stringify({
+      n: ns.map((n) => ({ id: n.id, t: n.type, x: Math.round(n.position.x),
+                          y: Math.round(n.position.y), d: strip(n.data) })),
+      e: es.map((e) => ({ s: e.source, t: e.target })),
+    });
+  }, []);
+
+  useEffect(() => {
+    const tid = setTimeout(() => {
+      const sig = sigOf(nodes, edges);
+      if (skipHist.current) {        // change came from an undo/redo restore — don't re-record
+        skipHist.current = false;
+        lastSig.current = sig;
+        return;
+      }
+      if (sig === lastSig.current) return;
+      lastSig.current = sig;
+      const snap = {
+        nodes: nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data } })),
+        edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+      };
+      histRef.current = histRef.current.slice(0, histIdx.current + 1);
+      histRef.current.push(snap);
+      if (histRef.current.length > 60) histRef.current.shift();
+      histIdx.current = histRef.current.length - 1;
+      setHistVer((v) => v + 1);
+    }, 350);
+    return () => clearTimeout(tid);
+  }, [nodes, edges, sigOf]);
+
+  const restoreHist = useCallback(
+    (idx: number) => {
+      const s = histRef.current[idx];
+      if (!s) return;
+      histIdx.current = idx;
+      skipHist.current = true;
+      setNodes(s.nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data } })));
+      setEdges(s.edges.map((e) => ({ ...e })));
+      setHistVer((v) => v + 1);
+    },
+    [setNodes, setEdges]
+  );
+  const undo = useCallback(() => restoreHist(histIdx.current - 1), [restoreHist]);
+  const redo = useCallback(() => restoreHist(histIdx.current + 1), [restoreHist]);
+  const canUndo = histIdx.current > 0;
+  const canRedo = histIdx.current < histRef.current.length - 1;
+  void histVer; // re-render trigger for the disabled state above
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable)
+        return; // let inputs do their own text undo
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   useEffect(() => {
     api.options().then((o) => setImageModels(o.image_models || [])).catch(() => {});
@@ -1211,6 +1289,43 @@ function Editor({
     },
     [rf, projectId, setNodes, update]
   );
+
+  // Auto-arrange nodes left→right by topological layer (longest-path depth), stacked within
+  // each layer. Untouched media/results — only positions change. Then fit the view.
+  const autoLayout = useCallback(() => {
+    const indeg = new Map(nodes.map((n) => [n.id, 0]));
+    const adj = new Map<string, string[]>(nodes.map((n) => [n.id, []]));
+    for (const e of edges) {
+      if (indeg.has(e.source) && indeg.has(e.target)) {
+        adj.get(e.source)!.push(e.target);
+        indeg.set(e.target, (indeg.get(e.target) || 0) + 1);
+      }
+    }
+    const layer = new Map<string, number>();
+    const ind = new Map(indeg);
+    const queue = [...indeg].filter(([, d]) => d === 0).map(([id]) => id);
+    queue.forEach((id) => layer.set(id, 0));
+    while (queue.length) {
+      const id = queue.shift()!;
+      const l = layer.get(id) || 0;
+      for (const t of adj.get(id) || []) {
+        layer.set(t, Math.max(layer.get(t) ?? 0, l + 1));
+        ind.set(t, (ind.get(t) || 0) - 1);
+        if ((ind.get(t) || 0) === 0) queue.push(t);
+      }
+    }
+    const byLayer = new Map<number, string[]>();
+    for (const n of nodes) {
+      const l = layer.get(n.id) ?? 0; // cycle leftovers → layer 0
+      (byLayer.get(l) || byLayer.set(l, []).get(l)!).push(n.id);
+    }
+    const COLW = 300, ROWH = 200;
+    const pos = new Map<string, { x: number; y: number }>();
+    for (const [l, ids] of byLayer)
+      ids.forEach((id, i) => pos.set(id, { x: l * COLW, y: i * ROWH }));
+    setNodes((ns) => ns.map((n) => (pos.has(n.id) ? { ...n, position: pos.get(n.id)! } : n)));
+    setTimeout(() => rf.fitView({ padding: 0.2, duration: 300 }), 60);
+  }, [nodes, edges, setNodes, rf]);
 
   // ── Graph presets (templates) — reuse a chain across shots/assets ──
   const saveAsPreset = async () => {
@@ -1448,6 +1563,20 @@ function Editor({
         <div className="ml-auto flex items-center gap-2">
           {done && <span className="text-xs text-emerald-400">✓ Đã tạo & áp dụng</span>}
           <div className="flex items-center gap-1">
+            <button onClick={undo} disabled={!canUndo} title="Hoàn tác (Ctrl+Z)"
+              className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800 disabled:opacity-30">
+              ↶
+            </button>
+            <button onClick={redo} disabled={!canRedo} title="Làm lại (Ctrl+Shift+Z)"
+              className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800 disabled:opacity-30">
+              ↷
+            </button>
+            <button onClick={autoLayout} title="Tự sắp xếp node theo luồng"
+              className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800">
+              ⤢ Sắp xếp
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
             <select
               value={presetSel}
               onChange={(e) => { setPresetSel(e.target.value); if (e.target.value) loadPreset(e.target.value); }}
@@ -1519,6 +1648,13 @@ function Editor({
           >
             <Background gap={20} color="#1f2937" />
             <Controls />
+            <MiniMap
+              pannable
+              zoomable
+              nodeColor={(n) => META[(n.type as string) || "output"]?.color || "#64748b"}
+              maskColor="rgba(0,0,0,0.6)"
+              style={{ background: "#0e1411", border: "1px solid #1f2937" }}
+            />
           </ReactFlow>
         </NodeOps.Provider>
       </div>
