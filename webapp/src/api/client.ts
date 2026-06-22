@@ -17,6 +17,7 @@ export interface Project {
   shot_duration?: number | null;
   tts_speed?: number | null;
   tts_gap?: number | null;
+  tts_sentence_gap?: number | null;
   seed?: number | null;
   prompt_header?: string | null;
   prompt_footer?: string | null;

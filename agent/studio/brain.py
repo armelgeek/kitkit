@@ -410,7 +410,7 @@ def partition_text(text: str, n: int) -> list[str]:
 
 
 def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
-                         location: str | None = None) -> str:
+                         location: str | None = None, target_beats: int | None = None) -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
     verbatim CONTIGUOUS slice of the voiceover (in order, concatenating back to the whole),
     so each beat's share of the audio time can be derived from its word count. Also pick the
@@ -435,11 +435,21 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
             "No location entity yet — invent ONE consistent place name in curly braces and "
             "reuse it for every beat."
         )
+    count_line = (
+        f"Aim for ABOUT {target_beats} beats (so each on-screen image lasts roughly 8 seconds "
+        "of narration — short enough that the visuals keep changing and the viewer stays "
+        "engaged). Split at natural sentence/clause boundaries; a beat is usually 1–2 "
+        "sentences. Prefer MORE, SHORTER beats over a few long ones."
+        if target_beats else
+        "Each beat should cover roughly one short on-screen moment (about 1–2 sentences); "
+        "prefer more, shorter beats over a few long ones so the visuals keep changing."
+    )
     return (
         "Split this scene VOICEOVER into visual BEATS (one beat = one on-screen moment). "
         "Do NOT rewrite the narration — each beat's `text` MUST be a verbatim, contiguous "
         "slice of the voiceover, and the slices in order MUST concatenate back to the whole "
         "voiceover (no gaps, no overlaps).\n"
+        f"{count_line}\n"
         f"{loc_line}\n\n"
         "For each beat return:\n"
         "- `text`: the verbatim voiceover slice for this beat.\n"

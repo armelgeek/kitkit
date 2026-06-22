@@ -120,6 +120,9 @@ _MIGRATIONS = [
     # Silent breathing pause inserted between beats in the scene narration (seconds). Also the
     # room a cross-dissolve has to land in; set ~1s (24f) for a full dissolve in silence.
     ("project", "tts_gap", "REAL DEFAULT 0.4"),
+    # Silent pause inserted between SENTENCES within a beat (seconds). Sentences are read one
+    # at a time so the engine pauses at every '.'/'?'/'!' — this is the breath between them.
+    ("project", "tts_sentence_gap", "REAL DEFAULT 0.3"),
     # Seed-lock: when set, image generation reuses this seed (reproducible). NULL = random.
     ("project", "seed", "INTEGER"),
     # A shot has two independent node graphs: graph_json = the storyboard IMAGE graph,

@@ -66,6 +66,7 @@ class UpdateProjectRequest(BaseModel):
     bgm_duck: Optional[bool] = None
     tts_speed: Optional[float] = None
     tts_gap: Optional[float] = None
+    tts_sentence_gap: Optional[float] = None
     seed: Optional[int] = None
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
@@ -1359,47 +1360,66 @@ def _silence_wav_bytes(template: bytes, seconds: float) -> bytes:
 
 
 async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
-                     speed: float = 1.0, gap: float = 0.0) -> tuple[str, list[float]]:
-    """TTS each beat's text as its OWN continuous read, then concat them into the scene WAV
-    with `gap` seconds of silence between beats (a natural breath at each beat boundary).
-    Returns (web_path, [per-beat READ durations] — one per input text, excluding the trailing
-    gap). One read per beat keeps the emotion within each visual unit AND gives the EXACT
-    spoken time each beat occupies, so images + subtitles land on the narration.
+                     speed: float = 1.0, gap: float = 0.0,
+                     sentence_gap: float = 0.0) -> tuple[str, list[float]]:
+    """TTS each beat SENTENCE-BY-SENTENCE, then concat into one scene WAV with two levels of
+    breathing silence: `sentence_gap` between sentences WITHIN a beat, and the larger `gap`
+    between beats. Reading per sentence forces a real pause at every '.'/'!'/'?' (the engine
+    otherwise runs sentences together, which is exhausting to listen to).
 
-    Fault-tolerant: a beat whose TTS fails becomes a silence of its estimated length (so the
-    rest of the scene's real audio is still saved + stays aligned). Raises only if EVERY beat
-    failed (caller then falls back to a word-count estimate for the whole scene)."""
-    pieces: list[tuple[bytes | None, float]] = []   # (audio | None for failed, read seconds)
-    template: bytes | None = None                   # a real WAV to clone silence params from
+    Returns (web_path, [per-beat READ durations] — the full spoken span of each beat incl. its
+    internal sentence gaps, EXCLUDING the trailing inter-beat gap). So images + subtitles land
+    on the narration.
+
+    Fault-tolerant: a sentence whose TTS fails becomes a silence of its estimated length (the
+    rest of the scene's real audio is still saved + stays aligned). Raises only if EVERY
+    sentence failed (caller then falls back to a word-count estimate for the whole scene)."""
+    # 1) synthesize every sentence of every beat (grouped per beat), tolerating failures.
+    beat_pieces: list[list[tuple[bytes | None, float]]] = []  # per beat: [(audio|None, secs)]
+    template: bytes | None = None                             # a real WAV → silence params
     for txt in texts:
         norm = (vntext.normalize(txt) or txt).strip()
-        if not norm:
-            pieces.append((None, 0.8))
+        sents = vntext.sentences(norm) if norm else []
+        if not sents:                                         # empty beat → a short silence
+            beat_pieces.append([(None, 0.8)])
             continue
-        try:
-            audio = await _tts_one(norm, voice_id, speed)
-        except Exception as e:  # noqa: BLE001 — one bad beat must not sink the whole scene
-            logger.warning("beat TTS lỗi, ước lượng beat này: %s", e)
-            audio = None
-        if audio:
-            template = template or audio
-            pieces.append((audio, round(_wav_bytes_duration(audio), 3)))
-        else:
-            pieces.append((None, max(0.8, round(_estimate_narration_secs(norm), 3))))
+        sent_pieces: list[tuple[bytes | None, float]] = []
+        for s in sents:
+            try:
+                audio = await _tts_one(s, voice_id, speed)
+            except Exception as e:  # noqa: BLE001 — one bad sentence must not sink the scene
+                logger.warning("câu TTS lỗi, ước lượng câu này: %s", e)
+                audio = None
+            if audio:
+                template = template or audio
+                sent_pieces.append((audio, round(_wav_bytes_duration(audio), 3)))
+            else:
+                sent_pieces.append((None, max(0.6, round(_estimate_narration_secs(s), 3))))
+        beat_pieces.append(sent_pieces)
     if template is None:
-        raise HTTPException(502, "Không tạo được audio cho beat nào")
-    # Assemble: real audio where we have it, silence (estimated length) for failed beats, and
-    # a gap pad between consecutive beats (not after the last one).
+        raise HTTPException(502, "Không tạo được audio cho câu nào")
+    # 2) assemble. Within a beat: sentence audio + sentence_gap between sentences. Between
+    #    beats: the larger gap (not after the last beat). A beat's READ = sum of its sentence
+    #    durations + its internal sentence gaps.
     out: list[bytes] = []
-    for k, (audio, dur) in enumerate(pieces):
-        out.append(audio if audio is not None else _silence_wav_bytes(template, dur))
-        if gap > 0 and k < len(pieces) - 1:
+    reads: list[float] = []
+    n = len(beat_pieces)
+    for bi, sent_pieces in enumerate(beat_pieces):
+        read = 0.0
+        for si, (audio, dur) in enumerate(sent_pieces):
+            out.append(audio if audio is not None else _silence_wav_bytes(template, dur))
+            read += dur
+            if sentence_gap > 0 and si < len(sent_pieces) - 1:
+                out.append(_silence_wav_bytes(template, sentence_gap))
+                read += sentence_gap
+        reads.append(round(read, 3))
+        if gap > 0 and bi < n - 1:
             out.append(_silence_wav_bytes(template, gap))
     rel = f"{pid}/narr_scene_{scene_id}.wav"
     dest = media_store.MEDIA_DIR / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     await asyncio.to_thread(_concat_wav_bytes, out, dest)
-    return f"/media/{rel}", [dur for _, dur in pieces]
+    return f"/media/{rel}", reads
 
 
 @router.post("/scenes/{sid}/beats")
@@ -1442,9 +1462,12 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     # 2) segment the verbatim narration into visual beats (AI = visual structure + key
     #    phrases). The SPOKEN text per beat is re-derived verbatim from the narration so the
     #    audio always covers the whole scene in order — no AI drift, no dropped sentences.
+    # ~8s of narration per beat → an image change every ~8s (keeps the video from going
+    # stale on one still). Target count drives the AI; partition_text caps it at sentence count.
+    target_beats = max(1, round(_estimate_narration_secs(voiceover) / 8.0))
     beats = await brain.run_json(brain.scene_segment_prompt(
         voiceover, erows, project["style"],
-        location=(scene_loc["name"] if scene_loc else None)))
+        location=(scene_loc["name"] if scene_loc else None), target_beats=target_beats))
     if not isinstance(beats, list) or not beats:
         beats = [{"description": scene["heading"], "ref_entity_names": [], "key_phrases": []}]
     if not scene_loc_id:                      # heading matched no entity → use the AI's pick
@@ -1461,11 +1484,14 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     voice_id = project.get("voice_id") or 0
     speed = float(project.get("tts_speed") or 1.0)
     gap = min(max(float(project.get("tts_gap") if project.get("tts_gap") is not None else 0.4), 0.0), 2.0)
+    sentence_gap = min(max(
+        float(project.get("tts_sentence_gap") if project.get("tts_sentence_gap") is not None else 0.3),
+        0.0), 1.0)
     narr_web, reads = None, None
     if body.measure and any(b.get("_say") for b in beats):
         try:
             narr_web, reads = await _tts_beats(
-                [b["_say"] for b in beats], voice_id, project["id"], sid, speed, gap)
+                [b["_say"] for b in beats], voice_id, project["id"], sid, speed, gap, sentence_gap)
         except HTTPException as e:
             logger.warning("beat TTS unavailable (%s) — dùng ước lượng theo số từ", e.detail)
         except Exception as e:  # noqa: BLE001

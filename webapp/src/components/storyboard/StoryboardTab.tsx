@@ -215,6 +215,42 @@ export default function StoryboardTab({
     setPlaying(sc.id);
   };
 
+  // Play / stop ONE shot's slice of the scene WAV (nghe thử lời đọc của shot này).
+  // The scene WAV concatenates all beats; this shot starts at sh.start_time and runs
+  // for sh.narration_duration (read + trailing gap), so we seek + stop at the boundary.
+  const toggleShotAudio = (sc: Scene, sh: Shot) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (playing === sh.id || !sc.narration_path) {
+      setPlaying(null);
+      return;
+    }
+    const start = sh.start_time || 0;
+    const end = start + (sh.narration_duration || 0);
+    const a = new Audio(sc.narration_path);
+    const stop = () => {
+      a.pause();
+      if (audioRef.current === a) audioRef.current = null;
+      setPlaying(null);
+    };
+    a.onloadedmetadata = () => {
+      a.currentTime = start;
+    };
+    a.ontimeupdate = () => {
+      if (end > start && a.currentTime >= end) stop();
+    };
+    a.onended = stop;
+    a.onerror = () => {
+      stop();
+      setErr("Không phát được audio shot.");
+    };
+    void a.play();
+    audioRef.current = a;
+    setPlaying(sh.id);
+  };
+
   // Audio status of a scene: measured = real TTS WAV exists; else estimate from beats.
   const sceneAudio = (sc: Scene) => {
     const list = shotsByScene[sc.id] || [];
@@ -618,23 +654,37 @@ export default function StoryboardTab({
                     }}
                     title="Kéo để đổi thứ tự shot"
                   >
-                  {(sh.narrator_text || sh.narration_duration != null) && (
-                    <span
-                      title={
-                        (sh.narrator_text ? `Lời đọc: "${sh.narrator_text}"\n` : "") +
-                        (sc.narration_path
-                          ? `Audio TTS thật (${(sh.narration_duration || 0).toFixed(1)}s)`
-                          : `Ước lượng ${(sh.narration_duration || 0).toFixed(1)}s — chưa có audio thật`)
-                      }
-                      className={`absolute left-1.5 top-1.5 z-10 rounded px-1 py-0.5 text-[10px] ${
-                        sc.narration_path
-                          ? "bg-emerald-600/85 text-white"
-                          : "bg-amber-600/80 text-white"
-                      }`}
-                    >
-                      {sc.narration_path ? "🔊" : "⏱"} {(sh.narration_duration || 0).toFixed(1)}s
-                    </span>
-                  )}
+                  {(sh.narrator_text || sh.narration_duration != null) &&
+                    (sc.narration_path ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleShotAudio(sc, sh);
+                        }}
+                        title={
+                          (sh.narrator_text ? `Lời đọc: "${sh.narrator_text}"\n` : "") +
+                          `Nghe thử shot này (${(sh.narration_duration || 0).toFixed(1)}s)`
+                        }
+                        className={`absolute left-1.5 top-1.5 z-10 flex items-center gap-1 rounded px-1 py-0.5 text-[10px] transition-colors ${
+                          playing === sh.id
+                            ? "bg-rose-600/90 text-white"
+                            : "bg-emerald-600/85 text-white hover:bg-emerald-500"
+                        }`}
+                      >
+                        {playing === sh.id ? "⏸" : "▶"} {(sh.narration_duration || 0).toFixed(1)}s
+                      </button>
+                    ) : (
+                      <span
+                        title={
+                          (sh.narrator_text ? `Lời đọc: "${sh.narrator_text}"\n` : "") +
+                          `Ước lượng ${(sh.narration_duration || 0).toFixed(1)}s — chưa có audio thật`
+                        }
+                        className="absolute left-1.5 top-1.5 z-10 rounded bg-amber-600/80 px-1 py-0.5 text-[10px] text-white"
+                      >
+                        ⏱ {(sh.narration_duration || 0).toFixed(1)}s
+                      </span>
+                    ))}
                   <MediaCard
                     imageSrc={sh.image_path}
                     title={sh.title}

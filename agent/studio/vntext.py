@@ -130,11 +130,26 @@ _SYMBOLS = {"%": " phần trăm", "&": " và ", "+": " cộng ", "=": " bằng "
             "@": " a còng ", "#": " ", "*": " ", "/": " trên ", "~": " ",
             "^": " ", "|": " ", "<": " ", ">": " ", "\\": " "}
 
+# Decorative / markdown glyphs the TTS model would read literally or stumble on
+# (stars, bullets, arrows, box-drawing, backticks, blockquote/heading marks…). Stripped
+# to a space BEFORE everything else so "✦ ✦ ✦ # Chương 2" → "Chương 2", not spoken noise.
+_DECOR = re.compile(
+    r"[`✦✧✶✷✸✹✺✩✫✬✭✮✯★☆✪✦❂❉❋❅❄❆•◦‣⁃·∙▪▫■□◾◽◆◇♦●○◌►◄▶◀▸◂♥♠♣♤♧♡"
+    r"※❖➤➢➣❯❮«»‹›¦§¶™►▼▲▽△▷◁☼☀�]"
+)
+_BULLET_LINE = re.compile(r"(?m)^[ \t]*[-*+•·]+[ \t]+")   # markdown list bullets at line start
+_HRULE_LINE = re.compile(r"(?m)^[ \t]*([-*_=~])\1{2,}[ \t]*$")  # --- *** ___ === rules
+
 
 def normalize(text: str) -> str:
     if not text:
         return ""
     t = text
+
+    # strip decorative/markdown noise first (rules whole-line, then bullets, then glyphs)
+    t = _HRULE_LINE.sub(" ", t)
+    t = _BULLET_LINE.sub("", t)
+    t = _DECOR.sub(" ", t)
 
     # abbreviations (longest first so TP.HCM beats TP.)
     for pat, rep in sorted(_ABBREV, key=lambda x: -len(x[0])):
@@ -182,6 +197,17 @@ def normalize(text: str) -> str:
     t = re.sub(r"\s+([,.;:!?…])", r"\1", t)
     t = re.sub(r"[ \t]+", " ", t).strip()
     return t
+
+
+def sentences(text: str) -> list[str]:
+    """Split text into individual sentences (keeping the end punctuation). Used to TTS one
+    sentence at a time so the engine pauses at every '.'/'!'/'?'/'…' instead of running them
+    together. Unlike `split_segments`, this does NOT regroup short sentences."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    sents = re.findall(r"[^.!?…\n]+[.!?…]?(?:\n+)?", text)
+    return [s.strip() for s in sents if s.strip()]
 
 
 def split_segments(text: str, max_chars: int = 280) -> list[str]:
