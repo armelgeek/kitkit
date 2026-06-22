@@ -1462,6 +1462,37 @@ async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
     return f"/media/{rel}", reads
 
 
+async def _ensure_source_segments(pid: str, force: bool = False) -> None:
+    """Populate scene.source_segment by CONTENT-aligning the project's source prose (idea) to
+    its scenes (once; or re-run when force=True). This replaces the naive equal-length split so
+    each scene reads the part of the source that matches ITS location — content about another
+    place no longer bleeds into the wrong scene. No-op if there's no source or all are set."""
+    project = await db.query_one("SELECT idea FROM project WHERE id=?", (pid,))
+    source = ((project or {}).get("idea") or "").strip()
+    if not source:
+        return
+    scenes = await db.query_all(
+        "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
+    if not scenes:
+        return
+    if not force and all((s.get("source_segment") or "").strip() for s in scenes):
+        return
+    segments = await brain.align_source_to_scenes(source, scenes)
+    for sc, seg in zip(scenes, segments):
+        await db.update("scene", sc["id"], {"source_segment": seg})
+
+
+@router.post("/projects/{pid}/align-source")
+async def align_source(pid: str):
+    """Re-run content alignment of the source prose → scenes (force). Use when scene order or
+    the source changed and the narration is landing in the wrong scene."""
+    await _project_or_404(pid)
+    await _ensure_source_segments(pid, force=True)
+    return {"scenes": await db.query_all(
+        "SELECT id, idx, heading, source_segment FROM scene WHERE project_id=? ORDER BY idx",
+        (pid,))}
+
+
 @router.post("/scenes/{sid}/beats")
 async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     """Storytelling (§2.6, audio-first): the scene reads a VERBATIM contiguous chunk of the
@@ -1484,11 +1515,19 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     #    original across the project's scenes (in order) so the union covers the whole text.
     source = (project.get("idea") or "").strip()
     if source:
-        order = [r["id"] for r in await db.query_all(
-            "SELECT id FROM scene WHERE project_id=? ORDER BY idx", (scene["project_id"],))]
-        pos = order.index(sid) if sid in order else 0
-        parts = brain.partition_text(source, len(order) or 1)
-        voiceover = (parts[pos] if pos < len(parts) else "").strip()
+        # The scene reads the part of the source that matches ITS location (content-aligned),
+        # cached in source_segment. Align the whole project once if not done yet.
+        voiceover = (scene.get("source_segment") or "").strip()
+        if not voiceover:
+            await _ensure_source_segments(scene["project_id"])
+            scene = await _scene_or_404(sid)
+            voiceover = (scene.get("source_segment") or "").strip()
+        if not voiceover:                              # alignment unavailable → equal-length split
+            order = [r["id"] for r in await db.query_all(
+                "SELECT id FROM scene WHERE project_id=? ORDER BY idx", (scene["project_id"],))]
+            pos = order.index(sid) if sid in order else 0
+            parts = brain.partition_text(source, len(order) or 1)
+            voiceover = (parts[pos] if pos < len(parts) else "").strip()
         if not voiceover:
             raise HTTPException(
                 400, "Scene này không còn nội dung gốc để đọc — số scene đang nhiều hơn "
@@ -1684,6 +1723,7 @@ async def build_scene_beats_job(sid: str, body: BuildBeatsRequest):
     and report state in the banner instead of blocking the request (which made the UI look
     hung). One scene = one job step; shots are deleted + rebuilt when it completes."""
     scene = await _scene_or_404(sid)
+    await _ensure_source_segments(scene["project_id"])   # content-align source once if needed
 
     async def _worker(_):
         await build_scene_beats(sid, body)
@@ -1706,6 +1746,7 @@ async def build_project_beats(pid: str, body: BuildBeatsRequest):
         "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
     if not scenes:
         raise HTTPException(400, "Chưa có scene — tạo kịch bản (Script) trước.")
+    await _ensure_source_segments(pid)                   # content-align source once if needed
 
     async def _worker(sc):
         await build_scene_beats(sc["id"], body)
@@ -1777,6 +1818,9 @@ async def reorder_scenes(pid: str, body: ReorderRequest):
     for i, scene_id in enumerate(body.order):
         await db.execute("UPDATE scene SET idx=? WHERE id=? AND project_id=?",
                          (i, scene_id, pid))
+    # the source→scene alignment is order-dependent → stale after a reorder; clear so the next
+    # build re-aligns the narration to the new scene order.
+    await db.execute("UPDATE scene SET source_segment=NULL WHERE project_id=?", (pid,))
     return {"scenes": await db.query_all(
         "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))}
 

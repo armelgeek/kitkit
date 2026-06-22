@@ -422,6 +422,28 @@ export default function StoryboardTab({
     }
   };
 
+  // Re-align the source prose to scenes by CONTENT (fixes narration landing in the wrong
+  // scene). Doesn't touch shots/audio — you rebuild "Dựng theo lời đọc" after.
+  const alignSource = async () => {
+    const ok = await confirm({
+      title: "Căn lại nội dung vào đúng scene?",
+      message:
+        "Dùng AI gán lại từng đoạn của nội dung gốc vào scene khớp bối cảnh của nó (theo " +
+        "heading/địa điểm), thay cho cách chia đều theo độ dài. Sau đó hãy 'Dựng theo lời đọc' lại.",
+      confirmText: "Căn lại nội dung",
+    });
+    if (!ok) return;
+    setBusy("align");
+    setErr(null);
+    try {
+      await storyboard.alignSource(project.id);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Rebuild the shot list for EVERY scene from the script (force) — deletes existing
   // shots (incl. manual edits) and re-splits via AI. Confirm because it's destructive.
   const rebuildAll = async () => {
@@ -489,14 +511,24 @@ export default function StoryboardTab({
               {busy === "rebuild-all" ? "Đang dựng lại…" : "↻ Dựng lại tất cả"}
             </button>
             {!!project.storytelling && (
-              <button
-                disabled={!!busy || !!beatsJob || !scenes.length}
-                onClick={buildBeats}
-                title="Storytelling: dựng shots theo độ dài lời đọc (beat audio-driven)"
-                className="rounded-lg border border-violet-700/60 px-3 py-2 text-sm text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
-              >
-                {beatsJob ? `Đang dựng beat ${beatsJob.done}/${beatsJob.total}…` : "🎙 Dựng theo lời đọc"}
-              </button>
+              <>
+                <button
+                  disabled={!!busy || !!beatsJob || !scenes.length}
+                  onClick={alignSource}
+                  title="Căn nội dung gốc vào đúng scene theo bối cảnh (sửa lệch nội dung giữa các scene). Sau đó dựng lại theo lời đọc."
+                  className="rounded-lg border border-sky-700/60 px-3 py-2 text-sm text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
+                >
+                  {busy === "align" ? "Đang căn nội dung…" : "🧭 Căn nội dung scene"}
+                </button>
+                <button
+                  disabled={!!busy || !!beatsJob || !scenes.length}
+                  onClick={buildBeats}
+                  title="Storytelling: dựng shots theo độ dài lời đọc (beat audio-driven)"
+                  className="rounded-lg border border-violet-700/60 px-3 py-2 text-sm text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
+                >
+                  {beatsJob ? `Đang dựng beat ${beatsJob.done}/${beatsJob.total}…` : "🎙 Dựng theo lời đọc"}
+                </button>
+              </>
             )}
             <button
               disabled={!!busy || !!revaryJob || !scenes.length}

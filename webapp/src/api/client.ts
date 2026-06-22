@@ -340,6 +340,10 @@ export const storyboard = {
       method: "POST",
       body: JSON.stringify({ order }),
     }),
+  // Content-align the source prose to scenes (force) so each scene reads the part that matches
+  // its location — fixes narration landing in the wrong scene. Then rebuild "Dựng theo lời đọc".
+  alignSource: (pid: string) =>
+    req<{ scenes: Scene[] }>(`/projects/${pid}/align-source`, { method: "POST" }),
   updateShot: (sid: string, body: Partial<Omit<Shot, "ref_entity_ids">> & { ref_entity_ids?: string[] }) =>
     req<Shot>(`/shots/${sid}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteShot: (sid: string) => req<{ ok: boolean }>(`/shots/${sid}`, { method: "DELETE" }),
@@ -430,6 +434,8 @@ export interface Scene {
   narration_path?: string | null;
   narration_duration?: number | null;
   narration_text?: string | null;
+  // Storytelling: this scene's content-aligned verbatim slice of the source prose.
+  source_segment?: string | null;
 }
 
 export interface ScriptResult {

@@ -409,6 +409,64 @@ def partition_text(text: str, n: int) -> list[str]:
     return parts
 
 
+async def align_source_to_scenes(source: str, scenes: list[dict]) -> list[str]:
+    """Assign the original SOURCE prose to scenes BY CONTENT (not by equal length). Each scene
+    gets a contiguous, verbatim block of source sentences that matches its location heading /
+    action, in order; together the slices cover the whole source with no gaps or overlaps.
+    Returns one slice per scene (len == len(scenes)).
+
+    Robust by construction: the AI only picks the sentence index where each scene ENDS, and we
+    slice on those boundaries — so the text is never paraphrased and the union is always the
+    complete source. Falls back to length-balanced partition_text if the AI reply is unusable."""
+    sents = _sentences(source)
+    n = len(scenes)
+    total = len(sents)
+    if n <= 0:
+        return []
+    if n == 1 or total <= 1:
+        return [" ".join(sents)] + [""] * (n - 1)
+    if total <= n:                                   # fewer sentences than scenes → one each
+        return [sents[i] if i < total else "" for i in range(n)]
+
+    numbered = "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(sents))
+    scene_lines = "\n".join(
+        f"- Scene {i + 1}: {sc.get('heading') or ''} :: {((sc.get('action') or '')[:200])}"
+        for i, sc in enumerate(scenes))
+    prompt = (
+        "You align an original SOURCE narration to a list of SCENES. The SOURCE below is split "
+        "into NUMBERED sentences. Each scene covers a CONTIGUOUS block of sentences IN ORDER; "
+        "together the scenes MUST cover EVERY sentence with no gaps or overlaps. Using each "
+        "scene's location heading and action summary, keep every sentence with the scene whose "
+        "LOCATION/EVENT it actually describes (a change of place starts a new scene's block).\n\n"
+        f"Return ONLY a JSON array of {n} integers: the 1-based index of the LAST sentence of "
+        f"each scene. Values MUST be strictly increasing and the final value MUST equal {total}."
+        f"\n\nSCENES:\n{scene_lines}\n\nSOURCE SENTENCES:\n{numbered}"
+    )
+    try:
+        ends = await run_json(prompt)
+        ends = [int(x) for x in ends]
+        if len(ends) != n:
+            raise ValueError("wrong length")
+    except Exception as e:  # noqa: BLE001 — any bad reply → safe length-based fallback
+        logger.warning("source→scene align failed (%s) — dùng chia đều", e)
+        return partition_text(source, n)
+    # sanitize: clamp into range, force strictly-increasing, ≥1 sentence per scene, last=total
+    fixed: list[int] = []
+    prev = 0
+    for i, e in enumerate(ends):
+        lo = prev + 1                                # ≥1 sentence after the previous scene
+        hi = total - (n - 1 - i)                     # leave ≥1 sentence for each remaining scene
+        e = max(lo, min(e, hi))
+        fixed.append(e)
+        prev = e
+    fixed[-1] = total
+    out, start = [], 0
+    for e in fixed:
+        out.append(" ".join(sents[start:e]))
+        start = e
+    return out
+
+
 def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
                          location: str | None = None, target_beats: int | None = None) -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
