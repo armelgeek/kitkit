@@ -91,6 +91,7 @@ const NodeOps = createContext<{
   update: (id: string, patch: any) => void;
   remove: (id: string) => void;
   duplicate: (id: string) => void;
+  bindEntitySource: (fromId: string, entityId: string) => void;
   preview: (src: string, video: boolean) => void;
   genNode: (id: string, propagate?: boolean) => void;
   genningId: string | null;
@@ -106,6 +107,7 @@ const NodeOps = createContext<{
   update: () => {},
   remove: () => {},
   duplicate: () => {},
+  bindEntitySource: () => {},
   preview: () => {},
   genNode: () => {},
   genningId: null,
@@ -370,7 +372,7 @@ function SourceNode({ id, data }: NodeProps) {
 }
 
 function PromptNode({ id, data }: NodeProps) {
-  const { update, entities } = useContext(NodeOps);
+  const { update, entities, bindEntitySource } = useContext(NodeOps);
   const d = data as any;
   // Local state for the textarea so typing updates synchronously and the caret stays put.
   // Binding `value` straight to node data round-trips through React Flow's store, which
@@ -429,14 +431,16 @@ function PromptNode({ id, data }: NodeProps) {
     return entities.filter((e) => !q || e.name.toLowerCase().includes(q)).slice(0, 8);
   }, [menu, entities]);
 
-  // Replace the "{query" with "{Name}" and drop the caret just after the "}".
-  const pick = (name: string) => {
+  // Replace the "{query" with "{Name}", drop the caret after "}", AND auto-add a "Nguồn ảnh"
+  // node for that entity wired to whatever this prompt feeds (so the {Name} actually binds).
+  const pick = (ent: Entity) => {
     if (!menu) return;
     const caret = taRef.current?.selectionStart ?? text.length;
-    const next = text.slice(0, menu.start) + "{" + name + "}" + text.slice(caret);
+    const next = text.slice(0, menu.start) + "{" + ent.name + "}" + text.slice(caret);
     setAll(next);
-    caretRef.current = menu.start + name.length + 2;
+    caretRef.current = menu.start + ent.name.length + 2;
     setMenu(null);
+    bindEntitySource(id, ent.id);
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
@@ -444,7 +448,7 @@ function PromptNode({ id, data }: NodeProps) {
     if (!menu || !matches.length) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => (h + 1) % matches.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => (h - 1 + matches.length) % matches.length); }
-    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[hi].name); }
+    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[hi]); }
     else if (e.key === "Escape") { e.preventDefault(); setMenu(null); }
   };
 
@@ -466,7 +470,7 @@ function PromptNode({ id, data }: NodeProps) {
               <button
                 key={e.id}
                 type="button"
-                onMouseDown={(ev) => { ev.preventDefault(); pick(e.name); }}
+                onMouseDown={(ev) => { ev.preventDefault(); pick(e); }}
                 className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] ${
                   i === hi ? "bg-indigo-600 text-white" : "text-neutral-300 hover:bg-neutral-800"
                 }`}
@@ -1130,6 +1134,39 @@ function Editor({
     },
     [setNodes, setEdges]
   );
+  // Auto-add a "Nguồn ảnh" node for `entityId` (prefilled with its image) and connect it to
+  // whatever `fromId` (the prompt node) already feeds — so picking {Entity} in a prompt makes
+  // that reference actually bind. Reuses an existing source node for the same entity.
+  const bindEntitySource = useCallback(
+    (fromId: string, entityId: string) => {
+      const ent = entities.find((e) => e.id === entityId);
+      if (!ent) return;
+      const existing = nodes.find((n) => n.type === "source" && (n.data as any).entity_id === entityId);
+      const srcId = existing?.id || `source-${Date.now()}`;
+      const targets = edges.filter((e) => e.source === fromId).map((e) => e.target);
+      if (!existing) {
+        const from = nodes.find((n) => n.id === fromId);
+        const nSources = nodes.filter((n) => n.type === "source").length;
+        const pos = from
+          ? { x: from.position.x, y: from.position.y + 150 + nSources * 30 }
+          : { x: 0, y: 200 + nSources * 30 };
+        setNodes((ns) => [
+          ...ns,
+          { id: srcId, type: "source", position: pos,
+            data: { _type: "source", entity_id: ent.id, media_id: ent.media_id || "",
+                    web: ent.image_path || "", label: ent.name } },
+        ]);
+      }
+      setEdges((es) => {
+        const add = targets
+          .filter((t) => !es.some((e) => e.source === srcId && e.target === t))
+          .map((t) => ({ id: `e-${srcId}-${t}`, source: srcId, target: t }));
+        return add.length ? [...es, ...add] : es;
+      });
+    },
+    [entities, nodes, edges, setNodes, setEdges]
+  );
+
   const undo = useCallback(() => restoreHist(histIdx.current - 1), [restoreHist]);
   const redo = useCallback(() => restoreHist(histIdx.current + 1), [restoreHist]);
   const canUndo = histIdx.current > 0;
@@ -1634,8 +1671,8 @@ function Editor({
   };
 
   const ops = useMemo(
-    () => ({ update, remove, duplicate, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId }),
-    [update, remove, duplicate, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId]
+    () => ({ update, remove, duplicate, bindEntitySource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId }),
+    [update, remove, duplicate, bindEntitySource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId]
   );
 
   return (
