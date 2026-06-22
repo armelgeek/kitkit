@@ -4,6 +4,7 @@ Builds a prompt that demands strict JSON, runs it through /api/agent/run's under
 handler, then extracts + parses the JSON (tolerant of code fences / surrounding prose).
 Retries once on parse failure. See video-app.md §6.
 """
+import asyncio
 import json
 import logging
 import re
@@ -78,6 +79,30 @@ async def run_json(prompt: str, *, timeout: float = 300.0, retries: int = 2):
             last_err = str(e)
             logger.warning("brain JSON parse failed (try %d): %s", attempt, e)
     raise HTTPException(502, f"AI-agent không trả JSON hợp lệ: {last_err}")
+
+
+async def run_json_valid(prompt: str, validate, *, label: str = "AI",
+                         attempts: int = 3, timeout: float = 300.0):
+    """run_json that ALSO retries when the reply is valid JSON but fails `validate` (wrong
+    shape/semantics — which run_json's parse-only retry can't catch). `validate(data)` returns
+    True to accept. Raises HTTPException(502) after all attempts fail, so callers stop silently
+    degrading to a worse result and instead surface (or retry) a real failure."""
+    last = None
+    for attempt in range(attempts):
+        try:
+            data = await run_json(prompt, timeout=timeout)
+            if validate(data):
+                return data
+            last = "reply failed validation (wrong shape/size)"
+            logger.warning("%s try %d: %s", label, attempt + 1, last)
+        except HTTPException as e:
+            last = e.detail
+            logger.warning("%s try %d: %s", label, attempt + 1, last)
+        except Exception as e:  # noqa: BLE001 — keep retrying through transient agent errors
+            last = str(e)
+            logger.warning("%s try %d: %s", label, attempt + 1, last)
+        await asyncio.sleep(min(1.0 + attempt, 4.0))
+    raise HTTPException(502, f"{label}: AI không trả kết quả hợp lệ sau {attempts} lần thử ({last})")
 
 
 # ─── Scene parsing (Fountain-ish screenplay → scenes) ───────
@@ -442,13 +467,17 @@ async def align_source_to_scenes(source: str, scenes: list[dict]) -> list[str]:
         f"each scene. Values MUST be strictly increasing and the final value MUST equal {total}."
         f"\n\nSCENES:\n{scene_lines}\n\nSOURCE SENTENCES:\n{numbered}"
     )
+    def _ok(data):
+        try:
+            return len(data) == n and all(isinstance(int(x), int) for x in data)
+        except Exception:  # noqa: BLE001
+            return False
+
     try:
-        ends = await run_json(prompt)
-        ends = [int(x) for x in ends]
-        if len(ends) != n:
-            raise ValueError("wrong length")
-    except Exception as e:  # noqa: BLE001 — any bad reply → safe length-based fallback
-        logger.warning("source→scene align failed (%s) — dùng chia đều", e)
+        raw = await run_json_valid(prompt, _ok, label="Căn nội dung→scene")
+        ends = [int(x) for x in raw]
+    except Exception as e:  # noqa: BLE001 — exhausted retries → safe length-based fallback
+        logger.warning("source→scene align failed after retries (%s) — dùng chia đều", e)
         return partition_text(source, n)
     # sanitize: clamp into range, force strictly-increasing, ≥1 sentence per scene, last=total
     fixed: list[int] = []

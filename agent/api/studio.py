@@ -1544,11 +1544,23 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     # ~8s of narration per beat → an image change every ~8s (keeps the video from going
     # stale on one still). Target count drives the AI; partition_text caps it at sentence count.
     target_beats = max(1, round(_estimate_narration_secs(voiceover) / 8.0))
-    beats = await brain.run_json(brain.scene_segment_prompt(
-        voiceover, erows, project["style"],
-        location=(scene_loc["name"] if scene_loc else None), target_beats=target_beats))
-    if not isinstance(beats, list) or not beats:
-        beats = [{"description": scene["heading"], "ref_entity_names": [], "key_phrases": []}]
+    loc_name = scene_loc["name"] if scene_loc else None
+    try:
+        beats = await brain.run_json_valid(
+            brain.scene_segment_prompt(
+                voiceover, erows, project["style"],
+                location=loc_name, target_beats=target_beats),
+            lambda d: isinstance(d, list) and len(d) > 0 and all(isinstance(x, dict) for x in d),
+            label=f"Tách beat ({scene.get('heading') or sid})")
+    except HTTPException as e:
+        # Retries exhausted: rather than collapse the scene into ONE giant shot (which forced
+        # the user to redo it by hand), fall back to a DETERMINISTIC split into ~8s beats so the
+        # scene still gets proper shots + audio timing. Generic framing — refine via "Đa dạng góc máy".
+        logger.warning("scene %s beat-segment fell back to deterministic split: %s", sid, e.detail)
+        slices = brain.partition_text(voiceover, target_beats)
+        loc_ref = [loc_name] if loc_name else []
+        beats = [{"text": s, "description": (f"{loc_name}, " if loc_name else "") + "cinematic shot",
+                  "ref_entity_names": loc_ref, "key_phrases": []} for s in slices]
     if not scene_loc_id:                      # heading matched no entity → use the AI's pick
         scene_loc_id = _first_location_id(beats, by_name)
     say = brain.partition_text(voiceover, len(beats))   # verbatim contiguous slices, complete
