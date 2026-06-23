@@ -21,3 +21,8 @@ node_modules/
 webapp/dist/
 media/
 studio_media/
+# local TTS/agent dump outputs
+final_beats.json
+output.json
+output_beats.json
+*_beats.json
