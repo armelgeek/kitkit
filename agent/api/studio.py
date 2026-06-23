@@ -1445,9 +1445,13 @@ async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
     beat_pieces: list[list[tuple[bytes | None, float]]] = []  # per beat: [(audio|None, secs)]
     template: bytes | None = None                             # a real WAV → silence params
     for txt in texts:
-        norm = (vntext.normalize(txt) or txt).strip()
-        sents = vntext.sentences(norm) if norm else []
-        if not sents:                                         # empty beat → a short silence
+        # normalize strips decoration; do NOT fall back to the raw text when it empties out
+        # (a beat that is only a decoration glyph like "◆"/"—" must become silence, not be
+        # read literally). Also drop word-less sentences (pure punctuation) so TTS never
+        # speaks a stray symbol as gibberish.
+        norm = (vntext.normalize(txt) or "").strip()
+        sents = [s for s in vntext.sentences(norm) if re.search(r"\w", s)] if norm else []
+        if not sents:                                         # empty/decoration-only → silence
             beat_pieces.append([(None, 0.8)])
             continue
         sent_pieces: list[tuple[bytes | None, float]] = []

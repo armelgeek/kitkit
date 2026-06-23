@@ -6,6 +6,7 @@ ngang", '_' → "gạch dưới"). Then `split_segments` cuts the result into sh
 aligned chunks for the TTS engine (no mid-sentence cuts, so the read stays natural).
 """
 import re
+import unicodedata
 
 _ONES = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"]
 _SCALES = ["", " nghìn", " triệu", " tỷ"]
@@ -139,6 +140,18 @@ _DECOR = re.compile(
 )
 _BULLET_LINE = re.compile(r"(?m)^[ \t]*[-*+•·]+[ \t]+")   # markdown list bullets at line start
 _HRULE_LINE = re.compile(r"(?m)^[ \t]*([-*_=~])\1{2,}[ \t]*$")  # --- *** ___ === rules
+# Em/en/figure dashes used as a pause or divider → comma (a spoken pause), not the glyph.
+_DASHES = re.compile(r"\s*[—–―]+\s*")
+# Catch-all: any NON-ASCII symbol/other char the explicit set missed (emoji, dingbats,
+# arrows, private-use, format/unassigned) → space, so the TTS never reads a stray glyph.
+_SYMBOL_CATS = {"So", "Sk", "Sm", "Co", "Cn", "Cf"}
+
+
+def _strip_unicode_symbols(t: str) -> str:
+    return "".join(
+        " " if (ord(c) > 0x7F and unicodedata.category(c) in _SYMBOL_CATS) else c
+        for c in t
+    )
 
 
 def normalize(text: str) -> str:
@@ -146,10 +159,13 @@ def normalize(text: str) -> str:
         return ""
     t = text
 
-    # strip decorative/markdown noise first (rules whole-line, then bullets, then glyphs)
+    # strip decorative/markdown noise first (rules whole-line, then bullets, then glyphs,
+    # then any leftover non-ASCII symbol, then dashes → comma pause)
     t = _HRULE_LINE.sub(" ", t)
     t = _BULLET_LINE.sub("", t)
     t = _DECOR.sub(" ", t)
+    t = _strip_unicode_symbols(t)
+    t = _DASHES.sub(", ", t)
 
     # abbreviations (longest first so TP.HCM beats TP.)
     for pat, rep in sorted(_ABBREV, key=lambda x: -len(x[0])):
@@ -195,7 +211,9 @@ def normalize(text: str) -> str:
 
     # tidy whitespace + spaces before punctuation
     t = re.sub(r"\s+([,.;:!?…])", r"\1", t)
+    t = re.sub(r"([,;:])\1+", r"\1", t)            # collapse repeated commas (from dashes)
     t = re.sub(r"[ \t]+", " ", t).strip()
+    t = re.sub(r"^[\s,;:.\-]+", "", t)             # drop leading separators (e.g. a lead comma)
     return t
 
 

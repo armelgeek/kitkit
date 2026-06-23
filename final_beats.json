@@ -1,0 +1,973 @@
+[
+  {
+    "text": "Hùng bước ra hành lang lộng gió, đứng trước cửa thang máy bằng thép không gỉ xước.",
+    "beat_action": "Hùng bước ra hành lang và đứng trước cửa thang máy.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder medium shot, {Hùng} bước ra hành lang và đứng trước cửa thang máy. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} bước ra hành lang và đứng trước cửa thang máy. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} bước ra hành lang và đứng trước cửa thang máy evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Hùng bước ra",
+      "hành lang lộng gió",
+      "thép không gỉ xước"
+    ]
+  },
+  {
+    "text": " Bốn từ ngắn ngủi: cậu làm tốt.",
+    "beat_action": "Hùng đứng im lặng phản ứng lại lời khen của Voss.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle extreme wide shot, {Hùng} đứng im lặng phản ứng lại lời khen của Voss. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đứng im lặng phản ứng lại lời khen của Voss. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} đứng im lặng phản ứng lại lời khen của Voss evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Bốn từ ngắn ngủi",
+      "Bốn từ",
+      "cậu làm tốt"
+    ]
+  },
+  {
+    "text": " Voss gọi anh lên tận tầng sáu chỉ để trao cho anh một lời khen trống rỗng, trong khi hoàn toàn phớt lờ bản báo cáo địa chấn quan trọng nhất mà anh đã dành bốn tháng ròng rã để hoàn thiện.",
+    "beat_action": "Hùng nhìn chằm chằm vào cửa thang máy bằng thép.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle medium shot, {Hùng} nhìn chằm chằm vào cửa thang máy bằng thép. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhìn chằm chằm vào cửa thang máy bằng thép. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} nhìn chằm chằm vào cửa thang máy bằng thép evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Voss gọi anh",
+      "tầng sáu",
+      "lời khen trống rỗng"
+    ]
+  },
+  {
+    "text": " Bản báo cáo chi tiết về dòng năng lượng dị thường tại cảm biến B-7, nơi tần số 432Hz liên tục dao động bất chấp mọi quy luật vật lý địa nhiệt đã biết.",
+    "beat_action": "Hùng trầm ngâm nghĩ về bản báo cáo bị ngó lơ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder full shot, {Hùng} trầm ngâm nghĩ về bản báo cáo bị ngó lơ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} trầm ngâm nghĩ về bản báo cáo bị ngó lơ. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} trầm ngâm nghĩ về bản báo cáo bị ngó lơ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "dòng năng lượng dị thường",
+      "cảm biến B-7",
+      "tần số 432Hz"
+    ]
+  },
+  {
+    "text": " Tài liệu đó đã bị thiêu hủy trên không gian số lúc hai giờ mười bảy phút sáng.",
+    "beat_action": "Hùng nhớ lại các con số từ cảm biến B-7 trong đầu.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle medium close-up shot, {Hùng} nhớ lại các con số từ cảm biến B-7 trong đầu. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhớ lại các con số từ cảm biến B-7 trong đầu. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} nhớ lại các con số từ cảm biến B-7 trong đầu evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "bị thiêu hủy",
+      "không gian số",
+      "hai giờ mười bảy phút"
+    ]
+  },
+  {
+    "text": " Để rồi đến mười giờ, người quản lý trực tiếp của anh mỉm cười và nói mọi thứ vẫn đang vận hành hoàn hảo.",
+    "beat_action": "Hùng cau mày nhẹ, nghĩ về tần số 432Hz kỳ lạ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level full shot, {Hùng} cau mày nhẹ, nghĩ về tần số 432Hz kỳ lạ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} cau mày nhẹ, nghĩ về tần số 432Hz kỳ lạ. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} cau mày nhẹ, nghĩ về tần số 432Hz kỳ lạ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "mười giờ",
+      "người quản lý",
+      "mỉm cười"
+    ]
+  },
+  {
+    "text": " Cửa thang máy mở ra với tiếng chuông nhẹ.",
+    "beat_action": "Hùng nghĩ về lệnh xóa tệp lúc nửa đêm.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, overhead medium close-up shot, {Hùng} nghĩ về lệnh xóa tệp lúc nửa đêm. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up overhead shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghĩ về lệnh xóa tệp lúc nửa đêm. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} nghĩ về lệnh xóa tệp lúc nửa đêm evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "thang máy mở ra",
+      "tiếng chuông nhẹ"
+    ]
+  },
+  {
+    "text": " Hùng bước vào cabin.",
+    "beat_action": "Hùng khẽ nhếch mép khi nghĩ về nụ cười của Voss lúc 10 giờ sáng.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV close-up shot, {Hùng} khẽ nhếch mép khi nghĩ về nụ cười của Voss lúc 10 giờ sáng. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} khẽ nhếch mép khi nghĩ về nụ cười của Voss lúc 10 giờ sáng. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} khẽ nhếch mép khi nghĩ về nụ cười của Voss lúc 10 giờ sáng evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Hùng bước vào",
+      "cabin"
+    ]
+  },
+  {
+    "text": " Vách thép xước mờ phản chiếu bóng hình anh — một gương mặt tĩnh lặng không để lộ bất kỳ gợn sóng cảm xúc nào, ",
+    "beat_action": "Hùng thở dài nhẹ khi nghĩ về câu nói dối vô can của quản lý.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt wide shot, {Hùng} thở dài nhẹ khi nghĩ về câu nói dối vô can của quản lý. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} thở dài nhẹ khi nghĩ về câu nói dối vô can của quản lý. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} thở dài nhẹ khi nghĩ về câu nói dối vô can của quản lý evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Vách thép xước mờ",
+      "gương mặt tĩnh lặng",
+      "gợn sóng cảm xúc"
+    ]
+  },
+  {
+    "text": "đôi mắt sau gọng kính đen vẫn đang phân tích các dữ kiện với tốc độ của một thuật toán.",
+    "beat_action": "Cửa thang máy bằng thép xước mờ mở ra với tiếng chuông nhẹ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle close-up shot, Cửa thang máy bằng thép xước mờ mở ra với tiếng chuông nhẹ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features Cửa thang máy bằng thép xước mờ mở ra với tiếng chuông nhẹ. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. Cửa thang máy bằng thép xước mờ mở ra với tiếng chuông nhẹ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH"
+    ],
+    "key_phrases": [
+      "đôi mắt",
+      "phân tích các dữ kiện",
+      "thuật toán"
+    ]
+  },
+  {
+    "text": " Tình huống này chỉ có thể được giải thích bằng ba kịch bản.",
+    "beat_action": "Hùng bước chân vào cabin thang máy vắng vẻ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV full shot, {Hùng} bước chân vào cabin thang máy vắng vẻ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} bước chân vào cabin thang máy vắng vẻ. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} bước chân vào cabin thang máy vắng vẻ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "ba kịch bản"
+    ]
+  },
+  {
+    "text": " Kịch bản đầu tiên: Voss hoàn toàn vô can.",
+    "beat_action": "Hùng nhìn bóng mình phản chiếu trên vách thép của thang máy.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level extreme close-up shot, {Hùng} nhìn bóng mình phản chiếu trên vách thép của thang máy. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhìn bóng mình phản chiếu trên vách thép của thang máy. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} nhìn bóng mình phản chiếu trên vách thép của thang máy evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Kịch bản đầu tiên",
+      "Voss hoàn toàn vô can"
+    ]
+  },
+  {
+    "text": " Một thế lực ẩn danh có quyền quản trị tối cao đã tự tay xóa sạch báo cáo của anh trước khi nó kịp chạm đến bàn làm việc của Voss, ",
+    "beat_action": "Hùng đeo gọng kính đen, ánh mắt lạnh lùng phân tích tình hình.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV medium close-up shot, {Hùng} đeo gọng kính đen, ánh mắt lạnh lùng phân tích tình hình. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đeo gọng kính đen, ánh mắt lạnh lùng phân tích tình hình. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} đeo gọng kính đen, ánh mắt lạnh lùng phân tích tình hình evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "quyền quản trị tối cao",
+      "xóa sạch báo cáo",
+      "bàn làm việc của Voss"
+    ]
+  },
+  {
+    "text": "và buổi gặp gỡ hôm nay chỉ đơn thuần là một cuộc đánh giá định kỳ vô thưởng vô phạt.",
+    "beat_action": "Hùng đứng im, suy ngẫm về ba giả thuyết có thể xảy ra.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt medium shot, {Hùng} đứng im, suy ngẫm về ba giả thuyết có thể xảy ra. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đứng im, suy ngẫm về ba giả thuyết có thể xảy ra. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} đứng im, suy ngẫm về ba giả thuyết có thể xảy ra evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "đánh giá định kỳ",
+      "vô thưởng vô phạt"
+    ]
+  },
+  {
+    "text": " Kịch bản thứ hai: Voss biết về vụ xóa dữ liệu nhưng ông ta không phải là người bấm nút.",
+    "beat_action": "Hùng tự hỏi liệu Voss có thực sự vô can.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle close-up shot, {Hùng} tự hỏi liệu Voss có thực sự vô can. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} tự hỏi liệu Voss có thực sự vô can. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} tự hỏi liệu Voss có thực sự vô can evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Kịch bản thứ hai"
+    ]
+  },
+  {
+    "text": " Cuộc gặp gỡ riêng tư này là một lời cảnh báo ngầm, một thông điệp được bọc trong lớp vỏ bọc an toàn: \"hãy tiếp tục làm một kỹ sư ngoan ngoãn và đừng đào sâu thêm nữa.\" ",
+    "beat_action": "Hùng nghĩ về quyền truy cập ADMIN_OVERRIDE trên máy chủ trạm địa nhiệt.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle wide shot, {Hùng} nghĩ về quyền truy cập ADMIN_OVERRIDE trên máy chủ trạm địa nhiệt. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghĩ về quyền truy cập ADMIN_OVERRIDE trên máy chủ trạm địa nhiệt. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} nghĩ về quyền truy cập ADMIN_OVERRIDE trên máy chủ trạm địa nhiệt evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "lời cảnh báo ngầm",
+      "kỹ sư ngoan ngoãn",
+      "đừng đào sâu thêm nữa"
+    ]
+  },
+  {
+    "text": "Kịch bản thứ ba: Chính Voss là kẻ ra lệnh xóa.",
+    "beat_action": "Hùng nghi ngờ cuộc gặp chỉ là màn kịch che mắt.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level extreme close-up shot, {Hùng} nghi ngờ cuộc gặp chỉ là màn kịch che mắt. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghi ngờ cuộc gặp chỉ là màn kịch che mắt. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} nghi ngờ cuộc gặp chỉ là màn kịch che mắt evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Kịch bản thứ ba",
+      "lệnh xóa"
+    ]
+  },
+  {
+    "text": " Và ông ta triệu tập anh đến chỉ để tận mắt quan sát xem người kỹ sư dưới quyền có để lộ bất kỳ sơ lầm hay sự bất mãn nào sau cú ra đòn trong bóng tối của mình hay không.",
+    "beat_action": "Hùng phân tích kịch bản thứ hai khi Voss biết nhưng không trực tiếp xóa.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, overhead wide shot, {Hùng} phân tích kịch bản thứ hai khi Voss biết nhưng không trực tiếp xóa. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide overhead shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} phân tích kịch bản thứ hai khi Voss biết nhưng không trực tiếp xóa. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} phân tích kịch bản thứ hai khi Voss biết nhưng không trực tiếp xóa evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "tận mắt quan sát",
+      "sơ lầm",
+      "bất mãn"
+    ]
+  },
+  {
+    "text": " Thang máy dừng lại ở tầng trệt.",
+    "beat_action": "Hùng coi lời khen của Voss là lời cảnh báo ngầm.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level medium shot, {Hùng} coi lời khen của Voss là lời cảnh báo ngầm. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} coi lời khen của Voss là lời cảnh báo ngầm. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} coi lời khen của Voss là lời cảnh báo ngầm evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "dừng lại ở tầng trệt"
+    ]
+  },
+  {
+    "text": " Cửa mở.",
+    "beat_action": "Hùng nghĩ đến kịch bản thứ ba khi chính Voss đứng sau mọi chuyện.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, overhead medium close-up shot, {Hùng} nghĩ đến kịch bản thứ ba khi chính Voss đứng sau mọi chuyện. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up overhead shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghĩ đến kịch bản thứ ba khi chính Voss đứng sau mọi chuyện. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} nghĩ đến kịch bản thứ ba khi chính Voss đứng sau mọi chuyện evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Cửa mở"
+    ]
+  },
+  {
+    "text": " Hùng bước qua sảnh chính lộng lẫy nhưng lạnh lẽo, hòa vào thứ ánh sáng ban ngày nhợt nhạt và khô khốc của Zone 4.",
+    "beat_action": "Hùng nhớ lại ánh mắt dò xét của Voss trong phòng họp B.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder extreme wide shot, {Hùng} nhớ lại ánh mắt dò xét của Voss trong phòng họp B. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhớ lại ánh mắt dò xét của Voss trong phòng họp B. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} nhớ lại ánh mắt dò xét của Voss trong phòng họp B evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "sảnh chính lộng lẫy",
+      "lạnh lẽo",
+      "ánh sáng ban ngày"
+    ]
+  },
+  {
+    "text": " Anh không biết đâu mới là sự thật nằm sau ba kịch bản đó.",
+    "beat_action": "Hùng nghiền ngẫm về mưu đồ ẩn giấu của tập đoàn.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV extreme close-up shot, {Hùng} nghiền ngẫm về mưu đồ ẩn giấu của tập đoàn. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghiền ngẫm về mưu đồ ẩn giấu của tập đoàn. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} nghiền ngẫm về mưu đồ ẩn giấu của tập đoàn evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "ba kịch bản"
+    ]
+  },
+  {
+    "text": " Nhưng anh hiểu một điều chắc chắn: ",
+    "beat_action": "Cabin thang máy rung nhẹ rồi dừng lại ở sảnh tầng trệt.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level medium shot, Cabin thang máy rung nhẹ rồi dừng lại ở sảnh tầng trệt. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features Cabin thang máy rung nhẹ rồi dừng lại ở sảnh tầng trệt. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. Cabin thang máy rung nhẹ rồi dừng lại ở sảnh tầng trệt evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH"
+    ],
+    "key_phrases": [
+      "hiểu một điều chắc chắn"
+    ]
+  },
+  {
+    "text": "trong bối cảnh của buổi sáng hôm nay, mệnh lệnh \"tiếp tục công việc\" từ miệng Voss chính là câu trả lời bất ổn nhất cho tất cả các giả thuyết.",
+    "beat_action": "Cửa cabin thang máy từ từ trượt mở.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV extreme wide shot, Cửa cabin thang máy từ từ trượt mở. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features Cửa cabin thang máy từ từ trượt mở. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. Cửa cabin thang máy từ từ trượt mở evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH"
+    ],
+    "key_phrases": [
+      "sáng",
+      "mệnh lệnh",
+      "tiếp tục công việc"
+    ]
+  },
+  {
+    "text": " ◆ Hùng không chọn quay về căn hộ của mình.",
+    "beat_action": "Hùng bước ra khỏi thang máy, đi qua sảnh tòa nhà hành chính sang trọng nhưng vắng lặng.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt full shot, {Hùng} bước ra khỏi thang máy, đi qua sảnh tòa nhà hành chính sang trọng nhưng vắng lặng. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} bước ra khỏi thang máy, đi qua sảnh tòa nhà hành chính sang trọng nhưng vắng lặng. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} bước ra khỏi thang máy, đi qua sảnh tòa nhà hành chính sang trọng nhưng vắng lặng evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "không chọn quay về",
+      "căn hộ"
+    ]
+  },
+  {
+    "text": " Thay vào đó, anh đi bộ bảy phút dọc theo những dãy nhà xám xịt để đến một quán cà phê nhỏ khuất sâu trong một con hẻm thuộc Zone 3.",
+    "beat_action": "Hùng đi về phía cửa kính lớn, nhìn ra ánh nắng nhạt của Zone 4.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle wide shot, {Hùng} đi về phía cửa kính lớn, nhìn ra ánh nắng nhạt của Zone 4. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đi về phía cửa kính lớn, nhìn ra ánh nắng nhạt của Zone 4. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} đi về phía cửa kính lớn, nhìn ra ánh nắng nhạt của Zone 4 evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "đi bộ bảy phút",
+      "những dãy nhà xám xịt",
+      "quán cà phê nhỏ"
+    ]
+  },
+  {
+    "text": " Nơi này không có màn hình quảng cáo huyên náo, không có những bản nhạc pop điện tử đập liên hồi vào màng nhĩ, ",
+    "beat_action": "Hùng đứng ở sảnh, băn khoăn về kịch bản thực sự.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV extreme wide shot, {Hùng} đứng ở sảnh, băn khoăn về kịch bản thực sự. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đứng ở sảnh, băn khoăn về kịch bản thực sự. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} đứng ở sảnh, băn khoăn về kịch bản thực sự evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "nhạc pop điện tử"
+    ]
+  },
+  {
+    "text": "chỉ có vài chiếc bàn gỗ mộc thô ráp, những ổ cắm điện cũ kỹ dọc mảng tường bê tông trần và bầu không khí trầm mặc của những kẻ tìm đến để làm việc thực sự chứ không phải để phô diễn sự bận rộn.",
+    "beat_action": "Hùng khẽ gật đầu, nhận thức rõ mối hiểm nguy.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level medium close-up shot, {Hùng} khẽ gật đầu, nhận thức rõ mối hiểm nguy. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} khẽ gật đầu, nhận thức rõ mối hiểm nguy. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} khẽ gật đầu, nhận thức rõ mối hiểm nguy evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "bàn gỗ mộc",
+      "ổ cắm điện cũ kỹ",
+      "làm việc thực sự"
+    ]
+  },
+  {
+    "text": " Anh gọi một ly cà phê đen không đường, mở chiếc laptop cá nhân đã sờn góc, cắm tai nghe vào cổng âm thanh.",
+    "beat_action": "Hùng nhận định mệnh lệnh của Voss chính là điểm đáng ngờ nhất.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder extreme close-up shot, {Hùng} nhận định mệnh lệnh của Voss chính là điểm đáng ngờ nhất. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhận định mệnh lệnh của Voss chính là điểm đáng ngờ nhất. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} nhận định mệnh lệnh của Voss chính là điểm đáng ngờ nhất evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "cà phê đen",
+      "laptop cá nhân",
+      "sờn góc"
+    ]
+  },
+  {
+    "text": " Đó không phải để nghe nhạc, mà là một tín hiệu xã hội ngầm định báo hiệu cho xung quanh rằng anh cần khoảng không riêng tư.",
+    "beat_action": "Hùng đứng trong sảnh tòa nhà hành chính, quyết định không về nhà.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV wide shot, {Hùng} đứng trong sảnh tòa nhà hành chính, quyết định không về nhà. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đứng trong sảnh tòa nhà hành chính, quyết định không về nhà. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} đứng trong sảnh tòa nhà hành chính, quyết định không về nhà evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "tín hiệu xã hội",
+      "khoảng không riêng tư"
+    ]
+  },
+  {
+    "text": " Hùng mở tệp tin mã hóa mang tên DN31_personal.",
+    "beat_action": "Hùng nắm chặt quai chiếc túi đựng laptop cá nhân.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle medium close-up shot, {Hùng} nắm chặt quai chiếc túi đựng {{Laptop}} cá nhân. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nắm chặt quai chiếc túi đựng {{Laptop}} cá nhân. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} nắm chặt quai chiếc túi đựng {{Laptop}} cá nhân evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng",
+      "Laptop"
+    ],
+    "key_phrases": [
+      "tệp tin mã hóa",
+      "DN31_personal"
+    ]
+  },
+  {
+    "text": " Anh không tạo tab mới, không lưu nháp, gõ thẳng những suy nghĩ của mình lên trang tài liệu trống như một cách giải phóng áp lực tích tụ trong lồng ngực: \"15/09/2047.",
+    "beat_action": "Hùng nghĩ đến việc tìm một nơi ẩn nấp an toàn để làm việc.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder close-up shot, {Hùng} nghĩ đến việc tìm một nơi ẩn nấp an toàn để làm việc. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghĩ đến việc tìm một nơi ẩn nấp an toàn để làm việc. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} nghĩ đến việc tìm một nơi ẩn nấp an toàn để làm việc evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "không tạo tab mới",
+      "không lưu nháp",
+      "trang tài liệu trống"
+    ]
+  },
+  {
+    "text": " Sáng.",
+    "beat_action": "Hùng đứng chờ ở khu vực thang máy, muốn tránh xa sự ồn ào công nghiệp.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle extreme close-up shot, {Hùng} đứng chờ ở khu vực thang máy, muốn tránh xa sự ồn ào công nghiệp. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đứng chờ ở khu vực thang máy, muốn tránh xa sự ồn ào công nghiệp. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} đứng chờ ở khu vực thang máy, muốn tránh xa sự ồn ào công nghiệp evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Sáng"
+    ]
+  },
+  {
+    "text": " Bản báo cáo kỹ thuật 432Hz đã biến mất hoàn toàn trên hệ thống máy chủ DN-31.",
+    "beat_action": "Hùng trân trọng không gian yên tĩnh và cũ kỹ của quán nước quen thuộc.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle extreme wide shot, {Hùng} trân trọng không gian yên tĩnh và cũ kỹ của quán nước quen thuộc. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} trân trọng không gian yên tĩnh và cũ kỹ của quán nước quen thuộc. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} trân trọng không gian yên tĩnh và cũ kỹ của quán nước quen thuộc evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "biến mất hoàn toàn",
+      "máy chủ DN-31"
+    ]
+  },
+  {
+    "text": " Nhật ký ghi nhận lệnh xóa được thực thi vào lúc 2:17 sáng bởi giao thức ADMIN_OVERRIDE.",
+    "beat_action": "Hùng lấy ra chiếc laptop cá nhân sờn góc để chuẩn bị gõ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt wide shot, {Hùng} lấy ra chiếc {{Laptop}} cá nhân sờn góc để chuẩn bị gõ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} lấy ra chiếc {{Laptop}} cá nhân sờn góc để chuẩn bị gõ. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} lấy ra chiếc {{Laptop}} cá nhân sờn góc để chuẩn bị gõ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng",
+      "Laptop"
+    ],
+    "key_phrases": [
+      "lệnh xóa",
+      "sáng",
+      "ADMIN_OVERRIDE"
+    ]
+  },
+  {
+    "text": " Ai đó ở cấp quản trị cao nhất của tập đoàn đã can thiệp trong đêm.",
+    "beat_action": "Hùng chuẩn bị đeo tai nghe để cô lập bản thân với thế giới.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV full shot, {Hùng} chuẩn bị đeo tai nghe để cô lập bản thân với thế giới. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} chuẩn bị đeo tai nghe để cô lập bản thân với thế giới. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} chuẩn bị đeo tai nghe để cô lập bản thân với thế giới evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "cấp quản trị cao nhất",
+      "can thiệp trong đêm"
+    ]
+  },
+  {
+    "text": " Voss gọi tôi lên văn phòng điều hành lúc 10 giờ.",
+    "beat_action": "Hùng muốn tạo một ranh giới riêng để tập trung suy nghĩ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder close-up shot, {Hùng} muốn tạo một ranh giới riêng để tập trung suy nghĩ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} muốn tạo một ranh giới riêng để tập trung suy nghĩ. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} muốn tạo một ranh giới riêng để tập trung suy nghĩ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "văn phòng điều hành",
+      "10 giờ"
+    ]
+  },
+  {
+    "text": " Chỉ bốn từ: 'Cậu làm tốt' và 'Tiếp tục duy trì công việc'.",
+    "beat_action": "Hùng coi chiếc tai nghe như một thông điệp không muốn bị làm phiền.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle wide shot, {Hùng} coi chiếc tai nghe như một thông điệp không muốn bị làm phiền. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} coi chiếc tai nghe như một thông điệp không muốn bị làm phiền. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} coi chiếc tai nghe như một thông điệp không muốn bị làm phiền evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "bốn từ",
+      "Cậu làm tốt",
+      "Tiếp tục duy trì"
+    ]
+  },
+  {
+    "text": " Tuyệt nhiên không nhắc đến báo cáo.",
+    "beat_action": "Hùng chuẩn bị phân tích tệp tin mật DN31_personal trên laptop.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt close-up shot, {Hùng} chuẩn bị phân tích tệp tin mật DN31_personal trên {{Laptop}}. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} chuẩn bị phân tích tệp tin mật DN31_personal trên {{Laptop}}. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} chuẩn bị phân tích tệp tin mật DN31_personal trên {{Laptop}} evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng",
+      "Laptop"
+    ],
+    "key_phrases": [
+      "không nhắc đến báo cáo"
+    ]
+  },
+  {
+    "text": " Đây không phải là một sự bỏ sót vô ý.",
+    "beat_action": "Hùng muốn viết thẳng suy nghĩ của mình ra một cách thô ráp nhất.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle medium close-up shot, {Hùng} muốn viết thẳng suy nghĩ của mình ra một cách thô ráp nhất. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} muốn viết thẳng suy nghĩ của mình ra một cách thô ráp nhất. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} muốn viết thẳng suy nghĩ của mình ra một cách thô ráp nhất evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Ở cấp bậc của Voss, không ai dùng phòng họp bảo mật tầng sáu chỉ để nói bốn từ xã giao với một kỹ sư cấp dưới.",
+    "beat_action": "Hùng ghi lại dấu mốc ngày tháng quan trọng trong nhật ký cá nhân.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle extreme wide shot, {Hùng} ghi lại dấu mốc ngày tháng quan trọng trong nhật ký cá nhân. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} ghi lại dấu mốc ngày tháng quan trọng trong nhật ký cá nhân. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} ghi lại dấu mốc ngày tháng quan trọng trong nhật ký cá nhân evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "cấp bậc của Voss",
+      "phòng họp bảo mật",
+      "tầng sáu"
+    ]
+  },
+  {
+    "text": " Và cũng không ai có thể làm ngơ trước bản báo cáo bất thường nhất trong năm nếu họ không có một ý đồ che đậy có chủ ý.",
+    "beat_action": "Hùng ghi thời gian sáng sớm của ngày định mệnh.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level medium shot, {Hùng} ghi thời gian sáng sớm của ngày định mệnh. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} ghi thời gian sáng sớm của ngày định mệnh. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} ghi thời gian sáng sớm của ngày định mệnh evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "báo cáo bất thường nhất",
+      "ý đồ che đậy"
+    ]
+  },
+  {
+    "text": " Tôi chưa có đủ bằng chứng để quy kết Voss là kẻ bấm nút hay ông ta chỉ đang đóng vai một quân cờ trong trò chơi của những kẻ đứng sau.",
+    "beat_action": "Hùng viết về sự biến mất của báo cáo kỹ thuật tần số 432Hz.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle wide shot, {Hùng} viết về sự biến mất của báo cáo kỹ thuật tần số 432Hz. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} viết về sự biến mất của báo cáo kỹ thuật tần số 432Hz. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} viết về sự biến mất của báo cáo kỹ thuật tần số 432Hz evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "chưa có đủ bằng chứng",
+      "kẻ bấm nút",
+      "quân cờ"
+    ]
+  },
+  {
+    "text": " Nhưng có một thực tế không thể bị tẩy xóa: báo cáo đã mất, cuộc họp bị bóp nghẹt thông tin, còn tần số 432Hz thì vẫn đang rung lên đều đặn dưới cảm biến sâu B-7.",
+    "beat_action": "Hùng ghi nhận lệnh xóa mờ ám bởi tài khoản admin.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder medium shot, {Hùng} ghi nhận lệnh xóa mờ ám bởi tài khoản admin. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} ghi nhận lệnh xóa mờ ám bởi tài khoản admin. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} ghi nhận lệnh xóa mờ ám bởi tài khoản admin evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "báo cáo đã mất",
+      "bóp nghẹt thông tin",
+      "tần số 432Hz"
+    ]
+  },
+  {
+    "text": " Đất đá không cần sự phê duyệt của Vortex Systems để tiếp tục phát ra tiếng nói.",
+    "beat_action": "Hùng khẳng định có sự can thiệp từ cấp lãnh đạo tối cao.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle full shot, {Hùng} khẳng định có sự can thiệp từ cấp lãnh đạo tối cao. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} khẳng định có sự can thiệp từ cấp lãnh đạo tối cao. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} khẳng định có sự can thiệp từ cấp lãnh đạo tối cao evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "không cần sự phê duyệt",
+      "tiếp tục phát ra tiếng nói"
+    ]
+  },
+  {
+    "text": " Tín hiệu vẫn tồn tại.",
+    "beat_action": "Hùng ghi lại mốc thời gian cuộc hẹn với Voss lúc 10 giờ.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, overhead medium close-up shot, {Hùng} ghi lại mốc thời gian cuộc hẹn với Voss lúc 10 giờ. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up overhead shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} ghi lại mốc thời gian cuộc hẹn với Voss lúc 10 giờ. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} ghi lại mốc thời gian cuộc hẹn với Voss lúc 10 giờ evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Tín hiệu vẫn tồn tại"
+    ]
+  },
+  {
+    "text": " Tôi đã giữ lại dữ liệu thô trong sổ tay.",
+    "beat_action": "Hùng ghi lại lời khen sáo rỗng của Voss trong sổ nhật ký.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level extreme wide shot, {Hùng} ghi lại lời khen sáo rỗng của Voss trong sổ nhật ký. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} ghi lại lời khen sáo rỗng của Voss trong sổ nhật ký. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} ghi lại lời khen sáo rỗng của Voss trong sổ nhật ký evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "dữ liệu thô",
+      "sổ tay"
+    ]
+  },
+  {
+    "text": " Cần phải tính toán bước tiếp theo.\" Anh đọc lại toàn bộ những gì mình vừa gõ, ngón tay dừng lại ở dòng chữ cuối cùng.",
+    "beat_action": "Hùng nhấn phím ghi chép khi nghĩ về việc Voss phớt lờ báo cáo.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV wide shot, {Hùng} nhấn phím ghi chép khi nghĩ về việc Voss phớt lờ báo cáo. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhấn phím ghi chép khi nghĩ về việc Voss phớt lờ báo cáo. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} nhấn phím ghi chép khi nghĩ về việc Voss phớt lờ báo cáo evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "tính toán bước tiếp theo",
+      "ngón tay dừng lại"
+    ]
+  },
+  {
+    "text": " Hùng nhấn phím xóa hai câu cuối cùng — ",
+    "beat_action": "Hùng khẳng định đây không phải là một sơ suất ngẫu nhiên.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level medium close-up shot, {Hùng} khẳng định đây không phải là một sơ suất ngẫu nhiên. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} khẳng định đây không phải là một sơ suất ngẫu nhiên. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} khẳng định đây không phải là một sơ suất ngẫu nhiên evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "nhấn phím xóa"
+    ]
+  },
+  {
+    "text": "chúng mang quá nhiều tính triết lý chủ quan, điều không nên xuất hiện trong thói quen tư duy của một kỹ sư thực chứng, ngay cả trong những dòng nhật ký cá nhân.",
+    "beat_action": "Hùng nhận định Voss đã lên kế hoạch rất kỹ lưỡng.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle medium shot, {Hùng} nhận định Voss đã lên kế hoạch rất kỹ lưỡng. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhận định Voss đã lên kế hoạch rất kỹ lưỡng. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} nhận định Voss đã lên kế hoạch rất kỹ lưỡng evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "triết lý chủ quan",
+      "kỹ sư thực chứng",
+      "nhật ký cá nhân"
+    ]
+  },
+  {
+    "text": " Anh gõ lại một dòng ngắn gọn: \"Tín hiệu vẫn còn đó.",
+    "beat_action": "Hùng chỉ ra sự bất thường khi Voss dùng phòng họp bảo mật chỉ để nói vài lời.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV extreme wide shot, {Hùng} chỉ ra sự bất thường khi Voss dùng phòng họp bảo mật chỉ để nói vài lời. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} chỉ ra sự bất thường khi Voss dùng phòng họp bảo mật chỉ để nói vài lời. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} chỉ ra sự bất thường khi Voss dùng phòng họp bảo mật chỉ để nói vài lời evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Tín hiệu vẫn còn đó"
+    ]
+  },
+  {
+    "text": " Dữ liệu trong sổ tay an toàn.",
+    "beat_action": "Hùng nghi vấn ý đồ che giấu tín hiệu nguy hiểm của Voss.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle medium shot, {Hùng} nghi vấn ý đồ che giấu tín hiệu nguy hiểm của Voss. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nghi vấn ý đồ che giấu tín hiệu nguy hiểm của Voss. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} nghi vấn ý đồ che giấu tín hiệu nguy hiểm của Voss evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Dữ liệu trong sổ tay an toàn",
+      "sổ tay"
+    ]
+  },
+  {
+    "text": " Bước tiếp theo: phân tích độc lập.\" Anh lưu tệp tin, gập máy tính.",
+    "beat_action": "Hùng nhận thấy âm mưu bóp nghẹt thông tin của tập đoàn.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, over-the-shoulder extreme close-up shot, {Hùng} nhận thấy âm mưu bóp nghẹt thông tin của tập đoàn. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up over-the-shoulder shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhận thấy âm mưu bóp nghẹt thông tin của tập đoàn. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} nhận thấy âm mưu bóp nghẹt thông tin của tập đoàn evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "phân tích độc lập",
+      "lưu tệp tin",
+      "gập máy tính"
+    ]
+  },
+  {
+    "text": " Ly cà phê đen trước mặt đã nguội đi một nửa, anh đưa lên môi uống một ngụm lớn, vị đắng chát lạnh ngắt chạy dọc cuống họng mà anh không hề để ý.",
+    "beat_action": "Hùng tự nhắc nhở bản thân cần thêm bằng chứng để chứng minh Voss là thủ phạm.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, overhead extreme wide shot, {Hùng} tự nhắc nhở bản thân cần thêm bằng chứng để chứng minh Voss là thủ phạm. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide overhead shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} tự nhắc nhở bản thân cần thêm bằng chứng để chứng minh Voss là thủ phạm. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} tự nhắc nhở bản thân cần thêm bằng chứng để chứng minh Voss là thủ phạm evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "cà phê đen"
+    ]
+  },
+  {
+    "text": " Bước tiếp theo.",
+    "beat_action": "Hùng suy ngẫm liệu Voss có phải là quân cờ của một thế lực lớn hơn.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level close-up shot, {Hùng} suy ngẫm liệu Voss có phải là quân cờ của một thế lực lớn hơn. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} suy ngẫm liệu Voss có phải là quân cờ của một thế lực lớn hơn. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} suy ngẫm liệu Voss có phải là quân cờ của một thế lực lớn hơn evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Suy nghĩ ấy đã âm ỉ cháy trong đầu anh từ lúc bước ra khỏi phòng họp của Voss.",
+    "beat_action": "Hùng đối mặt với sự thật rằng dữ liệu trên hệ thống đã bị xóa sạch.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV extreme wide shot, {Hùng} đối mặt với sự thật rằng dữ liệu trên hệ thống đã bị xóa sạch. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} đối mặt với sự thật rằng dữ liệu trên hệ thống đã bị xóa sạch. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} đối mặt với sự thật rằng dữ liệu trên hệ thống đã bị xóa sạch evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Đó không phải là một chuỗi tư duy logic có hệ thống, ",
+    "beat_action": "Hùng tự nhủ rằng tần số 432Hz tại cảm biến sâu B-7 vẫn đang rung động dưới lòng đất.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle medium close-up shot, {Hùng} tự nhủ rằng tần số 432Hz tại cảm biến sâu B-7 vẫn đang rung động dưới lòng đất. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} tự nhủ rằng tần số 432Hz tại cảm biến sâu B-7 vẫn đang rung động dưới lòng đất. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} tự nhủ rằng tần số 432Hz tại cảm biến sâu B-7 vẫn đang rung động dưới lòng đất evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": "mà giống như một chiếc kim nam châm liên tục xoay về một hướng duy nhất, bất kể anh có cố gắng nhìn ra ngoài cửa sổ tàu điện để xua tan nó đi chăng nữa.",
+    "beat_action": "Hùng tin rằng tín hiệu địa chất tự nhiên không thể bị bóp nghẹt bởi tập đoàn.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt close-up shot, {Hùng} tin rằng tín hiệu địa chất tự nhiên không thể bị bóp nghẹt bởi tập đoàn. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A close-up dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} tin rằng tín hiệu địa chất tự nhiên không thể bị bóp nghẹt bởi tập đoàn. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} tin rằng tín hiệu địa chất tự nhiên không thể bị bóp nghẹt bởi tập đoàn evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Cuốn sổ tay của anh đang lưu giữ bốn tháng dữ liệu thô được ghi chép tỉ mỉ bằng nét chì xanh.",
+    "beat_action": "Hùng giữ vững niềm tin vào sự tồn tại của tín hiệu.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle medium close-up shot, {Hùng} giữ vững niềm tin vào sự tồn tại của tín hiệu. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} giữ vững niềm tin vào sự tồn tại của tín hiệu. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} giữ vững niềm tin vào sự tồn tại của tín hiệu evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "sổ tay",
+      "dữ liệu thô"
+    ]
+  },
+  {
+    "text": " Nhưng chúng chỉ là những con số cô độc và các đường biểu đồ tự vẽ nguệch ngoạc bằng tay.",
+    "beat_action": "Hùng tự tin vì đã chép tay dữ liệu thô vào cuốn sổ tay của mình.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, POV full shot, {Hùng} tự tin vì đã chép tay dữ liệu thô vào cuốn {{Sổ tay}} của mình. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full POV shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} tự tin vì đã chép tay dữ liệu thô vào cuốn {{Sổ tay}} của mình. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} tự tin vì đã chép tay dữ liệu thô vào cuốn {{Sổ tay}} của mình evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng",
+      "Sổ tay"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Không có phân tích chuyển đổi FFT chuyên sâu, không có sự đối chiếu với cơ sở dữ liệu địa chất khu vực, ",
+    "beat_action": "Hùng nhìn lại những dòng chữ cuối cùng trên màn hình nhật ký.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, eye-level extreme close-up shot, {Hùng} nhìn lại những dòng chữ cuối cùng trên màn hình nhật ký. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme close-up eye-level shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} nhìn lại những dòng chữ cuối cùng trên màn hình nhật ký. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} nhìn lại những dòng chữ cuối cùng trên màn hình nhật ký evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": "không có bất kỳ công cụ khoa học chính quy nào để chứng minh với thế giới bên ngoài rằng những gì anh đang nhìn thấy không phải là ảo giác của một kẻ hoang tưởng.",
+    "beat_action": "Hùng quyết định xóa bớt những suy nghĩ cảm tính.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle medium close-up shot, {Hùng} quyết định xóa bớt những suy nghĩ cảm tính. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A medium close-up high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} quyết định xóa bớt những suy nghĩ cảm tính. Shot on 35mm prime lens, shallow depth of field. Lighting: hard white rim light from the corridor window panels, high contrast. Composition: centered symmetry, leading lines of the hallway paneling converging in the distance. Color palette: suspicious mood, cool monochromatic color palette with bright orange panel lights.",
+    "motion_prompt": "locked-off static shot, no camera move, light shadows shifting on the wall. {Hùng} quyết định xóa bớt những suy nghĩ cảm tính evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Để thuyết phục người khác — hay ít nhất là để giữ cho bản thân không nghi ngờ chính mình trước khi đưa ra quyết định tiếp theo — anh cần một bộ óc phân tích độc lập.",
+    "beat_action": "Hùng muốn giữ thái độ tư duy thực chứng của một kỹ sư.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, dutch tilt extreme wide shot, {Hùng} muốn giữ thái độ tư duy thực chứng của một kỹ sư. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A extreme wide dutch tilt shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} muốn giữ thái độ tư duy thực chứng của một kỹ sư. Shot on 50mm classic lens, realistic depth of field. Lighting: cool digital backlighting from the elevator buttons, soft fill light. Composition: heavy negative space on the left, character positioned on the far right. Color palette: lonely industrial vibe, desaturated grays and cool cyan undertones.",
+    "motion_prompt": "subtle slow pan to the right, corridor lights flickering slightly. {Hùng} muốn giữ thái độ tư duy thực chứng của một kỹ sư evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "phân tích độc lập"
+    ]
+  },
+  {
+    "text": " Một người nằm ngoài guồng quay lợi ích của Vortex Systems, ",
+    "beat_action": "Hùng gõ lại kết luận thực tế về sự tồn tại của tín hiệu.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle full shot, {Hùng} gõ lại kết luận thực tế về sự tồn tại của tín hiệu. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} gõ lại kết luận thực tế về sự tồn tại của tín hiệu. Shot on 85mm portrait lens, smooth bokeh background. Lighting: natural daylight filtered through haze, high contrast, warm temperature. Composition: subject in the midground, with reflection on the metal wall in the foreground. Color palette: cyberpunk administrative setting, futuristic charcoal and silver colors.",
+    "motion_prompt": "slow tilt down following the character's movement, soft smoke drifting in background. {Hùng} gõ lại kết luận thực tế về sự tồn tại của tín hiệu evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": "nhìn vào những con số này và đưa ra một lời khẳng định khách quan: anh đang chạm vào một sự thật hay chỉ đang hóa điên.",
+    "beat_action": "Hùng tự trấn an rằng dữ liệu chép tay trong sổ tay vẫn an toàn.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, low angle wide shot, {Hùng} tự trấn an rằng dữ liệu chép tay trong {{Sổ tay}} vẫn an toàn. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A wide low angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} tự trấn an rằng dữ liệu chép tay trong {{Sổ tay}} vẫn an toàn. Shot on 135mm telephoto lens, compressed background. Lighting: dim cool shadows with sharp white fluorescent glare, practical lamps. Composition: over-the-shoulder view with clean division between foreground and background. Color palette: quiet and analytical mood, cool blue and chrome hues with digital haze.",
+    "motion_prompt": "slow orbit/arc around the subject, dust particles floating in the backlight. {Hùng} tự trấn an rằng dữ liệu chép tay trong {{Sổ tay}} vẫn an toàn evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng",
+      "Sổ tay"
+    ],
+    "key_phrases": []
+  },
+  {
+    "text": " Nhưng tìm ai giữa một thành phố công nghiệp khép kín như Omega-7?",
+    "beat_action": "Hùng gập laptop cá nhân, cất chiếc bút chì xanh và chuẩn bị hành động.",
+    "description": "{HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}, high angle full shot, {Hùng} gập {{Laptop}} cá nhân, cất chiếc {{Bút chì}} xanh và chuẩn bị hành động. Comic style, sci-fi theme.",
+    "visual_prompt": "Comic style, sci-fi theme. A full high angle shot at {HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH}. Features {Hùng} gập {{Laptop}} cá nhân, cất chiếc {{Bút chì}} xanh và chuẩn bị hành động. Shot on 24mm wide lens, deep focus. Lighting: cold fluorescent key light from overhead, soft shadows. Composition: subject offset to the left using the rule of thirds, empty space on the right. Color palette: tense and sterile atmosphere, desaturated steel and teal color palette.",
+    "motion_prompt": "slow dolly-in on the subject, minor dust particles drifting in the light. {Hùng} gập {{Laptop}} cá nhân, cất chiếc {{Bút chì}} xanh và chuẩn bị hành động evolves slowly over the 8-second clip.",
+    "ref_entity_names": [
+      "HÀNH LANG VÀ THANG MÁY TÒA NHÀ HÀNH CHÍNH",
+      "Hùng",
+      "Laptop",
+      "Bút chì"
+    ],
+    "key_phrases": []
+  }
+]
