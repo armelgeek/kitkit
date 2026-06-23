@@ -6,6 +6,7 @@ import {
   base64ToAudioUrl,
   projectExportUrl,
   type Project,
+  type SettingsPreset,
   type Voice,
 } from "../../api/client";
 
@@ -48,10 +49,13 @@ export default function ProjectSettings({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [presets, setPresets] = useState<SettingsPreset[]>([]);
+  const [presetSel, setPresetSel] = useState("");
 
   useEffect(() => {
     api.options().then(setOpts).catch(() => {});
     listVoices().then(setVoices).catch(() => {});
+    api.listSettingsPresets().then((r) => setPresets(r.presets)).catch(() => {});
   }, []);
 
   const testVoice = async () => {
@@ -134,36 +138,25 @@ export default function ProjectSettings({
     "tts_speed", "tts_gap", "tts_sentence_gap"] as const;
   const BOOL_KEYS = ["storytelling", "bgm_duck"] as const;
 
-  const exportSettings = () => {
-    const payload: any = {
-      _type: "flowkit-project-settings", version: 1, ...s,
-      shot_duration: shotDuration, storytelling, seed, bgm_volume: bgmVol, bgm_duck: bgmDuck,
-      voice_id: voiceId, tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `flowkit-settings-${(project.title || "project").replace(/[^\w-]+/g, "_")}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const collectSettings = () => ({
+    ...s, shot_duration: shotDuration, storytelling, seed, bgm_volume: bgmVol, bgm_duck: bgmDuck,
+    voice_id: voiceId, tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
+  });
 
-  const importSettings = async (file: File | undefined) => {
-    if (!file) return;
+  // Apply a settings object (from a file OR a saved preset) to this project immediately,
+  // type-guarding each field, then reflect the persisted values back into the form.
+  const applySettings = async (obj: any, label = "thiết lập") => {
+    if (!obj || typeof obj !== "object") { setErr("Dữ liệu thiết lập không hợp lệ"); return; }
     setBusy(true);
     setErr(null);
     setMsg(null);
     try {
-      const obj = JSON.parse(await file.text());
-      if (!obj || typeof obj !== "object") throw new Error("File không hợp lệ");
       const fields: any = {};
       for (const k of STR_KEYS) if (typeof obj[k] === "string") fields[k] = obj[k];
       for (const k of NUM_KEYS) if (typeof obj[k] === "number") fields[k] = obj[k];
       for (const k of BOOL_KEYS) if (typeof obj[k] === "boolean") fields[k] = obj[k];
-      if (!Object.keys(fields).length) throw new Error("Không có thiết lập hợp lệ trong file");
+      if (!Object.keys(fields).length) throw new Error("Không có thiết lập hợp lệ");
       const u = await api.updateProject(project.id, fields);
-      // reflect the applied values back into the form
       setS((p) => ({
         style: u.style ?? p.style, script_lang: u.script_lang ?? p.script_lang,
         image_text_lang: u.image_text_lang ?? p.image_text_lang, culture_hint: u.culture_hint ?? p.culture_hint,
@@ -181,11 +174,55 @@ export default function ProjectSettings({
       if (u.tts_gap != null) setTtsGap(u.tts_gap);
       if (u.tts_sentence_gap != null) setTtsSentenceGap(u.tts_sentence_gap);
       onSaved(u);
-      setMsg(`Đã nhập & áp dụng ${Object.keys(fields).length} thiết lập.`);
+      setMsg(`Đã áp dụng ${Object.keys(fields).length} ${label}.`);
     } catch (e: any) {
-      setErr("Nhập thiết lập lỗi: " + (e.message || e));
+      setErr("Áp dụng thiết lập lỗi: " + (e.message || e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const exportSettings = () => {
+    const payload = { _type: "flowkit-project-settings", version: 1, ...collectSettings() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `flowkit-settings-${(project.title || "project").replace(/[^\w-]+/g, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importSettings = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      await applySettings(JSON.parse(await file.text()), "thiết lập từ file");
+    } catch {
+      setErr("File JSON không hợp lệ");
+    }
+  };
+
+  // ── In-app presets (server-side, like the node-graph presets) ──
+  const saveAsPreset = async () => {
+    const name = window.prompt("Tên preset thiết lập:");
+    if (!name?.trim()) return;
+    try {
+      const r = await api.saveSettingsPreset(name.trim(), collectSettings());
+      setPresets(r.presets);
+      setMsg(`Đã lưu preset "${name.trim()}".`);
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  };
+  const deletePreset = async (id: string) => {
+    const p = presets.find((x) => x.id === id);
+    if (!p || !window.confirm(`Xóa preset "${p.name}"?`)) return;
+    try {
+      const r = await api.deleteSettingsPreset(id);
+      setPresets(r.presets);
+      setPresetSel("");
+    } catch (e: any) {
+      setErr(e.message);
     }
   };
 
@@ -406,6 +443,33 @@ export default function ProjectSettings({
         </div>
 
         <div className="space-y-2 border-t border-neutral-800 p-4">
+          <div className="flex gap-2">
+            <select
+              value={presetSel}
+              onChange={(e) => {
+                setPresetSel(e.target.value);
+                const p = presets.find((x) => x.id === e.target.value);
+                if (p) applySettings(p.settings, `preset "${p.name}"`);
+              }}
+              title="Nạp một preset thiết lập đã lưu (áp dụng ngay)"
+              className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-300 outline-none"
+            >
+              <option value="">Preset thiết lập…</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {presetSel && (
+              <button onClick={() => deletePreset(presetSel)} title="Xóa preset đang chọn"
+                className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-sm text-rose-300 hover:bg-rose-950/40">
+                🗑
+              </button>
+            )}
+            <button onClick={saveAsPreset} title="Lưu thiết lập hiện tại thành preset trong app"
+              className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-sm hover:bg-neutral-800">
+              💾 Preset
+            </button>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={exportSettings}

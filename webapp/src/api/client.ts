@@ -244,7 +244,23 @@ export const api = {
     }),
   syncProjectMedia: (pid: string) =>
     req<SyncMediaResult>(`/projects/${pid}/sync-media`, { method: "POST" }),
+  // Saved project-settings presets (server-side, reusable across projects).
+  listSettingsPresets: () => req<{ presets: SettingsPreset[] }>(`/settings-presets`),
+  saveSettingsPreset: (name: string, settings: Record<string, any>) =>
+    req<{ presets: SettingsPreset[] }>(`/settings-presets`, {
+      method: "POST",
+      body: JSON.stringify({ name, settings }),
+    }),
+  deleteSettingsPreset: (id: string) =>
+    req<{ presets: SettingsPreset[] }>(`/settings-presets/${id}`, { method: "DELETE" }),
 };
+
+export interface SettingsPreset {
+  id: string;
+  name: string;
+  settings: Record<string, any>;
+  created_at?: string;
+}
 
 export interface SyncMediaResult {
   flow_media: number;

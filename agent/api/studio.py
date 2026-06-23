@@ -2429,6 +2429,39 @@ async def delete_graph_template(tid: str):
     return {"templates": templates}
 
 
+class SaveSettingsPresetRequest(BaseModel):
+    name: str
+    settings: dict
+
+
+@router.get("/settings-presets")
+async def list_settings_presets():
+    """Preset THIẾT LẬP dự án đã lưu (style, prompt header/footer, model, TTS…) — tái dùng nhanh."""
+    return {"presets": await db.kv_get("settings_presets", []) or []}
+
+
+@router.post("/settings-presets")
+async def save_settings_preset(body: SaveSettingsPresetRequest):
+    """Lưu thiết lập hiện tại thành preset (ghi đè nếu trùng tên)."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Thiếu tên preset")
+    presets = await db.kv_get("settings_presets", []) or []
+    presets = [p for p in presets if p.get("name") != name]
+    presets.append({"id": db.new_id(), "name": name, "settings": body.settings,
+                    "created_at": db.now()})
+    await db.kv_set("settings_presets", presets)
+    return {"presets": presets}
+
+
+@router.delete("/settings-presets/{tid}")
+async def delete_settings_preset(tid: str):
+    presets = await db.kv_get("settings_presets", []) or []
+    presets = [p for p in presets if p.get("id") != tid]
+    await db.kv_set("settings_presets", presets)
+    return {"presets": presets}
+
+
 class ApplyMediaRequest(BaseModel):
     media_id: str
     ext: str = "png"
