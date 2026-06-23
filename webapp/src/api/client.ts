@@ -18,6 +18,7 @@ export interface Project {
   tts_speed?: number | null;
   tts_gap?: number | null;
   tts_sentence_gap?: number | null;
+  tts_edge_pad?: number | null;
   seed?: number | null;
   prompt_header?: string | null;
   prompt_footer?: string | null;

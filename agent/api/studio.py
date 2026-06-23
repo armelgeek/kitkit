@@ -67,6 +67,7 @@ class UpdateProjectRequest(BaseModel):
     tts_speed: Optional[float] = None
     tts_gap: Optional[float] = None
     tts_sentence_gap: Optional[float] = None
+    tts_edge_pad: Optional[float] = None
     seed: Optional[int] = None
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
@@ -1428,14 +1429,21 @@ def _silence_wav_bytes(template: bytes, seconds: float) -> bytes:
 
 async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
                      speed: float = 1.0, gap: float = 0.0,
-                     sentence_gap: float = 0.0) -> tuple[str, list[float]]:
+                     sentence_gap: float = 0.0,
+                     edge_pad: float = 0.0) -> tuple[str, list[float], float]:
     """TTS each beat SENTENCE-BY-SENTENCE, then concat into one scene WAV with two levels of
     breathing silence: `sentence_gap` between sentences WITHIN a beat, and the larger `gap`
     between beats. Reading per sentence forces a real pause at every '.'/'!'/'?' (the engine
     otherwise runs sentences together, which is exhausting to listen to).
 
-    Returns (web_path, [per-beat READ durations] — the full spoken span of each beat incl. its
-    internal sentence gaps, EXCLUDING the trailing inter-beat gap). So images + subtitles land
+    `edge_pad` seconds of silence are prepended AND appended to the whole scene WAV so an
+    editor's cross-dissolve has silent handles at both ends (it otherwise eats the first/last
+    spoken words). The leading pad shifts every beat's start by `edge_pad`, so it is returned
+    for the caller to offset timing.
+
+    Returns (web_path, [per-beat READ durations], lead) where lead == the applied leading
+    edge_pad (0 if no audio template). Each read is the full spoken span of a beat incl. its
+    internal sentence gaps, EXCLUDING the trailing inter-beat gap. So images + subtitles land
     on the narration.
 
     Fault-tolerant: a sentence whose TTS fails becomes a silence of its estimated length (the
@@ -1475,6 +1483,9 @@ async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
     out: list[bytes] = []
     reads: list[float] = []
     n = len(beat_pieces)
+    lead = round(edge_pad, 3) if edge_pad > 0 else 0.0
+    if lead > 0:                                          # silent handle at the very start
+        out.append(_silence_wav_bytes(template, lead))
     for bi, sent_pieces in enumerate(beat_pieces):
         read = 0.0
         for si, (audio, dur) in enumerate(sent_pieces):
@@ -1486,11 +1497,13 @@ async def _tts_beats(texts: list[str], voice_id: int, pid: str, scene_id: str,
         reads.append(round(read, 3))
         if gap > 0 and bi < n - 1:
             out.append(_silence_wav_bytes(template, gap))
+    if lead > 0:                                          # silent handle at the very end
+        out.append(_silence_wav_bytes(template, lead))
     rel = f"{pid}/narr_scene_{scene_id}.wav"
     dest = media_store.MEDIA_DIR / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     await asyncio.to_thread(_concat_wav_bytes, out, dest)
-    return f"/media/{rel}", reads
+    return f"/media/{rel}", reads, lead
 
 
 async def _ensure_source_segments(pid: str, force: bool = False) -> None:
@@ -1609,11 +1622,15 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     sentence_gap = min(max(
         float(project.get("tts_sentence_gap") if project.get("tts_sentence_gap") is not None else 0.3),
         0.0), 1.0)
-    narr_web, reads = None, None
+    edge_pad = min(max(
+        float(project.get("tts_edge_pad") if project.get("tts_edge_pad") is not None else 0.5),
+        0.0), 3.0)
+    narr_web, reads, lead = None, None, 0.0
     if body.measure and any(b.get("_say") for b in beats):
         try:
-            narr_web, reads = await _tts_beats(
-                [b["_say"] for b in beats], voice_id, project["id"], sid, speed, gap, sentence_gap)
+            narr_web, reads, lead = await _tts_beats(
+                [b["_say"] for b in beats], voice_id, project["id"], sid,
+                speed, gap, sentence_gap, edge_pad)
         except HTTPException as e:
             logger.warning("beat TTS unavailable (%s) — dùng ước lượng theo số từ", e.detail)
         except Exception as e:  # noqa: BLE001
@@ -1628,14 +1645,16 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     # so durations sum to the gapped scene WAV and start_times stay in sync with the audio.
     n = len(beats)
     durs = [round(reads[i] + (gap if i < n - 1 else 0.0), 3) for i in range(n)]
-    scene_dur = round(sum(durs), 3)
+    # WAV = lead silence + gapped beats + trailing lead silence (edge handles for dissolves).
+    # The leading pad shifts every beat's start by `lead`; both pads count toward scene length.
+    scene_dur = round(sum(durs) + 2 * lead, 3)
 
     await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
     await db.update("scene", sid, {
         "narration_text": voiceover, "narration_path": narr_web,
         "narration_duration": scene_dur, "location_entity_id": scene_loc_id})
     ts = db.now()
-    t = 0.0
+    t = lead                                   # first beat starts after the leading silent pad
     for i, b in enumerate(beats):
         b_dur = durs[i]
         # subtitle spans the SPOKEN read (nearly the whole shot), not the trailing pause

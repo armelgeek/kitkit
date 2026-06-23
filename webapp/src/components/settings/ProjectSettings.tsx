@@ -44,6 +44,7 @@ export default function ProjectSettings({
   const [ttsSpeed, setTtsSpeed] = useState<number>(project.tts_speed ?? 1.0);
   const [ttsGap, setTtsGap] = useState<number>(project.tts_gap ?? 0.4);
   const [ttsSentenceGap, setTtsSentenceGap] = useState<number>(project.tts_sentence_gap ?? 0.3);
+  const [ttsEdgePad, setTtsEdgePad] = useState<number>(project.tts_edge_pad ?? 0.5);
   const [testing, setTesting] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,6 +91,7 @@ export default function ProjectSettings({
         tts_speed: ttsSpeed,
         tts_gap: ttsGap,
         tts_sentence_gap: ttsSentenceGap,
+        tts_edge_pad: ttsEdgePad,
         seed,
       });
       onSaved(updated);
@@ -135,12 +137,13 @@ export default function ProjectSettings({
   const STR_KEYS = ["style", "script_lang", "image_text_lang", "culture_hint",
     "prompt_header", "prompt_footer", "image_model", "aspect_ratio", "video_model"] as const;
   const NUM_KEYS = ["shot_duration", "seed", "bgm_volume", "voice_id",
-    "tts_speed", "tts_gap", "tts_sentence_gap"] as const;
+    "tts_speed", "tts_gap", "tts_sentence_gap", "tts_edge_pad"] as const;
   const BOOL_KEYS = ["storytelling", "bgm_duck"] as const;
 
   const collectSettings = () => ({
     ...s, shot_duration: shotDuration, storytelling, seed, bgm_volume: bgmVol, bgm_duck: bgmDuck,
     voice_id: voiceId, tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
+    tts_edge_pad: ttsEdgePad,
   });
 
   // Apply a settings object (from a file OR a saved preset) to this project immediately,
@@ -173,6 +176,7 @@ export default function ProjectSettings({
       if (u.tts_speed != null) setTtsSpeed(u.tts_speed);
       if (u.tts_gap != null) setTtsGap(u.tts_gap);
       if (u.tts_sentence_gap != null) setTtsSentenceGap(u.tts_sentence_gap);
+      if (u.tts_edge_pad != null) setTtsEdgePad(u.tts_edge_pad);
       onSaved(u);
       setMsg(`Đã áp dụng ${Object.keys(fields).length} ${label}.`);
     } catch (e: any) {
@@ -397,6 +401,20 @@ export default function ProjectSettings({
             <p className="mt-1 text-xs text-neutral-600">
               Mỗi câu được đọc riêng và chèn khoảng lặng này ở mỗi dấu chấm/câu, để giọng đọc
               ngừng nghỉ tự nhiên thay vì đọc liền tù tì. Cần "Dựng theo lời đọc" lại.
+            </p>
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-xs text-neutral-500">Đệm 2 đầu</span>
+              <input type="range" min={0} max={2} step={0.05} value={ttsEdgePad}
+                onChange={(e) => setTtsEdgePad(parseFloat(e.target.value))}
+                className="flex-1 accent-indigo-500" />
+              <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
+                {ttsEdgePad.toFixed(2)}s
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-neutral-600">
+              Khoảng lặng đệm ở ĐẦU và CUỐI mỗi WAV scene, làm "tay cầm" cho cross-dissolve
+              khi dựng (DaVinci…) — hiệu ứng nằm trọn trong khoảng lặng, không nuốt lời đọc
+              đầu/cuối. ≈0.5s phủ một dissolve 24 frame. Cần "Dựng theo lời đọc" lại.
             </p>
             <p className="mt-1 text-xs text-neutral-600">
               Quản lý / thêm giọng trong ⚙ Settings. Cần đặt OmniVoice URL để test.

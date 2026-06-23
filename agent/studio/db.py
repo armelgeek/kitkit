@@ -123,6 +123,10 @@ _MIGRATIONS = [
     # Silent pause inserted between SENTENCES within a beat (seconds). Sentences are read one
     # at a time so the engine pauses at every '.'/'?'/'!' — this is the breath between them.
     ("project", "tts_sentence_gap", "REAL DEFAULT 0.3"),
+    # Silent edge padding prepended AND appended to each scene WAV (seconds). Gives a
+    # cross-dissolve in the editor (DaVinci etc.) silent "handles" to chew on at both ends so
+    # the transition never eats the first/last spoken words. ~0.5s covers a 24f dissolve.
+    ("project", "tts_edge_pad", "REAL DEFAULT 0.5"),
     # Seed-lock: when set, image generation reuses this seed (reproducible). NULL = random.
     ("project", "seed", "INTEGER"),
     # A shot has two independent node graphs: graph_json = the storyboard IMAGE graph,
