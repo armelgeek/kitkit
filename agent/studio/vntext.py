@@ -109,8 +109,9 @@ def _date_sub(m: re.Match) -> str:
         return m.group(0)
     day = ("mùng " if d <= 10 else "") + int_to_words(d)
     out = f"{day} tháng {int_to_words(mo)}"   # no "ngày" prefix (source often already has it)
-    if m.group("y"):
-        out += f" năm {int_to_words(int(m.group('y')))}"
+    y = m.groupdict().get("y")                # the dd/mm (no-year) pattern has no 'y' group
+    if y:
+        out += f" năm {int_to_words(int(y))}"
     return out
 
 
