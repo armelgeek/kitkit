@@ -1340,7 +1340,8 @@ def _subtitle_windows(beat_text: str, b_start: float, read_dur: float) -> list[d
     read (by word count). Together they tile the whole read — the subtitle is on screen nearly
     the entire time the beat is spoken, changing at sentence boundaries — and stay in sync
     because times come from the measured read duration."""
-    sents = [s.strip() for s in _SENT_RE.findall(beat_text or "") if s.strip()] or [(beat_text or "").strip()]
+    clean = vntext.strip_decoration(beat_text or "")
+    sents = [s.strip() for s in _SENT_RE.findall(clean) if s.strip()] or [clean.strip()]
     sents = [s for s in sents if s]
     if not sents or read_dur <= 0:
         return []
@@ -1613,7 +1614,10 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     if len(say) < len(beats):                            # fewer sentences than beats → trim
         beats = beats[:len(say)]
     for i, b in enumerate(beats):
-        b["_say"] = (say[i] if i < len(say) else (b.get("text") or "")).strip()
+        # strip decoration glyphs from the stored/spoken slice so narrator_text, the shot title
+        # and the burned caption never show a '◆' the narration won't read (audio already drops
+        # it via normalize; this keeps the TEXT in sync).
+        b["_say"] = vntext.strip_decoration(say[i] if i < len(say) else (b.get("text") or "")).strip()
 
     # 3) TTS one continuous read PER BEAT (with a breathing GAP between beats) → the scene WAV
     #    + each beat's exact READ duration. The beat occupies read+gap on the timeline; the
@@ -1702,7 +1706,9 @@ async def rebuild_scene_audio(sid: str):
     shots = await db.query_all("SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))
     if not shots:
         raise HTTPException(400, "Scene chưa có shot nào để dựng lại audio")
-    say = [(s.get("narrator_text") or "").strip() for s in shots]
+    # strip decoration from existing narration (old builds kept a '◆' prefix) so the re-TTS
+    # and re-tiled captions are clean.
+    say = [vntext.strip_decoration(s.get("narrator_text") or "").strip() for s in shots]
     if not any(say):
         raise HTTPException(400, "Các shot chưa có lời đọc (narrator_text) để tạo audio")
 
@@ -1738,12 +1744,15 @@ async def rebuild_scene_audio(sid: str):
         b_dur = durs[i]
         # captions re-tiled over the new read timing (start shifted by the leading pad)
         caps = _subtitle_windows(say[i], t, reads[i])
-        await db.update("shot", s["id"], {
+        update = {
             "narration_duration": b_dur,
             "start_time": round(t, 3),
             "captions": json.dumps(caps, ensure_ascii=False),
             "duration": max(1, int(round(b_dur))),
-            "updated_at": ts})
+            "updated_at": ts}
+        if say[i] and say[i] != (s.get("narrator_text") or "").strip():
+            update["narrator_text"] = say[i]    # persist the decoration-stripped narration
+        await db.update("shot", s["id"], update)
         t += b_dur
 
     return {"shots": await db.query_all(

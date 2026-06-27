@@ -12,7 +12,7 @@ import re
 from fastapi import HTTPException
 
 from agent.api.ai_agent import RunRequest, run_agent
-from agent.studio import db
+from agent.studio import db, vntext
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +404,10 @@ _SENT_RE = re.compile(r".*?(?:[.!?…]+[\"'’”\)\]]*(?=\s|$)|\n|$)", re.S)
 
 
 def _sentences(text: str) -> list[str]:
-    return [s.strip() for s in _SENT_RE.findall(text or "") if s.strip()]
+    # Drop fragments with no readable word (a standalone "◆", a row of bullets) so decoration
+    # never becomes its own contiguous part → its own beat → a wasted shot + 0.8s of noise.
+    return [s.strip() for s in _SENT_RE.findall(text or "")
+            if s.strip() and vntext.has_words(s)]
 
 
 def partition_text(text: str, n: int) -> list[str]:

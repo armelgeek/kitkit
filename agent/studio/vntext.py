@@ -155,6 +155,32 @@ def _strip_unicode_symbols(t: str) -> str:
     )
 
 
+def strip_decoration(text: str) -> str:
+    """Remove decorative / markdown glyphs (bullets, stars, box-drawing, em-dashes, any
+    non-ASCII symbol) for DISPLAY / caption / stored-narration use — WITHOUT the full TTS
+    normalization (numbers, dates etc. are left as written). Mirrors what `normalize` strips so
+    a burned caption or shot title never shows a '◆' the narration won't actually read."""
+    if not text:
+        return ""
+    t = _HRULE_LINE.sub(" ", text)
+    t = _BULLET_LINE.sub("", t)
+    t = _DECOR.sub(" ", t)
+    t = _strip_unicode_symbols(t)
+    t = _DASHES.sub(", ", t)
+    t = re.sub(r"([,;:])\1+", r"\1", t)
+    t = re.sub(r"\s+([,.;:!?…])", r"\1", t)
+    t = re.sub(r"[ \t]+", " ", t).strip()
+    t = re.sub(r"^[\s,;:.\-]+", "", t)
+    return t
+
+
+def has_words(text: str) -> bool:
+    """True if `text` has at least one readable word character once decoration is removed — so
+    a pure-decoration fragment (a standalone '◆', a row of bullets) is recognised as NOT
+    narration and can be dropped instead of becoming its own beat / shot / 0.8s of noise."""
+    return bool(re.search(r"\w", strip_decoration(text), re.UNICODE))
+
+
 def normalize(text: str) -> str:
     if not text:
         return ""
