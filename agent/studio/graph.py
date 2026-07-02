@@ -174,6 +174,20 @@ def _generated_media_id(payload, exclude=None):
     return None
 
 
+def _gen_media_item(payload, exclude=None):
+    """The `media` item that holds the GENERATED image (same selection as _generated_media_id)
+    — so its direct URL can be read for a resolve-free download. {} if none."""
+    media = payload.get("media") or []
+    chosen = {}
+    for m in media:
+        if not isinstance(m, dict):
+            continue
+        mid = ((m.get("image") or {}).get("generatedImage") or {}).get("mediaId")
+        if mid and mid != exclude:
+            chosen = m                  # last generated item wins (result after echoed inputs)
+    return chosen
+
+
 async def _img_gen_retry(call, pid, exclude=None):
     """Run an image-producing Flow call, VERIFY a media was made + downloaded, and retry
     on content-policy blocks / transient failures. Returns (media_id, web_path). `exclude`
@@ -187,7 +201,10 @@ async def _img_gen_retry(call, pid, exclude=None):
             p = res.get("data", res)
             mid = _generated_media_id(p, exclude)
             if mid:
-                web = await media_store.ensure_local(mid, pid)
+                # download via the direct URL in the gen response when present (no rate-limited
+                # resolve), else fall back to get_direct_media with retries
+                url = media_store.direct_url_in(_gen_media_item(p, exclude))
+                web = await media_store.save_media(mid, pid, "png", url)
                 if web:
                     return mid, web
                 last = "tải ảnh lỗi"

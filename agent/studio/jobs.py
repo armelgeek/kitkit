@@ -169,23 +169,24 @@ class JobManager:
                            + ", ".join(labels)[:80])
             await self._broadcast(job)
 
-            async def _one(idx, it):
+            async def _one(idx, it, lbl):
                 # spread the group's submits so they don't hit Flow at the same instant
                 if stagger[1] > 0 and idx:
                     await asyncio.sleep(idx * random.uniform(*stagger))
-                return await worker(it, batch_id)     # batch worker takes (item, batch_id)
-
-            results = await asyncio.gather(*[_one(k, it) for k, it in enumerate(group)],
-                                           return_exceptions=True)
-            for it, lbl, res in zip(group, labels, results):
-                if isinstance(res, Exception):
-                    logger.exception("job %s batch item failed: %s", job.id, lbl,
-                                     exc_info=res)
-                    job.errors.append({"item": lbl, "error": str(res)[:200]})
-                else:
+                try:
+                    await worker(it, batch_id)        # batch worker takes (item, batch_id)
                     job.done += 1
-            await self._broadcast(job)
-            await self._persist(job)
+                except Exception as ex:               # noqa: BLE001
+                    logger.exception("job %s batch item failed: %s", job.id, lbl)
+                    job.errors.append({"item": lbl, "error": str(ex)[:200]})
+                # reflect THIS item's completion immediately (done/errors is polled by the UI),
+                # so images appear as each finishes instead of only when the whole group does —
+                # a slow retry on one frame no longer freezes the others' updates.
+                await self._broadcast(job)
+                await self._persist(job)
+
+            await asyncio.gather(*[_one(k, it, lbl)
+                                   for k, (it, lbl) in enumerate(zip(group, labels))])
             if gi < len(groups) - 1 and not job.cancel.is_set():
                 await self._cooldown(job, throttle)   # 10s cooldown between batches
         if finalize is not None and job.status != "cancelled":

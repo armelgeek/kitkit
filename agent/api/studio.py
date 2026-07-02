@@ -614,13 +614,21 @@ async def _resolve_image_model(project: dict) -> Optional[str]:
 
 
 def _extract_image_result(payload: dict) -> dict:
-    media = (payload.get("media") or [{}])[0]
+    items = payload.get("media") or []
+    # An edit echoes the source image back in `media`, so pick the LAST item that actually has
+    # a generatedImage (the result comes after any echoed inputs); fall back to the first item.
+    media = next((m for m in reversed(items)
+                  if isinstance(m, dict) and (m.get("image") or {}).get("generatedImage", {}).get("mediaId")),
+                 items[0] if items else {})
     gen = media.get("image", {}).get("generatedImage", {})
     wf = (payload.get("workflows") or [{}])[0]
     return {
         "media_id": gen.get("mediaId") or media.get("name"),
         "workflow_id": wf.get("name"),
         "primary_media_id": wf.get("metadata", {}).get("primaryMediaId"),
+        # the gen response already carries the result's direct URL → download it without a
+        # separate rate-limited resolve (search only THIS generated item, not the whole payload).
+        "url": media_store.direct_url_in(media),
     }
 
 
@@ -653,13 +661,19 @@ async def _generate_image_verified(gen_call, store_call, label_for_err: str) -> 
             payload = res.get("data", res)
             info = _extract_image_result(payload)
             if info.get("media_id"):
+                # The image EXISTS on Flow now. store_call downloads it (with its own retries).
+                # Do NOT loop back to gen_call on a download miss — regenerating just spawns
+                # duplicate Flow media (the 's04_33 created ×3' bug). Fail hard instead; the
+                # media_id is persisted so it can be re-fetched later.
                 row = await store_call(info)
                 if row.get("image_path"):       # ảnh tạo + tải về OK
                     return row
-                last = "ảnh chưa tải được"
-            else:
-                last = _image_block_reason(payload) or "Flow không trả media (có thể bị chặn)"
-        # A block backs off long + earns a few extra tries (retrying fast extends the block).
+                raise HTTPException(
+                    502, f"Ảnh đã tạo (media {info['media_id'][:8]}) nhưng tải về lỗi "
+                         f"({label_for_err}) — thử 'Gen nhanh' lại, không tạo ảnh trùng.")
+            last = _image_block_reason(payload) or "Flow không trả media (có thể bị chặn)"
+        # No media produced (error / block / filter) → retrying gen is the right move. A block
+        # backs off long + earns a few extra tries (retrying fast extends the block).
         if blocked and max_attempts < IMAGE_GEN_RETRIES + ABUSE_EXTRA_RETRIES:
             max_attempts += 1
         logger.warning("%s: tạo ảnh hỏng (lần %d/%d%s): %s", label_for_err, attempt, max_attempts,
@@ -742,9 +756,7 @@ async def _store_media_on_entity(entity: dict, project: dict, info: dict, label:
                 info["workflow_id"], project["flow_project_id"], label[:60])
         except Exception:
             pass
-    web = None
-    if info.get("media_id"):
-        web = await media_store.ensure_local(info["media_id"], project["id"])
+    web = await media_store.save_media(info.get("media_id"), project["id"], "png", info.get("url"))
     await db.update("entity", entity["id"], {
         "media_id": info.get("media_id"),
         "primary_media_id": info.get("primary_media_id"),
@@ -1120,8 +1132,10 @@ async def _store_media_on_shot(shot: dict, project: dict, info: dict,
         except Exception:
             pass
     ext = "png" if kind == "image" else "mp4"
-    web = await media_store.ensure_local(info["media_id"], project["id"], ext) \
-        if info.get("media_id") else None
+    # Prefer the direct URL from the gen response (no rate-limited resolve); fall back to
+    # get_direct_media with retries. This stops a concurrent batch from tripping Flow's media
+    # rate limit and leaving image_path NULL → regenerate (the 's04_33 created ×3' bug).
+    web = await media_store.save_media(info.get("media_id"), project["id"], ext, info.get("url"))
     fields = {
         f"{kind}_media_id": info.get("media_id"),
         f"{kind}_primary_id": info.get("primary_media_id"),

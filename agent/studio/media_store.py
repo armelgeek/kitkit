@@ -69,17 +69,25 @@ async def _download(url: str, dest: Path) -> bool:
         return False
 
 
-async def ensure_local(media_id: str, project_id: str, ext: str = "png") -> str | None:
-    """Ensure ./media/<project_id>/<media_id>.<ext> exists; return web path or None."""
+async def ensure_local(media_id: str, project_id: str, ext: str = "png",
+                       *, attempts: int = 1) -> str | None:
+    """Ensure ./media/<project_id>/<media_id>.<ext> exists; return web path or None.
+
+    `attempts` > 1 retries the resolve+download with backoff — a FRESHLY generated media
+    (esp. in a concurrent batch) is often not immediately resolvable / trips Flow's media
+    rate limit, and a one-shot resolve then returns None. Retrying here saves the download
+    instead of leaving image_path NULL (which used to make the caller REGENERATE the image —
+    wasting credits and spawning duplicate Flow media)."""
     rel = Path(project_id) / f"{media_id}.{ext}"
     dest = MEDIA_DIR / rel
     if dest.exists() and dest.stat().st_size > 0:
         return f"/media/{rel.as_posix()}"
-    url = await resolve_url(media_id)
-    if not url:
-        return None
-    if await _download(url, dest):
-        return f"/media/{rel.as_posix()}"
+    for attempt in range(max(1, attempts)):
+        url = await resolve_url(media_id)
+        if url and await _download(url, dest):
+            return f"/media/{rel.as_posix()}"
+        if attempt < attempts - 1:
+            await asyncio.sleep(random.uniform(2, 5) * (attempt + 1))   # let Flow settle
     return None
 
 
@@ -92,6 +100,47 @@ async def save_from_url(media_id: str, project_id: str, ext: str, url: str) -> s
     if await _download(url, dest):
         return f"/media/{rel.as_posix()}"
     return None
+
+
+_URL_KEYS = ("fifeUrl", "servingBaseUri", "servingUri", "servingUrl",
+             "directUrl", "downloadUrl", "url", "uri")
+
+
+def direct_url_in(obj) -> str | None:
+    """First directly-downloadable http(s) URL inside a generated-media item. An image-gen
+    response already carries the result's URL, so we can download it straight away instead of
+    a separate, rate-limited get_direct_media resolve. Search a SINGLE generated-media item
+    only (not the whole payload) so we never pick up a reference/input image's URL."""
+    if isinstance(obj, dict):
+        for k in _URL_KEYS:
+            v = obj.get(k)
+            if isinstance(v, str) and v.startswith("http"):
+                return v
+        for v in obj.values():
+            hit = direct_url_in(v)
+            if hit:
+                return hit
+    elif isinstance(obj, list):
+        for v in obj:
+            hit = direct_url_in(v)
+            if hit:
+                return hit
+    return None
+
+
+async def save_media(media_id: str, project_id: str, ext: str,
+                     url: str | None = None, *, attempts: int = 6) -> str | None:
+    """Cache a freshly generated media. PREFER the direct `url` from the gen response (no
+    rate-limited resolve) — fall back to get_direct_media (with retries) only if there is no
+    url or that download failed. This is what stops a concurrent batch from tripping Flow's
+    media rate limit on every frame (which used to leave image_path NULL → regenerate)."""
+    if not media_id:
+        return None
+    if url:
+        web = await save_from_url(media_id, project_id, ext, url)
+        if web:
+            return web
+    return await ensure_local(media_id, project_id, ext, attempts=attempts)
 
 
 _LOCAL_EXTS = ("png", "jpg", "jpeg", "webp")
