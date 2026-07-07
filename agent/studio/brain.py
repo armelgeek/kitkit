@@ -557,8 +557,33 @@ async def align_source_to_scenes(source: str, scenes: list[dict]) -> list[str]:
     return out
 
 
+def scene_plan_prompt(voiceover: str, entities: list[dict], style: str,
+                      location: str | None = None) -> str:
+    """Read the WHOLE scene first and produce a short shot PLAN, so the shots that follow are
+    coherent (a real scene) instead of a random jumble of solo shots. Identifies who is
+    physically present + where (blocking) and a camera coverage strategy. Small JSON output."""
+    roster = "\n".join(
+        f"- {e['name']} ({e['type']}): {e.get('description') or ''}" for e in entities
+    ) or "(none)"
+    return (
+        "You are a film director. Read this ENTIRE scene voiceover and return a SHORT plan so "
+        "the storyboard shots stay coherent — same place, same people, consistent spatial "
+        "relationships — instead of disconnected solo shots.\n"
+        f"Location: {location or 'one consistent place (name it)'}. Visual style: {style}.\n"
+        f"AVAILABLE ENTITIES:\n{roster}\n\nVOICEOVER:\n{voiceover}\n\n"
+        "Return ONLY JSON:\n"
+        "{\n"
+        '  "present": ["names of entities PHYSICALLY in this scene"],\n'
+        '  "blocking": "one sentence: where each person/object is and their spatial relation",\n'
+        '  "coverage": "one sentence: how to shoot it — e.g. establishing wide, then '
+        'over-the-shoulder between the two speakers, reaction close-ups, inserts of the screen"\n'
+        "}"
+    )
+
+
 def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
-                         location: str | None = None, target_beats: int | None = None) -> str:
+                         location: str | None = None, target_beats: int | None = None,
+                         plan: dict | None = None) -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
     verbatim CONTIGUOUS slice of the voiceover (in order, concatenating back to the whole),
     so each beat's share of the audio time can be derived from its word count. Also pick the
@@ -592,12 +617,28 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
         "Each beat should cover roughly one short on-screen moment (about 1–2 sentences); "
         "prefer more, shorter beats over a few long ones so the visuals keep changing."
     )
+    plan_line = ""
+    if plan and (plan.get("blocking") or plan.get("coverage")):
+        present = ", ".join(plan.get("present") or [])
+        plan_line = (
+            "SCENE PLAN — OBEY IT so the beats form ONE coherent scene, not disconnected solo "
+            "shots:\n"
+            + (f"- People present the WHOLE scene: {present}. Keep them consistent; do NOT drop "
+               "a present person or invent someone not listed.\n" if present else "")
+            + (f"- Blocking / space: {plan['blocking']}\n" if plan.get("blocking") else "")
+            + (f"- Camera coverage: {plan['coverage']}\n" if plan.get("coverage") else "")
+            + "Establish the space early, then VARY framing across beats (wide → medium → "
+            "over-the-shoulder → reaction/insert) while respecting who is where. In a dialogue, "
+            "alternate over-the-shoulder + reaction shots of BOTH speakers — never a random "
+            "string of one-person shots.\n\n"
+        )
     return (
         "Split this scene VOICEOVER into visual BEATS (one beat = one on-screen moment). "
         "Do NOT rewrite the narration — each beat's `text` MUST be a verbatim, contiguous "
         "slice of the voiceover, and the slices in order MUST concatenate back to the whole "
         "voiceover (no gaps, no overlaps).\n"
         f"{count_line}\n"
+        f"{plan_line}"
         f"{loc_line}\n\n"
         "For each beat return:\n"
         "- `text`: the verbatim voiceover slice for this beat.\n"

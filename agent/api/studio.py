@@ -31,6 +31,12 @@ router = APIRouter(prefix="/studio", tags=["studio"])
 # Storytelling: an on-screen image changes at most every ~this many seconds of narration, so
 # a beat longer than this is split into ≤this-second sub-shots (image change ≈ every 8s).
 MAX_SHOT_SECS = float(os.environ.get("FLOWKIT_MAX_SHOT_SECS", "8"))
+# When one beat is split into several ≤8s sub-shots, rotate the framing so they don't render as
+# the same still — a natural coverage cycle (establish → tighten → reaction → insert).
+_SUBSHOT_ANGLES = [
+    "wide establishing shot", "medium shot", "over-the-shoulder shot", "close-up",
+    "reaction close-up", "low-angle medium shot", "high-angle wide shot", "insert detail shot",
+]
 # Google đôi khi chặn ảnh theo policy (không trả media) hoặc trả filtered → thử lại.
 IMAGE_GEN_RETRIES = 3
 # Video tốn thời gian (15–30s/lần) nên thử lại ít hơn.
@@ -1659,11 +1665,22 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     # stale on one still). Target count drives the AI; partition_text caps it at sentence count.
     target_beats = max(1, round(_estimate_narration_secs(voiceover) / 8.0))
     loc_name = scene_loc["name"] if scene_loc else None
+    # First understand the WHOLE scene (who's present, blocking, coverage) so the beats form a
+    # coherent scene instead of a random string of solo shots. Best-effort — segmentation still
+    # runs without it.
+    plan = None
+    try:
+        plan = await brain.run_json_valid(
+            brain.scene_plan_prompt(voiceover, erows, project["style"], location=loc_name),
+            lambda d: isinstance(d, dict) and isinstance(d.get("blocking") or d.get("coverage"), str),
+            label=f"Kế hoạch scene ({scene.get('heading') or sid})", attempts=2)
+    except Exception as e:  # noqa: BLE001 — plan is optional
+        logger.warning("scene plan unavailable (%s) — dùng tách beat không kế hoạch", e)
     try:
         beats = await brain.run_json_valid(
             brain.scene_segment_prompt(
                 voiceover, erows, project["style"],
-                location=loc_name, target_beats=target_beats),
+                location=loc_name, target_beats=target_beats, plan=plan),
             lambda d: isinstance(d, list) and len(d) > 0 and all(isinstance(x, dict) for x in d),
             label=f"Tách beat ({scene.get('heading') or sid})")
     except HTTPException as e:
@@ -1696,9 +1713,15 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
         if len(subs) <= 1:
             expanded.append(b)
             continue
-        for sub in subs:
+        for j, sub in enumerate(subs):
             nb = dict(b)
             nb["_say"] = sub
+            # sub-shots share the beat's coherent moment, but must NOT render as the same still —
+            # rotate the framing so consecutive sub-shots differ in size/angle.
+            if j > 0 and nb.get("description"):
+                ang = _SUBSHOT_ANGLES[j % len(_SUBSHOT_ANGLES)]
+                nb["description"] = (f"{nb['description']} Camera for THIS moment: {ang}, "
+                                     "a distinctly different angle from the previous shot.")
             expanded.append(nb)
     beats = expanded
 
