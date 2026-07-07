@@ -17,6 +17,11 @@ from agent.studio import db, vntext
 
 logger = logging.getLogger(__name__)
 
+# Per-call agent timeout for brain JSON prompts. Must match the CLI ceiling in config
+# (AGENT_CLI_TIMEOUT) — a slow agent/model (e.g. antigravity + gemini-flash) can take
+# several minutes per scene-plan/beat-split call, so 300s was too tight and tripped 504s.
+_AGENT_TIMEOUT = float(os.environ.get("AGENT_CLI_TIMEOUT", "600"))
+
 
 async def _agent_cfg() -> tuple[str, str | None]:
     """(agent key, model). Model comes from the `agent_model` setting (or env AGENT_MODEL);
@@ -74,7 +79,7 @@ def _extract_json(text: str):
     raise ValueError("unbalanced JSON in agent output")
 
 
-async def run_json(prompt: str, *, timeout: float = 300.0, retries: int = 2):
+async def run_json(prompt: str, *, timeout: float = _AGENT_TIMEOUT, retries: int = 2):
     """Run the agent and return parsed JSON. Raises HTTPException(502) on failure."""
     agent, model = await _agent_cfg()
     last_err = None
@@ -94,7 +99,7 @@ async def run_json(prompt: str, *, timeout: float = 300.0, retries: int = 2):
 
 
 async def run_json_valid(prompt: str, validate, *, label: str = "AI",
-                         attempts: int = 3, timeout: float = 300.0):
+                         attempts: int = 3, timeout: float = _AGENT_TIMEOUT):
     """run_json that ALSO retries when the reply is valid JSON but fails `validate` (wrong
     shape/semantics — which run_json's parse-only retry can't catch). `validate(data)` returns
     True to accept. Raises HTTPException(502) after all attempts fail, so callers stop silently

@@ -2125,8 +2125,7 @@ async def split_scene(sid: str, target_secs: float = TARGET_SCENE_SECS):
     await db.update("scene", sid, {
         "heading": _part_heading(scene["heading"], 1, n),
         "source_segment": chunks[0], "action": chunks[0],
-        "narration_text": None, "narration_path": None, "narration_duration": None,
-        "updated_at": ts})
+        "narration_text": None, "narration_path": None, "narration_duration": None})
     for i in range(1, n):
         await db.insert("scene", {
             "id": db.new_id(), "project_id": pid, "idx": base_idx + i,
