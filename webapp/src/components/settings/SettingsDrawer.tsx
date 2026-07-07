@@ -64,6 +64,19 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
             </select>
           </Field>
 
+          <Field label="AI Agent model (để trống = mặc định của CLI)">
+            <input
+              value={s.agent_model || ""}
+              onChange={(e) => set("agent_model", e.target.value)}
+              placeholder="vd: gemini-flash-3-5"
+              className={inp}
+            />
+            <p className="mt-1 text-xs text-neutral-600">
+              Truyền qua <code>--model</code> cho agent. Chọn model nhanh (gemini-flash) để tăng
+              tốc tạo script/scene/shot. Phải đúng tên model mà CLI chấp nhận.
+            </p>
+          </Field>
+
           <Field label="Image model">
             <select value={s.image_model || ""} onChange={(e) => set("image_model", e.target.value)} className={inp}>
               <option value="">(mặc định)</option>

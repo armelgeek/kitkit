@@ -7,6 +7,7 @@ Retries once on parse failure. See video-app.md §6.
 import asyncio
 import json
 import logging
+import os
 import re
 
 from fastapi import HTTPException
@@ -17,9 +18,19 @@ from agent.studio import db, vntext
 logger = logging.getLogger(__name__)
 
 
-async def _agent_name() -> str:
+async def _agent_cfg() -> tuple[str, str | None]:
+    """(agent key, model). Model comes from the `agent_model` setting (or env AGENT_MODEL);
+    None → let the CLI use its own default. Passing a fast model (e.g. gemini-flash) here
+    speeds up every brain call — script/scene/shot generation."""
     settings = await db.kv_get_all()
-    return settings.get("agent") or "claude"
+    agent = settings.get("agent") or "claude"
+    model = (settings.get("agent_model") or os.environ.get("AGENT_MODEL") or "").strip() or None
+    return agent, model
+
+
+async def _agent_name() -> str:
+    agent, _ = await _agent_cfg()
+    return agent
 
 
 def _extract_json(text: str):
@@ -65,11 +76,12 @@ def _extract_json(text: str):
 
 async def run_json(prompt: str, *, timeout: float = 300.0, retries: int = 2):
     """Run the agent and return parsed JSON. Raises HTTPException(502) on failure."""
-    agent = await _agent_name()
+    agent, model = await _agent_cfg()
     last_err = None
     for attempt in range(retries + 1):
         nudge = "" if attempt == 0 else "\n\nReturn ONLY valid JSON, no prose, no markdown."
-        res = await run_agent(RunRequest(agent=agent, prompt=prompt + nudge, timeout=timeout))
+        res = await run_agent(RunRequest(agent=agent, prompt=prompt + nudge, timeout=timeout,
+                                         model=model))
         if not res.get("ok"):
             last_err = res.get("stderr") or f"exit {res.get('exit_code')}"
             continue
