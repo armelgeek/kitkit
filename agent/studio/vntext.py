@@ -224,7 +224,12 @@ def normalize(text: str) -> str:
     t = re.sub(r"(?<![\w.])(?:từ\s+)?(\d[\d.,]*)\s*-\s*(\d[\d.,]*)(?![\w.])",
                lambda m: f"từ {_number_words(m.group(1))} đến {_number_words(m.group(2))}", t)
 
-    # alnum codes: drop the hyphen/underscore so it isn't read as "gạch ngang/dưới"
+    # Uppercase code identifiers (ADMIN_OVERRIDE, FILE_ACCESS, ADMIN_003) — SPEAK the '_' as
+    # "gạch dưới": between two shouty ALL-CAPS tokens the TTS otherwise slurs or drops the join
+    # (loses sound). Must run BEFORE the generic underscore→space rule below.
+    t = re.sub(r"(?<=[A-Z0-9])_(?=[A-Z0-9])", " gạch dưới ", t)
+
+    # alnum codes: drop the remaining hyphen/underscore so it isn't read as "gạch ngang/dưới"
     # (DN-31 → "DN 31", file_name → "file name")
     t = re.sub(r"(?<=\w)[-_](?=\w)", " ", t)
 
