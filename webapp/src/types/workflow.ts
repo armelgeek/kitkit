@@ -1,4 +1,4 @@
-export type WorkflowStep = 1 | 2 | 3 | 4 | 5;
+export type WorkflowStep = 1 | 2 | 2.5 | 3 | 4 | 5;
 
 export interface Entity {
   id: string;
@@ -65,6 +65,7 @@ export interface WorkflowActions {
   setLanguage: (language: string) => void;
   setCustomPromptHeader: (header: string) => void;
   generateScreenplay: () => Promise<void>;
+  showScenes: () => void;
   approveScreenplay: () => Promise<void>;
   redoScreenplay: () => void;
   updateBeat: (beatId: string, updates: Partial<Beat>) => void;

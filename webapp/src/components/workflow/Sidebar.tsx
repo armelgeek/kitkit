@@ -5,7 +5,8 @@ import { WorkflowStep } from "../../types/workflow";
 const STEPS = [
   { number: 1, label: "Setup Your Story" },
   { number: 2, label: "Review Screenplay" },
-  { number: 3, label: "Review Storyboard" },
+  { number: 2.5, label: "Review Scenes" },
+  { number: 3, label: "Review Beats" },
   { number: 4, label: "Generate Assets" },
   { number: 5, label: "Video Done" },
 ];
@@ -18,11 +19,23 @@ export default function Sidebar() {
   const canGoForward = currentStep < 5;
 
   const handleBack = () => {
-    actions.goToStep((currentStep - 1) as WorkflowStep);
+    if (currentStep === 2.5) {
+      actions.goToStep(2);
+    } else if (currentStep === 3) {
+      actions.goToStep(2.5);
+    } else {
+      actions.goToStep((currentStep - 1) as WorkflowStep);
+    }
   };
 
   const handleForward = () => {
-    actions.goToStep((currentStep + 1) as WorkflowStep);
+    if (currentStep === 2) {
+      actions.goToStep(2.5);
+    } else if (currentStep === 2.5) {
+      actions.goToStep(3);
+    } else {
+      actions.goToStep((currentStep + 1) as WorkflowStep);
+    }
   };
 
   return (

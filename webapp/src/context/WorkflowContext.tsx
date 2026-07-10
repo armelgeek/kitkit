@@ -203,6 +203,13 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
       }
     },
 
+    showScenes: () => {
+      setState((s) => ({
+        ...s,
+        currentStep: 2.5 as any,
+      }));
+    },
+
     approveScreenplay: async () => {
       const currentState = state;
 

@@ -2,6 +2,7 @@ import React from "react";
 import { useWorkflow } from "../../context/WorkflowContext";
 import Step1Setup from "./Step1Setup";
 import Step2ReviewScreenplay from "./Step2ReviewScreenplay";
+import Step2ReviewScenes from "./Step2ReviewScenes";
 import Step3ReviewStoryboard from "./Step3ReviewStoryboard";
 import Step4ReviewAssets from "./Step4ReviewAssets";
 import Step5Done from "./Step5Done";
@@ -15,6 +16,8 @@ export default function MainContent() {
       return <Step1Setup />;
     case 2:
       return <Step2ReviewScreenplay />;
+    case 2.5:
+      return <Step2ReviewScenes />;
     case 3:
       return <Step3ReviewStoryboard />;
     case 4:

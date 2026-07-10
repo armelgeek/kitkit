@@ -12,8 +12,8 @@ export default function Step2ReviewScreenplay() {
     actions.redoScreenplay();
   };
 
-  const handleApprove = async () => {
-    await actions.approveScreenplay();
+  const handleApprove = () => {
+    actions.showScenes();
   };
 
   return (
