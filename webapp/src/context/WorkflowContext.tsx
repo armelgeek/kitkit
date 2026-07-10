@@ -222,12 +222,16 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
         // Convert API beats to Beat type
         const beats = result.beats.map((b: any) => ({
           id: `beat-${Math.random().toString(36).substring(7)}`,
-          sceneHeading: b.sceneHeading || b.heading || "",
+          sceneHeading: b.description?.split('\n')[0] || `Scene ${result.beats.indexOf(b) + 1}`,
           description: b.description || "",
-          entities: b.entities || [],
-          shotPrompts: b.shotPrompts || "",
-          motionHints: b.motionHints || "",
-          voiceover: b.voiceover || "",
+          entities: (b.ref_entity_names || []).map((name: string) => ({
+            name,
+            type: "unknown",
+            description: ""
+          })),
+          shotPrompts: b.visual_prompt || b.shotPrompts || "",
+          motionHints: b.motion_prompt || b.motionHints || "",
+          voiceover: b.text || b.voiceover || "",
         }));
 
         setState((s) => ({

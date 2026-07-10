@@ -14,15 +14,28 @@ export default function BeatCard({ beat, index, isEdited, onEdit }: BeatCardProp
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
         <h3 className="text-lg font-semibold text-white">
-          Beat {index + 1}: {beat.sceneHeading}
+          Beat {index + 1}
         </h3>
         {isEdited && (
           <span className="text-yellow-500 text-sm font-medium">✎ Manually edited</span>
         )}
       </div>
 
+      {/* Voiceover/Text Section */}
+      {beat.voiceover && (
+        <div className="mb-4 p-3 bg-neutral-800 rounded-lg border border-neutral-700">
+          <p className="text-sm font-medium text-neutral-400 mb-2">Narration:</p>
+          <p className="text-neutral-200 italic">{beat.voiceover}</p>
+        </div>
+      )}
+
       {/* Description */}
-      <p className="mb-6 text-neutral-300">{beat.description}</p>
+      {beat.description && (
+        <div className="mb-6">
+          <p className="text-sm font-medium text-neutral-400 mb-2">Visual Description:</p>
+          <p className="text-neutral-300">{beat.description}</p>
+        </div>
+      )}
 
       {/* Entities Section */}
       {beat.entities && beat.entities.length > 0 && (
