@@ -319,14 +319,14 @@ function CreateModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
+            className="rounded-lg px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition-colors duration-150"
           >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={busy || !title.trim()}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors duration-150"
           >
             {busy ? "Creating..." : "Create"}
           </button>
