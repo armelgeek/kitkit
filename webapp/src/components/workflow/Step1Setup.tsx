@@ -45,7 +45,10 @@ export default function Step1Setup() {
 
         {/* Story Idea */}
         <div className="mb-6">
-          <label htmlFor="story-idea" className="block text-sm font-medium text-neutral-300 mb-2">
+          <label
+            htmlFor="story-idea"
+            className="block text-sm font-medium text-neutral-300 mb-2"
+          >
             Story Idea
           </label>
           <textarea
@@ -60,7 +63,10 @@ export default function Step1Setup() {
 
         {/* Style */}
         <div className="mb-6">
-          <label htmlFor="style" className="block text-sm font-medium text-neutral-300 mb-2">
+          <label
+            htmlFor="style"
+            className="block text-sm font-medium text-neutral-300 mb-2"
+          >
             Style
           </label>
           <textarea
@@ -75,7 +81,10 @@ export default function Step1Setup() {
 
         {/* Duration */}
         <div className="mb-6">
-          <label htmlFor="duration" className="block text-sm font-medium text-neutral-300 mb-2">
+          <label
+            htmlFor="duration"
+            className="block text-sm font-medium text-neutral-300 mb-2"
+          >
             Duration
           </label>
           <select
@@ -106,7 +115,10 @@ export default function Step1Setup() {
           <div className="mb-6 space-y-6 border-t border-neutral-800 pt-6">
             {/* Model */}
             <div>
-              <label htmlFor="model" className="block text-sm font-medium text-neutral-300 mb-2">
+              <label
+                htmlFor="model"
+                className="block text-sm font-medium text-neutral-300 mb-2"
+              >
                 Model
               </label>
               <select
@@ -125,7 +137,10 @@ export default function Step1Setup() {
 
             {/* Language */}
             <div>
-              <label htmlFor="language" className="block text-sm font-medium text-neutral-300 mb-2">
+              <label
+                htmlFor="language"
+                className="block text-sm font-medium text-neutral-300 mb-2"
+              >
                 Language
               </label>
               <select
@@ -144,9 +159,15 @@ export default function Step1Setup() {
 
             {/* Custom Prompt Header */}
             <div>
-              <label htmlFor="custom-prompt-header" className="block text-sm font-medium text-neutral-300 mb-2">
+              <label
+                htmlFor="custom-prompt-header"
+                className="block text-sm font-medium text-neutral-300 mb-2"
+              >
                 Custom Prompt Header
-                <span className="text-neutral-500 font-normal"> (optional)</span>
+                <span className="text-neutral-500 font-normal">
+                  {" "}
+                  (optional)
+                </span>
               </label>
               <textarea
                 id="custom-prompt-header"

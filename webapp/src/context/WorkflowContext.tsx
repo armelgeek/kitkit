@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import type { WorkflowState, WorkflowActions, WorkflowStep, Beat, Scene } from "../types/workflow";
-import { generateScreenplay as apiGenerateScreenplay, generateBeats as apiGenerateBeats, type Project } from "../api/client";
 import * as apiClient from "../api/client";
+import type { Project } from "../api/client";
 
 // Helper: Parse scenes from FOUNTAIN format screenplay
 function parseScenes(screenplay: string): Scene[] {
@@ -184,7 +184,7 @@ Follow FOUNTAIN format: scene headings (INT./EXT. LOCATION - TIME), action, dial
 Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
 
       try {
-        const result = await apiGenerateScreenplay(prompt, capturedState.model, 120);
+        const result = await apiClient.generateScreenplay(prompt, capturedState.model, 120);
         const screenplay = result.screenplay;
         const parsedScenes = parseScenes(screenplay);
 
@@ -222,7 +222,7 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
       if (!capturedState) return;
 
       try {
-        const result = await apiGenerateBeats(
+        const result = await apiClient.generateBeats(
           capturedState.screenplayRaw,
           capturedState.scenes,
           capturedState.model
