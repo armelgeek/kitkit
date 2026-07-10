@@ -59,7 +59,7 @@ CLAUDE_MODELS = [
     "claude-3-haiku-20240307",
 ]
 
-DEFAULT_AGENT = "gemini"
+DEFAULT_AGENT = "claude"
 
 # Prompt mode "arg" nhét prompt vào dòng lệnh; Windows giới hạn độ dài command-line
 # (~32k, ConPTY/winpty còn thấp hơn) → prompt dài báo "The filename or extension is too
@@ -95,7 +95,7 @@ AI_AGENTS = {
     "claude": {
         # Set use_api=true to call Claude API directly instead of CLI
         "use_api": os.environ.get("AGENT_CLAUDE_USE_API", "1") == "1",
-        "model": os.environ.get("AGENT_CLAUDE_MODEL", "claude-3-haiku-20240307"),
+        "model": os.environ.get("AGENT_CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
         # Only used if use_api=false
         "bin": os.environ.get("AGENT_CLAUDE_BIN", "claude"),
         "prompt_mode": "stdin",
