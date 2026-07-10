@@ -580,3 +580,27 @@ export function base64ToAudioUrl(b64: string, mime = "audio/wav"): string {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
+
+export async function generateScreenplay(
+  prompt: string,
+  model: string,
+  timeout: number = 60
+): Promise<{ screenplay: string }> {
+  const response = await fetch(`/api/agent/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      agent: "claude",
+      prompt: prompt,
+      model: model,
+      timeout: timeout,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Generation failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return { screenplay: data.stdout || data.response || "" };
+}

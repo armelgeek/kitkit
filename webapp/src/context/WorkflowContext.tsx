@@ -1,5 +1,44 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import type { WorkflowState, WorkflowActions, WorkflowStep, Beat } from "../types/workflow";
+import type { WorkflowState, WorkflowActions, WorkflowStep, Beat, Scene } from "../types/workflow";
+import { generateScreenplay as apiGenerateScreenplay } from "../api/client";
+
+// Helper: Parse scenes from FOUNTAIN format screenplay
+function parseScenes(screenplay: string): Scene[] {
+  const scenes: Scene[] = [];
+  // ponytail: simple scene parser splits on FOUNTAIN scene headings (INT./EXT.)
+  const lines = screenplay.split("\n");
+  let currentHeading = "";
+  let currentBody = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // FOUNTAIN scene heading: starts with INT. or EXT., ends with - TIME
+    if (/^(INT\.|EXT\.|INTR\.|EXTR\.)/i.test(trimmed) && trimmed.includes("-")) {
+      // Save previous scene if exists
+      if (currentHeading) {
+        scenes.push({
+          heading: currentHeading,
+          body: currentBody.trim(),
+        });
+      }
+      currentHeading = trimmed;
+      currentBody = "";
+    } else if (currentHeading) {
+      // Accumulate body lines
+      currentBody += (currentBody ? "\n" : "") + line;
+    }
+  }
+
+  // Save final scene
+  if (currentHeading) {
+    scenes.push({
+      heading: currentHeading,
+      body: currentBody.trim(),
+    });
+  }
+
+  return scenes;
+}
 
 const initialState: WorkflowState = {
   // Step 1 inputs
@@ -66,19 +105,62 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
 
     generateScreenplay: async () => {
-      setState((s) => ({
-        ...s,
-        loading: true,
-        loadingMessage: "Generating screenplay...",
-      }));
-      // ponytail: mock implementation, calls real API endpoint when wired
-      const mockScreenplay = "INT. COFFEE SHOP - DAY\n\nA barista prepares coffee.";
-      setState((s) => ({
-        ...s,
-        screenplayRaw: mockScreenplay,
-        loading: false,
-        currentStep: 2,
-      }));
+      let capturedState: WorkflowState | null = null;
+
+      // Capture current state before async operations
+      setState((s) => {
+        capturedState = s;
+        return {
+          ...s,
+          loading: true,
+          loadingMessage: "Generating screenplay...",
+          error: null,
+        };
+      });
+
+      if (!capturedState) return;
+
+      // Build prompt from step 1 inputs
+      const shotCount = Math.ceil(capturedState.duration / 8);
+      const wordEstimate = Math.ceil(capturedState.duration * 5);
+
+      const prompt = `You are a professional screenwriter. Write a screenplay in FOUNTAIN format.
+
+WRITE THE SCREENPLAY IN ${capturedState.language}: all action lines must be in ${capturedState.language}
+
+TARGET DURATION: ${capturedState.duration}s (≈ ${shotCount} shots, ≈ ${wordEstimate} words)
+
+IDEA / CONTENT: ${capturedState.idea}
+
+STYLE / TONE: ${capturedState.style}
+
+${capturedState.customPromptHeader ? capturedState.customPromptHeader + "\n" : ""}
+
+Follow FOUNTAIN format: scene headings (INT./EXT. LOCATION - TIME), action, dialogue.
+
+Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
+
+      try {
+        const result = await apiGenerateScreenplay(prompt, capturedState.model, 120);
+        const screenplay = result.screenplay;
+        const parsedScenes = parseScenes(screenplay);
+
+        setState((s) => ({
+          ...s,
+          screenplayRaw: screenplay,
+          scenes: parsedScenes,
+          loading: false,
+          currentStep: 2,
+        }));
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error generating screenplay";
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: errorMessage,
+        }));
+      }
     },
 
     approveScreenplay: async () => {

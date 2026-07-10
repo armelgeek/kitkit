@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import React from "react";
 import { WorkflowProvider, useWorkflow } from "../../src/context/WorkflowContext";
+import * as apiClient from "../../src/api/client";
 
 describe("WorkflowContext", () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -132,6 +133,11 @@ describe("WorkflowContext", () => {
   describe("Workflow transitions", () => {
     it("generateScreenplay sets loading and advances to step 2", async () => {
       const { result } = renderHook(() => useWorkflow(), { wrapper });
+      const mockScreenplay = "INT. COFFEE SHOP - DAY\n\nA barista prepares coffee.";
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: mockScreenplay,
+      });
 
       expect(result.current.state.currentStep).toBe(1);
 
@@ -309,6 +315,119 @@ describe("WorkflowContext", () => {
       expect(result.current.state.screenplayRaw).toBe("");
       expect(result.current.state.scenes).toEqual([]);
       expect(result.current.state.currentStep).toBe(1);
+    });
+  });
+
+  describe("Screenplay generation API integration", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("generateScreenplay advances to step 2 on success", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+      const mockScreenplay = "INT. COFFEE SHOP - DAY\n\nA barista prepares coffee.";
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: mockScreenplay,
+      });
+
+      expect(result.current.state.currentStep).toBe(1);
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      expect(result.current.state.currentStep).toBe(2);
+      expect(result.current.state.loading).toBe(false);
+    });
+
+    it("generateScreenplay sets error on API failure", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+      const errorMessage = "API call failed";
+
+      vi.spyOn(apiClient, "generateScreenplay").mockRejectedValue(
+        new Error(errorMessage)
+      );
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      expect(result.current.state.error).toBe(errorMessage);
+      expect(result.current.state.currentStep).toBe(1);
+      expect(result.current.state.loading).toBe(false);
+    });
+
+    it("generateScreenplay stores screenplay and parses scenes", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+      const mockScreenplay = `INT. COFFEE SHOP - DAY
+
+A barista prepares coffee.
+
+EXT. STREET - MORNING
+
+People walk by.
+
+INT. APARTMENT - NIGHT
+
+A person writes in a journal.`;
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: mockScreenplay,
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      expect(result.current.state.screenplayRaw).toBe(mockScreenplay);
+      expect(result.current.state.scenes.length).toBeGreaterThan(0);
+      expect(result.current.state.scenes[0].heading).toContain("INT. COFFEE SHOP");
+      expect(result.current.state.scenes[0].body).toContain("barista");
+    });
+
+    it("generateScreenplay clears previous error", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+      const mockScreenplay = "INT. COFFEE SHOP - DAY\n\nA barista prepares coffee.";
+
+      // Set initial error
+      act(() => {
+        result.current.actions.setError("Previous error");
+      });
+
+      expect(result.current.state.error).toBe("Previous error");
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: mockScreenplay,
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      expect(result.current.state.error).toBeNull();
+    });
+
+    it("generateScreenplay parses multiple scenes from FOUNTAIN format", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+      const mockScreenplay = `INT. OFFICE - DAY
+A professional at a desk.
+
+EXT. PARK - SUNSET
+Children playing.`;
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: mockScreenplay,
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      // Verify multiple scenes are parsed correctly
+      expect(result.current.state.scenes.length).toBe(2);
+      expect(result.current.state.scenes[0].heading).toContain("OFFICE");
+      expect(result.current.state.scenes[1].heading).toContain("PARK");
     });
   });
 });
