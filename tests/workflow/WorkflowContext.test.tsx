@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import React from "react";
 import { WorkflowProvider, useWorkflow } from "../../webapp/src/context/WorkflowContext";
+import * as apiClient from "../../webapp/src/api/client";
 
 describe("WorkflowContext", () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -144,19 +145,238 @@ describe("WorkflowContext", () => {
       expect(result.current.state.loading).toBe(false);
     });
 
+    it("approveScreenplay calls beats API with screenplay and scenes", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const mockBeats = [
+        {
+          heading: "INT. ROOM",
+          description: "A character wakes up",
+          entities: [],
+          shotPrompts: "Wide shot",
+          motionHints: "slow pan",
+          voiceover: "Morning light",
+        },
+      ];
+
+      // First mock generateScreenplay to set up state with screenplay data
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: "INT. ROOM - MORNING\n\nA character wakes up.",
+      });
+
+      const generateBeatsSpy = vi
+        .spyOn(apiClient, "generateBeats")
+        .mockResolvedValue({ beats: mockBeats });
+
+      // Generate screenplay first to populate state
+      act(() => {
+        result.current.actions.setIdea("Test idea");
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      expect(result.current.state.screenplayRaw).not.toBe("");
+
+      // Now test approveScreenplay
+      await act(async () => {
+        await result.current.actions.approveScreenplay();
+      });
+
+      // Verify beats API was called
+      expect(generateBeatsSpy).toHaveBeenCalledWith(
+        result.current.state.screenplayRaw,
+        result.current.state.scenes,
+        result.current.state.model
+      );
+
+      vi.mocked(apiClient.generateScreenplay).mockRestore();
+      generateBeatsSpy.mockRestore();
+    });
+
+    it("approveScreenplay converts API beats to Beat type correctly", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const mockApiBeats = [
+        {
+          heading: "INT. ROOM",
+          description: "A character wakes up",
+          entities: [{ name: "Character", type: "person", description: "Main actor" }],
+          shotPrompts: "Wide shot of room",
+          motionHints: "slow camera pan",
+          voiceover: "Good morning",
+        },
+        {
+          sceneHeading: "INT. KITCHEN",
+          description: "Making breakfast",
+          entities: [],
+          shotPrompts: "Close up of coffee",
+          motionHints: "focus shift",
+          voiceover: "Time for coffee",
+        },
+      ];
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: "INT. ROOM - MORNING\n\nA character wakes up.\n\nINT. KITCHEN - CONTINUOUS\n\nMaking breakfast.",
+      });
+
+      vi.spyOn(apiClient, "generateBeats").mockResolvedValue({ beats: mockApiBeats });
+
+      // Generate screenplay first
+      act(() => {
+        result.current.actions.setIdea("Test idea");
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      // Call approveScreenplay to test beat conversion
+      await act(async () => {
+        await result.current.actions.approveScreenplay();
+      });
+
+      // Verify beats were converted correctly
+      expect(result.current.state.beats).toHaveLength(2);
+      expect(result.current.state.beats[0].sceneHeading).toBe("INT. ROOM");
+      expect(result.current.state.beats[0].description).toBe("A character wakes up");
+      expect(result.current.state.beats[0].entities).toEqual([
+        { name: "Character", type: "person", description: "Main actor" },
+      ]);
+      expect(result.current.state.beats[1].sceneHeading).toBe("INT. KITCHEN");
+      expect(result.current.state.beats[1].voiceover).toBe("Time for coffee");
+
+      vi.mocked(apiClient.generateScreenplay).mockRestore();
+      vi.mocked(apiClient.generateBeats).mockRestore();
+    });
+
     it("approveScreenplay advances from step 2 to step 3", async () => {
       const { result } = renderHook(() => useWorkflow(), { wrapper });
 
-      // Setup: go to step 2 first
-      act(() => {
-        result.current.actions.goToStep(2);
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: "INT. ROOM - MORNING\n\nTest scene.",
       });
+
+      vi.spyOn(apiClient, "generateBeats").mockResolvedValue({
+        beats: [
+          {
+            heading: "INT. ROOM",
+            description: "Test scene",
+            entities: [],
+            shotPrompts: "Wide shot",
+            motionHints: "",
+            voiceover: "",
+          },
+        ],
+      });
+
+      // Setup: generate screenplay first to populate state
+      act(() => {
+        result.current.actions.setIdea("Test idea");
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      expect(result.current.state.currentStep).toBe(2);
 
       await act(async () => {
         await result.current.actions.approveScreenplay();
       });
 
       expect(result.current.state.currentStep).toBe(3);
+
+      vi.mocked(apiClient.generateScreenplay).mockRestore();
+      vi.mocked(apiClient.generateBeats).mockRestore();
+    });
+
+    it("approveScreenplay sets error on API failure", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: "INT. ROOM - MORNING\n\nTest scene.",
+      });
+
+      const errorMessage = "Network error while generating beats";
+      vi.spyOn(apiClient, "generateBeats").mockRejectedValue(
+        new Error(errorMessage)
+      );
+
+      // Setup: generate screenplay first
+      act(() => {
+        result.current.actions.setIdea("Test idea");
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      await act(async () => {
+        await result.current.actions.approveScreenplay();
+      });
+
+      expect(result.current.state.error).toBe(errorMessage);
+      expect(result.current.state.currentStep).toBe(2); // Should stay on step 2
+      expect(result.current.state.loading).toBe(false);
+
+      vi.mocked(apiClient.generateScreenplay).mockRestore();
+      vi.mocked(apiClient.generateBeats).mockRestore();
+    });
+
+    it("approveScreenplay clears edited beat IDs after generation", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const mockBeats = [
+        {
+          heading: "INT. ROOM",
+          description: "Test scene",
+          entities: [],
+          shotPrompts: "Wide shot",
+          motionHints: "",
+          voiceover: "",
+        },
+      ];
+
+      vi.spyOn(apiClient, "generateScreenplay").mockResolvedValue({
+        screenplay: "INT. ROOM - MORNING\n\nTest scene.",
+      });
+
+      vi.spyOn(apiClient, "generateBeats").mockResolvedValue({ beats: mockBeats });
+
+      // Setup: generate screenplay first
+      act(() => {
+        result.current.actions.setIdea("Test idea");
+      });
+
+      await act(async () => {
+        await result.current.actions.generateScreenplay();
+      });
+
+      // Pre-populate editedBeatIds (simulating prior edits)
+      act(() => {
+        result.current.actions.updateBeat("beat-old-1", {
+          id: "beat-old-1",
+          sceneHeading: "OLD INT. ROOM",
+          description: "Old scene",
+          entities: [],
+          shotPrompts: "Old shot",
+          motionHints: "",
+          voiceover: "",
+        });
+      });
+
+      expect(result.current.state.editedBeatIds.size).toBeGreaterThan(0);
+
+      await act(async () => {
+        await result.current.actions.approveScreenplay();
+      });
+
+      expect(result.current.state.editedBeatIds.size).toBe(0);
+
+      vi.mocked(apiClient.generateScreenplay).mockRestore();
+      vi.mocked(apiClient.generateBeats).mockRestore();
     });
 
     it("approveStoryboard advances from step 3 to step 4 and sets videoStatus", async () => {

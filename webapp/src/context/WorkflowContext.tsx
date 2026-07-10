@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import type { WorkflowState, WorkflowActions, WorkflowStep, Beat, Scene } from "../types/workflow";
-import { generateScreenplay as apiGenerateScreenplay } from "../api/client";
+import { generateScreenplay as apiGenerateScreenplay, generateBeats as apiGenerateBeats } from "../api/client";
 
 // Helper: Parse scenes from FOUNTAIN format screenplay
 function parseScenes(screenplay: string): Scene[] {
@@ -164,7 +164,52 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     },
 
     approveScreenplay: async () => {
-      setState((s) => ({ ...s, currentStep: 3 }));
+      let capturedState: WorkflowState | null = null;
+
+      setState((s) => {
+        capturedState = s;
+        return {
+          ...s,
+          loading: true,
+          loadingMessage: "Generating storyboard...",
+          error: null,
+        };
+      });
+
+      if (!capturedState) return;
+
+      try {
+        const result = await apiGenerateBeats(
+          capturedState.screenplayRaw,
+          capturedState.scenes,
+          capturedState.model
+        );
+
+        // Convert API beats to Beat type
+        const beats = result.beats.map((b: any) => ({
+          id: `beat-${Math.random().toString(36).substring(7)}`,
+          sceneHeading: b.sceneHeading || b.heading || "",
+          description: b.description || "",
+          entities: b.entities || [],
+          shotPrompts: b.shotPrompts || "",
+          motionHints: b.motionHints || "",
+          voiceover: b.voiceover || "",
+        }));
+
+        setState((s) => ({
+          ...s,
+          beats,
+          editedBeatIds: new Set(),
+          loading: false,
+          currentStep: 3,
+        }));
+      } catch (error: any) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: error.message || "Failed to generate storyboard",
+        }));
+      }
     },
 
     redoScreenplay: () => {

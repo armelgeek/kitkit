@@ -604,3 +604,28 @@ export async function generateScreenplay(
   const data = await response.json();
   return { screenplay: data.stdout || data.response || "" };
 }
+
+export async function generateBeats(
+  screenplay: string,
+  scenes: { heading: string; body: string }[],
+  model: string,
+  timeout: number = 60
+): Promise<{ beats: any[] }> {
+  const response = await fetch(`/api/studio/beats`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      screenplay,
+      scenes,
+      model,
+      timeout,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Beats generation failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return { beats: data.beats || [] };
+}
