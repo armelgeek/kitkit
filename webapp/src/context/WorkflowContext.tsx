@@ -61,6 +61,9 @@ const initialState: WorkflowState = {
   // Step 4 data (Assets)
   entities: [],
 
+  // Step 4.5 data (Generated Images)
+  generatedImages: [],
+
   // Step 5 data (Video)
   videoStatus: "pending",
   videoUrl: null,
@@ -380,7 +383,7 @@ Studio lighting, isolated on white background, professional product reference sh
       setState({
         ...currentState,
         loading: true,
-        loadingMessage: "Starting image generation...",
+        loadingMessage: "Generating and enhancing image prompts...",
         error: null,
       });
 
@@ -389,18 +392,26 @@ Studio lighting, isolated on white background, professional product reference sh
 
         setState((s) => ({
           ...s,
+          generatedImages: result.images,
           generationJobId: result.jobId,
-          videoStatus: "generating",
           loading: false,
-          currentStep: 4,
+          currentStep: 4.5 as any,
         }));
       } catch (error: any) {
         setState((s) => ({
           ...s,
           loading: false,
-          error: error.message || "Failed to start image generation",
+          error: error.message || "Failed to generate images",
         }));
       }
+    },
+
+    proceedToVideo: () => {
+      setState((s) => ({
+        ...s,
+        videoStatus: "generating",
+        currentStep: 5,
+      }));
     },
 
     goToStep: (step: WorkflowStep) => {

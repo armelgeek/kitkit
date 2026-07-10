@@ -706,7 +706,7 @@ export async function generateImages(
   beats: any[],
   model: string,
   timeout: number = 60
-): Promise<{ jobId: string }> {
+): Promise<{ jobId: string; images: any[] }> {
   // Generate images by using AI agent to enhance beat prompts
   const beatDescriptions = beats
     .map((b, idx) => `Beat ${idx + 1}: ${b.description}\nVisual Prompt: ${b.shotPrompts}`)
@@ -749,13 +749,75 @@ Return ONLY JSON: {
     throw new Error(`AI generation failed: ${data.stderr || "unknown error"}`);
   }
 
-  // For now, return a jobId - in production this would queue an actual image generation job
-  // The response contains enhanced prompts for image generation
+  // Parse enhanced prompts from AI response
+  let enhancedImages: any[] = [];
+  try {
+    const stdout = data.stdout || "";
+    const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      enhancedImages = parsed.images || [];
+    }
+  } catch (e) {
+    console.warn("Could not parse enhanced prompts:", e);
+  }
+
+  // Generate images using Flow API
+  const images: any[] = [];
+  const projectId = `project-${Date.now()}`; // Use a temporary project ID
+
+  for (let idx = 0; idx < beats.length; idx++) {
+    const beat = beats[idx];
+    const enhancedPrompt = enhancedImages[idx]?.enhanced_prompt || beat.shotPrompts || "";
+
+    try {
+      // Call Flow API to generate the image
+      const imageResponse = await fetch(`/api/flow/generate-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: enhancedPrompt,
+          project_id: projectId,
+          aspect_ratio: "IMAGE_ASPECT_RATIO_LANDSCAPE",
+          user_paygate_tier: "PAYGATE_TIER_ONE",
+        }),
+      });
+
+      let imageUrl = null;
+      if (imageResponse.ok) {
+        const imageData = await imageResponse.json();
+        imageUrl = imageData.web || imageData.url || null;
+        console.log(`Generated image for beat ${idx}:`, imageUrl);
+      } else {
+        console.warn(`Failed to generate image for beat ${idx}:`, imageResponse.statusText);
+      }
+
+      images.push({
+        beat_id: beat.id,
+        beat_index: idx,
+        visual_prompt: beat.shotPrompts || "",
+        enhanced_prompt: enhancedPrompt,
+        consistency_notes: enhancedImages[idx]?.consistency_notes || "",
+        image_url: imageUrl,
+      });
+    } catch (e) {
+      console.error(`Error generating image for beat ${idx}:`, e);
+      images.push({
+        beat_id: beat.id,
+        beat_index: idx,
+        visual_prompt: beat.shotPrompts || "",
+        enhanced_prompt: enhancedPrompt,
+        consistency_notes: enhancedImages[idx]?.consistency_notes || "",
+        image_url: null,
+      });
+    }
+  }
+
   const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-  console.log("Image generation prompts generated:", data.stdout);
+  console.log("Images generated via Flow API:", images);
 
-  return { jobId };
+  return { jobId, images };
 }
 
 export async function getVideoStatus(jobId: string): Promise<{

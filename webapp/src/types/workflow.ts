@@ -1,4 +1,4 @@
-export type WorkflowStep = 1 | 2 | 2.5 | 3 | 4 | 5;
+export type WorkflowStep = 1 | 2 | 2.5 | 3 | 4 | 4.5 | 5;
 
 export interface Entity {
   id: string;
@@ -8,6 +8,15 @@ export interface Entity {
   ref_prompt: string;
   imageUrl?: string;
   imageMediaId?: string;
+}
+
+export interface GeneratedImage {
+  beat_id: string;
+  beat_index: number;
+  visual_prompt: string;
+  enhanced_prompt: string;
+  consistency_notes: string;
+  image_url?: string;
 }
 
 export interface Beat {
@@ -45,6 +54,9 @@ export interface WorkflowState {
   // Step 4 data (Assets/Entities)
   entities: Entity[];
 
+  // Step 4.5 data (Generated Images)
+  generatedImages: GeneratedImage[];
+
   // Step 5 data (Video generation)
   videoStatus: "pending" | "generating" | "done" | "error";
   videoUrl: string | null;
@@ -72,6 +84,7 @@ export interface WorkflowActions {
   redoAllBeats: () => Promise<void>;
   extractAndGenerateAssets: () => Promise<void>;
   approveStoryboard: () => Promise<void>;
+  proceedToVideo: () => void;
   goToStep: (step: WorkflowStep) => void;
   pollVideoStatus: () => Promise<void>;
   setError: (error: string | null) => void;
