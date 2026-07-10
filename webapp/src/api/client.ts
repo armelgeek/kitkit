@@ -629,3 +629,41 @@ export async function generateBeats(
   const data = await response.json();
   return { beats: data.beats || [] };
 }
+
+export async function generateImages(
+  beats: any[],
+  model: string,
+  timeout: number = 60
+): Promise<{ jobId: string }> {
+  const response = await fetch(`/api/studio/generate_images`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      beats,
+      model,
+      timeout,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Image generation failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return { jobId: data.jobId || data.job_id || "" };
+}
+
+export async function getVideoStatus(jobId: string): Promise<{
+  status: "pending" | "generating" | "done" | "error";
+  progress?: number;
+  videoUrl?: string;
+  error?: string;
+}> {
+  const response = await fetch(`/api/studio/video_status?jobId=${jobId}`);
+
+  if (!response.ok) {
+    throw new Error("Failed to get video status");
+  }
+
+  return response.json();
+}

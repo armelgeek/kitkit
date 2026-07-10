@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import type { WorkflowState, WorkflowActions, WorkflowStep, Beat, Scene } from "../types/workflow";
 import { generateScreenplay as apiGenerateScreenplay, generateBeats as apiGenerateBeats } from "../api/client";
+import * as apiClient from "../api/client";
 
 // Helper: Parse scenes from FOUNTAIN format screenplay
 function parseScenes(screenplay: string): Scene[] {
@@ -239,11 +240,37 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     },
 
     approveStoryboard: async () => {
-      setState((s) => ({
-        ...s,
-        currentStep: 4,
-        videoStatus: "generating",
-      }));
+      let capturedState: WorkflowState | null = null;
+
+      setState((s) => {
+        capturedState = s;
+        return {
+          ...s,
+          loading: true,
+          loadingMessage: "Starting image generation...",
+          error: null,
+        };
+      });
+
+      if (!capturedState) return;
+
+      try {
+        const result = await apiClient.generateImages(capturedState.beats, capturedState.model);
+
+        setState((s) => ({
+          ...s,
+          generationJobId: result.jobId,
+          videoStatus: "generating",
+          loading: false,
+          currentStep: 4,
+        }));
+      } catch (error: any) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: error.message || "Failed to start image generation",
+        }));
+      }
     },
 
     goToStep: (step: WorkflowStep) => {
@@ -251,7 +278,29 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     },
 
     pollVideoStatus: async () => {
-      // ponytail: stub, will be implemented when wired to real API
+      let capturedState: WorkflowState | null = null;
+      setState((s) => {
+        capturedState = s;
+        return s;
+      });
+
+      if (!capturedState || !capturedState.generationJobId) return;
+
+      try {
+        const result = await apiClient.getVideoStatus(capturedState.generationJobId);
+
+        setState((s) => ({
+          ...s,
+          videoStatus: result.status,
+          videoUrl: result.videoUrl || null,
+          error: result.error || null,
+        }));
+      } catch (error: any) {
+        setState((s) => ({
+          ...s,
+          error: error.message || "Failed to check video status",
+        }));
+      }
     },
 
     setError: (error: string | null) => {

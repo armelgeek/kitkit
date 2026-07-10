@@ -222,6 +222,8 @@ describe("WorkflowContext", () => {
     it("approveStoryboard advances from step 3 to step 4 and sets videoStatus", async () => {
       const { result } = renderHook(() => useWorkflow(), { wrapper });
 
+      vi.spyOn(apiClient, "generateImages").mockResolvedValue({ jobId: "job-123" });
+
       // Setup: go to step 3 first
       act(() => {
         result.current.actions.goToStep(3);
@@ -235,7 +237,228 @@ describe("WorkflowContext", () => {
 
       expect(result.current.state.currentStep).toBe(4);
       expect(result.current.state.videoStatus).toBe("generating");
+
+      vi.mocked(apiClient.generateImages).mockRestore();
     });
+    it("approveStoryboard calls generateImages API with beats", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const generateImagesSpy = vi
+        .spyOn(apiClient, "generateImages")
+        .mockResolvedValue({ jobId: "job-123" });
+
+      // Setup: populate state with beats via updateBeat
+      act(() => {
+        result.current.actions.goToStep(3);
+      });
+
+      const testBeat = {
+        id: "beat-1",
+        sceneHeading: "INT. ROOM",
+        description: "A character wakes up",
+        entities: [],
+        shotPrompts: "Wide shot",
+        motionHints: "slow pan",
+        voiceover: "Morning light",
+      };
+
+      act(() => {
+        result.current.actions.updateBeat("beat-1", testBeat);
+      });
+
+      await act(async () => {
+        await result.current.actions.approveStoryboard();
+      });
+
+      // Verify generateImages was called with beats and model
+      expect(generateImagesSpy).toHaveBeenCalled();
+      const callArgs = generateImagesSpy.mock.calls[0];
+      expect(callArgs[1]).toBe("claude-3-5-sonnet-20241022"); // model
+      expect(callArgs[2]).toBe(60); // timeout
+
+      generateImagesSpy.mockRestore();
+    });
+
+    it("approveStoryboard stores jobId and advances to step 4", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const jobId = "job-abc-123";
+
+      vi.spyOn(apiClient, "generateImages").mockResolvedValue({ jobId });
+
+      // Setup: go to step 3
+      act(() => {
+        result.current.actions.goToStep(3);
+      });
+
+      expect(result.current.state.generationJobId).toBe(null);
+
+      await act(async () => {
+        await result.current.actions.approveStoryboard();
+      });
+
+      expect(result.current.state.generationJobId).toBe(jobId);
+      expect(result.current.state.currentStep).toBe(4);
+      expect(result.current.state.videoStatus).toBe("generating");
+      expect(result.current.state.loading).toBe(false);
+
+      vi.mocked(apiClient.generateImages).mockRestore();
+    });
+
+    it("approveStoryboard sets error on API failure", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const errorMessage = "Network error generating images";
+      vi.spyOn(apiClient, "generateImages").mockRejectedValue(
+        new Error(errorMessage)
+      );
+
+      // Setup: go to step 3
+      act(() => {
+        result.current.actions.goToStep(3);
+      });
+
+      await act(async () => {
+        await result.current.actions.approveStoryboard();
+      });
+
+      expect(result.current.state.error).toBe(errorMessage);
+      expect(result.current.state.loading).toBe(false);
+      expect(result.current.state.currentStep).toBe(3); // Should stay on step 3
+
+      vi.mocked(apiClient.generateImages).mockRestore();
+    });
+
+    it("pollVideoStatus calls getVideoStatus API with jobId", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const jobId = "job-xyz-789";
+
+      // First, mock generateImages to set up the jobId
+      vi.spyOn(apiClient, "generateImages").mockResolvedValue({ jobId });
+
+      const getVideoStatusSpy = vi.spyOn(apiClient, "getVideoStatus").mockResolvedValue({
+        status: "generating",
+        progress: 0.5,
+      });
+
+      // Setup: set generation job ID by calling approveStoryboard
+      act(() => {
+        result.current.actions.goToStep(3);
+      });
+
+      await act(async () => {
+        await result.current.actions.approveStoryboard();
+      });
+
+      expect(result.current.state.generationJobId).toBe(jobId);
+
+      await act(async () => {
+        await result.current.actions.pollVideoStatus();
+      });
+
+      expect(getVideoStatusSpy).toHaveBeenCalledWith(jobId);
+
+      vi.mocked(apiClient.generateImages).mockRestore();
+      getVideoStatusSpy.mockRestore();
+    });
+
+    it("pollVideoStatus updates videoStatus, videoUrl, error from response", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const jobId = "job-poll-123";
+      const videoUrl = "https://example.com/video.mp4";
+
+      // Setup: first mock generateImages to set the jobId
+      vi.spyOn(apiClient, "generateImages").mockResolvedValue({ jobId });
+
+      const getVideoStatusSpy = vi.spyOn(apiClient, "getVideoStatus").mockResolvedValue({
+        status: "done",
+        progress: 1,
+        videoUrl,
+        error: null,
+      });
+
+      // Setup: go to step 3 first, then call approveStoryboard to set jobId
+      act(() => {
+        result.current.actions.goToStep(3);
+      });
+
+      await act(async () => {
+        await result.current.actions.approveStoryboard();
+      });
+
+      expect(result.current.state.videoStatus).toBe("generating");
+      expect(result.current.state.videoUrl).toBe(null);
+
+      await act(async () => {
+        await result.current.actions.pollVideoStatus();
+      });
+
+      expect(result.current.state.videoStatus).toBe("done");
+      expect(result.current.state.videoUrl).toBe(videoUrl);
+      expect(result.current.state.error).toBe(null);
+
+      vi.mocked(apiClient.generateImages).mockRestore();
+      getVideoStatusSpy.mockRestore();
+    });
+
+    it("pollVideoStatus handles missing jobId gracefully", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const getVideoStatusSpy = vi.spyOn(apiClient, "getVideoStatus");
+
+      // Setup: go to step 4, no job ID set
+      act(() => {
+        result.current.actions.goToStep(4);
+      });
+
+      expect(result.current.state.generationJobId).toBe(null);
+
+      // Should not call API
+      await act(async () => {
+        await result.current.actions.pollVideoStatus();
+      });
+
+      expect(getVideoStatusSpy).not.toHaveBeenCalled();
+
+      getVideoStatusSpy.mockRestore();
+    });
+
+    it("pollVideoStatus sets error on API failure", async () => {
+      const { result } = renderHook(() => useWorkflow(), { wrapper });
+
+      const jobId = "job-error-123";
+      const errorMessage = "Failed to fetch video status";
+
+      // Setup: first mock generateImages to set the jobId
+      vi.spyOn(apiClient, "generateImages").mockResolvedValue({ jobId });
+
+      vi.spyOn(apiClient, "getVideoStatus").mockRejectedValue(
+        new Error(errorMessage)
+      );
+
+      // Setup: go to step 3 and call approveStoryboard to set jobId
+      act(() => {
+        result.current.actions.goToStep(3);
+      });
+
+      await act(async () => {
+        await result.current.actions.approveStoryboard();
+      });
+
+      expect(result.current.state.generationJobId).toBe(jobId);
+
+      await act(async () => {
+        await result.current.actions.pollVideoStatus();
+      });
+
+      expect(result.current.state.error).toBe(errorMessage);
+
+      vi.mocked(apiClient.generateImages).mockRestore();
+      vi.mocked(apiClient.getVideoStatus).mockRestore();
+    });
+
   });
 
   describe("Reset workflow", () => {
