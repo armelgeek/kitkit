@@ -16,8 +16,8 @@ describe("WorkflowContext", () => {
       expect(result.current.state.idea).toBe("");
       expect(result.current.state.style).toBe("");
       expect(result.current.state.duration).toBe(120);
-      expect(result.current.state.model).toBe("claude-3-5-sonnet");
-      expect(result.current.state.language).toBe("en");
+      expect(result.current.state.model).toBe("claude-3-5-sonnet-20241022");
+      expect(result.current.state.language).toBe("English");
       expect(result.current.state.customPromptHeader).toBe("");
       expect(result.current.state.screenplayRaw).toBe("");
       expect(result.current.state.scenes).toEqual([]);

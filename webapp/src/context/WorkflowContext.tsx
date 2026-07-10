@@ -6,8 +6,8 @@ const initialState: WorkflowState = {
   idea: "",
   style: "",
   duration: 120,
-  model: "claude-3-5-sonnet",
-  language: "en",
+  model: "claude-3-5-sonnet-20241022",
+  language: "English",
   customPromptHeader: "",
 
   // Step 2 data
