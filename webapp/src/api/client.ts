@@ -611,14 +611,30 @@ export async function generateBeats(
   model: string,
   timeout: number = 60
 ): Promise<{ beats: any[] }> {
-  const response = await fetch(`/api/studio/beats`, {
+  // Build prompt to generate beats from screenplay
+  const scenesList = scenes.map(s => `${s.heading}\n${s.body}`).join("\n\n");
+  const prompt = `You are a film director. Break this screenplay into visual BEATS (shot plan segments). Each beat should be ~8 seconds of screen time.
+
+SCREENPLAY:
+${screenplay}
+
+For each beat, return:
+- text: verbatim slice of screenplay narration
+- description: visual shot description (shot size, angle, action)
+- visual_prompt: full image generation prompt
+- motion_prompt: camera movement and action during the clip
+- ref_entity_names: any characters/locations mentioned
+
+Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"...","motion_prompt":"...","ref_entity_names":[]}]`;
+
+  const response = await fetch(`/api/agent/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      screenplay,
-      scenes,
-      model,
-      timeout,
+      agent: "claude",
+      prompt: prompt,
+      model: model,
+      timeout: timeout,
     }),
   });
 
@@ -627,7 +643,17 @@ export async function generateBeats(
   }
 
   const data = await response.json();
-  return { beats: data.beats || [] };
+
+  // Parse JSON from stdout
+  try {
+    const stdout = data.stdout || "";
+    const jsonMatch = stdout.match(/\[[\s\S]*\]/);
+    const beats = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    return { beats };
+  } catch (e) {
+    console.error("Failed to parse beats from AI response:", data.stdout);
+    return { beats: [] };
+  }
 }
 
 export async function generateImages(
