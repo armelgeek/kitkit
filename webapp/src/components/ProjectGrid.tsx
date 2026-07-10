@@ -210,9 +210,9 @@ export default function ProjectGrid({ onOpen }: Props) {
       {creating && (
         <CreateModal
           onClose={() => setCreating(false)}
-          onCreated={() => {
+          onCreated={(project) => {
             setCreating(false);
-            refresh();
+            onOpen(project);
           }}
         />
       )}
@@ -225,7 +225,7 @@ function CreateModal({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (project: Project) => void;
 }) {
   const [title, setTitle] = useState("");
   const [aspect, setAspect] = useState("VIDEO_ASPECT_RATIO_LANDSCAPE");
@@ -250,9 +250,9 @@ function CreateModal({
     setBusy(true);
     setErr(null);
     try {
-      await api.createProject({ title, aspect_ratio: aspect, style, storytelling,
+      const project = await api.createProject({ title, aspect_ratio: aspect, style, storytelling,
         script_lang: scriptLang.trim() || "English" });
-      onCreated();
+      onCreated(project);
     } catch (e: any) {
       setErr(e.message);
       setBusy(false);
