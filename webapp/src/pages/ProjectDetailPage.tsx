@@ -16,6 +16,14 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    // If id is "new", show empty project
+    if (id === "new") {
+      setProject(null);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise, load existing project
     const loadProject = async () => {
       try {
         setLoading(true);
@@ -48,13 +56,11 @@ export default function ProjectDetailPage() {
     );
   }
 
-  if (err || !project) {
+  if (err) {
     return (
       <div className="flex h-full items-center justify-center bg-neutral-950">
         <div className="text-center">
-          <p className="mb-4 text-red-400">
-            {err || "Project not found"}
-          </p>
+          <p className="mb-4 text-red-400">{err}</p>
           <button
             onClick={() => navigate("/")}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500"
@@ -66,6 +72,7 @@ export default function ProjectDetailPage() {
     );
   }
 
+  // Show ProjectWorkspaceNew with either existing project or null for new project
   return (
     <ProjectWorkspaceNew project={project} onBack={() => navigate("/")} />
   );

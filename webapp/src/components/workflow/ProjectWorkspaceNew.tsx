@@ -5,13 +5,13 @@ import Sidebar from "./Sidebar";
 import MainContent from "./MainContent";
 
 interface ProjectWorkspaceNewProps {
-  project: Project;
+  project: Project | null;
   onBack: () => void;
 }
 
 export default function ProjectWorkspaceNew({ project, onBack }: ProjectWorkspaceNewProps) {
   return (
-    <WorkflowProvider initialProject={project}>
+    <WorkflowProvider initialProject={project || undefined}>
       <div className="flex h-full">
         {/* Sidebar */}
         <Sidebar />
@@ -27,7 +27,7 @@ export default function ProjectWorkspaceNew({ project, onBack }: ProjectWorkspac
               ← Projects
             </button>
             <div className="ml-4 min-w-0">
-              <div className="truncate font-medium text-white">{project.title}</div>
+              <div className="truncate font-medium text-white">{project?.title || "New Project"}</div>
             </div>
           </div>
 

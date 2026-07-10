@@ -1,11 +1,7 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, useNavigate, useParams } from "react-router-dom";
-import { type Project } from "./api/client";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import StatusPills from "./components/StatusPills";
 import ProjectGrid from "./components/ProjectGrid";
-import ProjectWorkspace from "./components/ProjectWorkspace";
-import ProjectWorkspaceNew from "./components/workflow/ProjectWorkspaceNew";
-import CreateProjectPage from "./pages/CreateProjectPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import SettingsDrawer from "./components/settings/SettingsDrawer";
 
@@ -41,7 +37,6 @@ function AppContent() {
       <main className="flex-1 overflow-auto">
         <Routes>
           <Route path="/" element={<ProjectGrid />} />
-          <Route path="/project/new" element={<CreateProjectPage />} />
           <Route path="/project/:id" element={<ProjectDetailPage />} />
         </Routes>
       </main>
