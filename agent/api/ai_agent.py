@@ -111,7 +111,7 @@ async def _run_via_api(body: "RunRequest", cfg: dict, timeout: float) -> dict:
     started = time.monotonic()
     try:
         client = Anthropic(api_key=ANTHROPIC_API_KEY)
-        model = body.model or cfg.get("model", "claude-3-5-sonnet-20241022")
+        model = body.model or cfg.get("model", "claude-opus-4-8")
 
         response = client.messages.create(
             model=model,
@@ -121,7 +121,10 @@ async def _run_via_api(body: "RunRequest", cfg: dict, timeout: float) -> dict:
             ],
         )
 
-        output = response.content[0].text if response.content else ""
+        output = ""
+        for block in response.content:
+            if hasattr(block, "text"):
+                output += block.text
         duration = round(time.monotonic() - started, 2)
 
         logger.info("agent/run done (api): %s model=%s in %ss",
