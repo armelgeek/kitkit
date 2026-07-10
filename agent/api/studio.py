@@ -1674,41 +1674,52 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
         if not voiceover:
             raise HTTPException(400, "Chưa có nội dung gốc (idea) để đọc cho scene này.")
 
-    # 2) segment the verbatim narration into visual beats (AI = visual structure + key
-    #    phrases). The SPOKEN text per beat is re-derived verbatim from the narration so the
-    #    audio always covers the whole scene in order — no AI drift, no dropped sentences.
-    # ~8s of narration per beat → an image change every ~8s (keeps the video from going
-    # stale on one still). Target count drives the AI; partition_text caps it at sentence count.
-    target_beats = max(1, round(_estimate_narration_secs(voiceover) / 8.0))
+    # 2) segment the verbatim narration into visual beats (UNIFIED AI call: plan + segment in 1)
+    #    The SPOKEN text per beat is re-derived verbatim from the narration so the audio always
+    #    covers the whole scene in order — no AI drift, no dropped sentences.
     loc_name = scene_loc["name"] if scene_loc else None
-    # First understand the WHOLE scene (who's present, blocking, coverage) so the beats form a
-    # coherent scene instead of a random string of solo shots. Best-effort — segmentation still
-    # runs without it.
-    plan = None
+
+    # Get previous scene exit state for inter-scene continuity
+    prev_scene = await db.query_one(
+        "SELECT exit_state FROM scene WHERE project_id=? AND idx < ? ORDER BY idx DESC LIMIT 1",
+        (scene["project_id"], scene.get("idx", 0)))
+    prev_exit = json.loads(prev_scene["exit_state"] or "{}") if prev_scene else None
+
+    # ONE unified call returns: plan + beats + exit_state
     try:
-        plan = await brain.run_json_valid(
-            brain.scene_plan_prompt(voiceover, erows, project["style"], location=loc_name),
-            lambda d: isinstance(d, dict) and isinstance(d.get("blocking") or d.get("coverage"), str),
-            label=f"Kế hoạch scene ({scene.get('heading') or sid})", attempts=2)
-    except Exception as e:  # noqa: BLE001 — plan is optional
-        logger.warning("scene plan unavailable (%s) — dùng tách beat không kế hoạch", e)
-    try:
-        beats = await brain.run_json_valid(
-            brain.scene_segment_prompt(
-                voiceover, erows, project["style"],
-                location=loc_name, target_beats=target_beats, plan=plan),
-            lambda d: isinstance(d, list) and len(d) > 0 and all(isinstance(x, dict) for x in d),
-            label=f"Tách beat ({scene.get('heading') or sid})")
-    except HTTPException as e:
-        # Retries exhausted: rather than collapse the scene into ONE giant shot (which forced
-        # the user to redo it by hand), fall back to a DETERMINISTIC split into ~8s beats so the
-        # scene still gets proper shots + audio timing. Generic framing — refine via "Đa dạng góc máy".
-        logger.warning("scene %s beat-segment fell back to deterministic split: %s", sid, e.detail)
+        scene_result = await brain.PromptRunner.run_json_valid(
+            brain.unified_scene_beats_prompt(
+                voiceover, scene["heading"], scene.get("action", ""),
+                erows, project["style"], previous_scene_exit=prev_exit),
+            schema=lambda d: (isinstance(d, dict) and "plan" in d and "beats" in d),
+            timeout=600)
+
+        plan = scene_result.get("plan")
+        beats = scene_result.get("beats", [])
+        exit_state = scene_result.get("exit_state")
+
+        if not isinstance(beats, list) or len(beats) == 0:
+            raise ValueError("Invalid beats from unified prompt")
+
+        # Hybrid validation: catch hard issues (unknown entities, repeated angles)
+        from agent.studio import validation
+        beats, validation_issues = await validation.auto_fix_beats(beats, erows, max_retries=2)
+
+        if validation_issues["soft_warnings"]:
+            logger.warning(f"Scene {sid} soft issues: {validation_issues['soft_warnings']}")
+
+    except (HTTPException, ValueError, json.JSONDecodeError) as e:
+        # Fallback to deterministic split if AI fails
+        logger.warning("unified scene beats failed (%s) — falling back to deterministic split", e)
+        target_beats = max(1, round(_estimate_narration_secs(voiceover) / 8.0))
         slices = brain.partition_text(voiceover, target_beats)
         loc_ref = [loc_name] if loc_name else []
         beats = [{"text": s, "description": (f"{loc_name}, " if loc_name else "") + "cinematic shot",
-                  "ref_entity_names": loc_ref, "key_phrases": []} for s in slices]
-    if not scene_loc_id:                      # heading matched no entity → use the AI's pick
+                  "visual_prompt": "", "motion_prompt": "",
+                  "ref_entity_names": loc_ref, "key_phrases": [], "beat_action": ""} for s in slices]
+        exit_state = None
+
+    if not scene_loc_id:  # heading matched no entity → use the AI's pick
         scene_loc_id = _first_location_id(beats, by_name)
     say = brain.partition_text(voiceover, len(beats))   # verbatim contiguous slices, complete
     if len(say) < len(beats):                            # fewer sentences than beats → trim
@@ -1780,7 +1791,8 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
     await db.update("scene", sid, {
         "narration_text": voiceover, "narration_path": narr_web,
-        "narration_duration": scene_dur, "location_entity_id": scene_loc_id})
+        "narration_duration": scene_dur, "exit_state": json.dumps(exit_state or {}),
+        "location_entity_id": scene_loc_id})
     ts = db.now()
     t = lead                                   # first beat starts after the leading silent pad
     for i, b in enumerate(beats):
