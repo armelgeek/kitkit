@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import type { WorkflowState, WorkflowActions, WorkflowStep, Beat, Scene } from "../types/workflow";
-import { generateScreenplay as apiGenerateScreenplay, generateBeats as apiGenerateBeats } from "../api/client";
+import { generateScreenplay as apiGenerateScreenplay, generateBeats as apiGenerateBeats, type Project } from "../api/client";
 import * as apiClient from "../api/client";
 
 // Helper: Parse scenes from FOUNTAIN format screenplay
@@ -70,6 +70,43 @@ const initialState: WorkflowState = {
   loadingMessage: "",
 };
 
+function getInitialState(project?: Project): WorkflowState {
+  if (!project) return initialState;
+
+  // Pre-fill from project data
+  const screenplay = project.script_raw || "";
+  const scenes = screenplay ? parseScenes(screenplay) : [];
+
+  return {
+    // Step 1 inputs (from project)
+    idea: project.idea || "",
+    style: project.style || "",
+    duration: project.target_duration ? Math.round(project.target_duration / 1000) : 120, // convert ms to seconds
+    model: project.video_model || project.image_model || "claude-3-5-sonnet-20241022",
+    language: project.script_lang || "English",
+    customPromptHeader: "",
+
+    // Step 2 data (from project)
+    screenplayRaw: screenplay,
+    scenes: scenes,
+
+    // Step 3 data (empty, will be generated or loaded separately)
+    beats: [],
+    editedBeatIds: new Set(),
+
+    // Step 4 data
+    videoStatus: "pending",
+    videoUrl: null,
+    generationJobId: null,
+
+    // Meta
+    currentStep: screenplay ? 2 : 1, // If screenplay exists, start at Step 2
+    loading: false,
+    error: null,
+    loadingMessage: "",
+  };
+}
+
 interface WorkflowContextType {
   state: WorkflowState;
   actions: WorkflowActions;
@@ -77,8 +114,13 @@ interface WorkflowContextType {
 
 const WorkflowCtx = createContext<WorkflowContextType | null>(null);
 
-export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<WorkflowState>(initialState);
+interface WorkflowProviderProps {
+  children: ReactNode;
+  initialProject?: Project;
+}
+
+export function WorkflowProvider({ children, initialProject }: WorkflowProviderProps) {
+  const [state, setState] = useState<WorkflowState>(() => getInitialState(initialProject));
 
   const actions: WorkflowActions = {
     setIdea: (idea: string) => {

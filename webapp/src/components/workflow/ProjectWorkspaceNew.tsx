@@ -11,7 +11,7 @@ interface ProjectWorkspaceNewProps {
 
 export default function ProjectWorkspaceNew({ project, onBack }: ProjectWorkspaceNewProps) {
   return (
-    <WorkflowProvider>
+    <WorkflowProvider initialProject={project}>
       <div className="flex h-full">
         {/* Sidebar */}
         <Sidebar />
