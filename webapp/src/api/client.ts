@@ -644,15 +644,36 @@ Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"..."
 
   const data = await response.json();
 
-  // Parse JSON from stdout
+  if (!data.ok) {
+    throw new Error(`AI generation failed: ${data.stderr || "unknown error"}`);
+  }
+
+  // Parse JSON from stdout - try multiple extraction methods
   try {
     const stdout = data.stdout || "";
-    const jsonMatch = stdout.match(/\[[\s\S]*\]/);
-    const beats = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    return { beats };
+    if (!stdout.trim()) {
+      throw new Error("Empty response from AI");
+    }
+
+    // Method 1: Try direct JSON parse
+    try {
+      const beats = JSON.parse(stdout);
+      if (Array.isArray(beats)) return { beats };
+    } catch { /* not direct JSON */ }
+
+    // Method 2: Extract JSON array from text (handles markdown code fences)
+    const cleaned = stdout.replace(/```json\n?|\n?```/g, "").trim();
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const beats = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(beats)) return { beats };
+    }
+
+    throw new Error("Could not extract valid JSON array from response");
   } catch (e) {
-    console.error("Failed to parse beats from AI response:", data.stdout);
-    return { beats: [] };
+    const errorMsg = `Failed to parse beats: ${e instanceof Error ? e.message : String(e)}`;
+    console.error(errorMsg, "\nResponse:", data.stdout);
+    throw new Error(errorMsg);
   }
 }
 
