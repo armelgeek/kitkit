@@ -609,20 +609,23 @@ export async function generateBeats(
   screenplay: string,
   scenes: { heading: string; body: string }[],
   model: string,
-  timeout: number = 60
+  timeout: number = 60,
+  language: string = "English"
 ): Promise<{ beats: any[] }> {
   // Build prompt to generate beats from screenplay
   const scenesList = scenes.map(s => `${s.heading}\n${s.body}`).join("\n\n");
   const prompt = `You are a film director. Break this screenplay into visual BEATS (shot plan segments). Each beat should be ~8 seconds of screen time.
 
+The screenplay is written in ${language}. Keep all descriptions and prompts in ${language}.
+
 SCREENPLAY:
 ${screenplay}
 
 For each beat, return:
-- text: verbatim slice of screenplay narration
-- description: visual shot description (shot size, angle, action)
-- visual_prompt: full image generation prompt
-- motion_prompt: camera movement and action during the clip
+- text: verbatim slice of screenplay narration in ${language}
+- description: visual shot description in ${language} (shot size, angle, action)
+- visual_prompt: full image generation prompt (can mix languages but emphasize ${language})
+- motion_prompt: camera movement and action during the clip in ${language}
 - ref_entity_names: any characters/locations mentioned
 
 Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"...","motion_prompt":"...","ref_entity_names":[]}]`;

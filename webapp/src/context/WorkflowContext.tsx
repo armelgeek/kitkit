@@ -214,7 +214,9 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
         const result = await apiClient.generateBeats(
           currentState.screenplayRaw,
           currentState.scenes,
-          currentState.model
+          currentState.model,
+          120,
+          currentState.language
         );
 
         // Convert API beats to Beat type
