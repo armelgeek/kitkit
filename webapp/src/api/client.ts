@@ -662,11 +662,33 @@ Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"..."
     } catch { /* not direct JSON */ }
 
     // Method 2: Extract JSON array from text (handles markdown code fences)
-    const cleaned = stdout.replace(/```json\n?|\n?```/g, "").trim();
-    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const beats = JSON.parse(jsonMatch[0]);
-      if (Array.isArray(beats)) return { beats };
+    let cleaned = stdout.replace(/```json\n?|\n?```/g, "").trim();
+
+    // Handle incomplete JSON by finding the last complete object
+    const openBracket = cleaned.indexOf('[');
+    if (openBracket !== -1) {
+      // Find the last closing brace before potential truncation
+      let trimmed = cleaned.substring(openBracket);
+
+      // Count brackets to find valid JSON
+      let bracketCount = 0;
+      let lastValidEnd = -1;
+      for (let i = 0; i < trimmed.length; i++) {
+        if (trimmed[i] === '[' || trimmed[i] === '{') bracketCount++;
+        else if (trimmed[i] === ']' || trimmed[i] === '}') bracketCount--;
+
+        if (bracketCount === 0 && trimmed[i] === ']') {
+          lastValidEnd = i;
+        }
+      }
+
+      if (lastValidEnd > 0) {
+        trimmed = trimmed.substring(0, lastValidEnd + 1);
+        try {
+          const beats = JSON.parse(trimmed);
+          if (Array.isArray(beats)) return { beats };
+        } catch { /* continue to next method */ }
+      }
     }
 
     throw new Error("Could not extract valid JSON array from response");

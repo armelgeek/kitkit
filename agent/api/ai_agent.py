@@ -115,7 +115,7 @@ async def _run_via_api(body: "RunRequest", cfg: dict, timeout: float) -> dict:
 
         response = client.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=16384,
             messages=[
                 {"role": "user", "content": body.prompt}
             ],
