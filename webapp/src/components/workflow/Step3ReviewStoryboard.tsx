@@ -8,7 +8,7 @@ export default function Step3ReviewStoryboard() {
   const { beats, editedBeatIds, generationJobId, loading, error } = state;
   const [editor, setEditor] = useState<EditorTarget | null>(null);
 
-  const isGenerateDisabled = beats.length === 0 || loading || !!generationJobId;
+  const isGenerateDisabled = beats.length === 0 || loading;
 
   const handleRedo = () => {
     actions.redoAllBeats();
@@ -113,7 +113,7 @@ export default function Step3ReviewStoryboard() {
                   : "bg-indigo-600 text-white hover:bg-indigo-700"
               }`}
             >
-              {loading ? "Starting generation..." : generationJobId ? "✓ Generation started" : "Generate Images"}
+              {loading ? "Starting generation..." : "Generate Images"}
             </button>
           </div>
         </div>

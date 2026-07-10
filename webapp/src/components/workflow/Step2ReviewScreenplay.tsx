@@ -6,7 +6,7 @@ export default function Step2ReviewScreenplay() {
   const { screenplayRaw, scenes, beats, loading, error } = state;
 
   const sceneCount = scenes.length;
-  const isApproveDisabled = !screenplayRaw.trim() || loading || beats.length > 0;
+  const isApproveDisabled = !screenplayRaw.trim() || loading;
 
   const handleRedo = () => {
     actions.redoScreenplay();
@@ -73,7 +73,7 @@ export default function Step2ReviewScreenplay() {
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
             }`}
           >
-            {loading ? "Generating storyboard..." : beats.length > 0 ? "✓ Storyboard created" : "Looks Good"}
+            {loading ? "Generating storyboard..." : "Looks Good"}
           </button>
         </div>
       </div>
