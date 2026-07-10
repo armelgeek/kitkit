@@ -148,43 +148,37 @@ export function WorkflowProvider({ children, initialProject }: WorkflowProviderP
     },
 
     generateScreenplay: async () => {
-      let capturedState: WorkflowState | null = null;
+      const currentState = state;
 
-      // Capture current state before async operations
-      setState((s) => {
-        capturedState = s;
-        return {
-          ...s,
-          loading: true,
-          loadingMessage: "Generating screenplay...",
-          error: null,
-        };
+      setState({
+        ...currentState,
+        loading: true,
+        loadingMessage: "Generating screenplay...",
+        error: null,
       });
 
-      if (!capturedState) return;
-
       // Build prompt from step 1 inputs
-      const shotCount = Math.ceil(capturedState.duration / 8);
-      const wordEstimate = Math.ceil(capturedState.duration * 5);
+      const shotCount = Math.ceil(currentState.duration / 8);
+      const wordEstimate = Math.ceil(currentState.duration * 5);
 
       const prompt = `You are a professional screenwriter. Write a screenplay in FOUNTAIN format.
 
-WRITE THE SCREENPLAY IN ${capturedState.language}: all action lines must be in ${capturedState.language}
+WRITE THE SCREENPLAY IN ${currentState.language}: all action lines must be in ${currentState.language}
 
-TARGET DURATION: ${capturedState.duration}s (≈ ${shotCount} shots, ≈ ${wordEstimate} words)
+TARGET DURATION: ${currentState.duration}s (≈ ${shotCount} shots, ≈ ${wordEstimate} words)
 
-IDEA / CONTENT: ${capturedState.idea}
+IDEA / CONTENT: ${currentState.idea}
 
-STYLE / TONE: ${capturedState.style}
+STYLE / TONE: ${currentState.style}
 
-${capturedState.customPromptHeader ? capturedState.customPromptHeader + "\n" : ""}
+${currentState.customPromptHeader ? currentState.customPromptHeader + "\n" : ""}
 
 Follow FOUNTAIN format: scene headings (INT./EXT. LOCATION - TIME), action, dialogue.
 
 Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
 
       try {
-        const result = await apiClient.generateScreenplay(prompt, capturedState.model, 120);
+        const result = await apiClient.generateScreenplay(prompt, currentState.model, 120);
         const screenplay = result.screenplay;
         const parsedScenes = parseScenes(screenplay);
 
@@ -207,25 +201,20 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     },
 
     approveScreenplay: async () => {
-      let capturedState: WorkflowState | null = null;
+      const currentState = state;
 
-      setState((s) => {
-        capturedState = s;
-        return {
-          ...s,
-          loading: true,
-          loadingMessage: "Generating storyboard...",
-          error: null,
-        };
+      setState({
+        ...currentState,
+        loading: true,
+        loadingMessage: "Generating storyboard...",
+        error: null,
       });
-
-      if (!capturedState) return;
 
       try {
         const result = await apiClient.generateBeats(
-          capturedState.screenplayRaw,
-          capturedState.scenes,
-          capturedState.model
+          currentState.screenplayRaw,
+          currentState.scenes,
+          currentState.model
         );
 
         // Convert API beats to Beat type
@@ -282,22 +271,17 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     },
 
     approveStoryboard: async () => {
-      let capturedState: WorkflowState | null = null;
+      const currentState = state;
 
-      setState((s) => {
-        capturedState = s;
-        return {
-          ...s,
-          loading: true,
-          loadingMessage: "Starting image generation...",
-          error: null,
-        };
+      setState({
+        ...currentState,
+        loading: true,
+        loadingMessage: "Starting image generation...",
+        error: null,
       });
 
-      if (!capturedState) return;
-
       try {
-        const result = await apiClient.generateImages(capturedState.beats, capturedState.model);
+        const result = await apiClient.generateImages(currentState.beats, currentState.model);
 
         setState((s) => ({
           ...s,
@@ -320,16 +304,10 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     },
 
     pollVideoStatus: async () => {
-      let capturedState: WorkflowState | null = null;
-      setState((s) => {
-        capturedState = s;
-        return s;
-      });
-
-      if (!capturedState || !capturedState.generationJobId) return;
+      if (!state.generationJobId) return;
 
       try {
-        const result = await apiClient.getVideoStatus(capturedState.generationJobId);
+        const result = await apiClient.getVideoStatus(state.generationJobId!);
 
         setState((s) => ({
           ...s,
