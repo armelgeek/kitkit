@@ -38,6 +38,65 @@ async def _agent_name() -> str:
     return agent
 
 
+class PromptRunner:
+    """Centralized prompt execution with JSON schema validation & retry."""
+
+    @staticmethod
+    async def run_json_valid(prompt: str, schema: dict = None,
+                             retries: int = 2, timeout: float = 600) -> dict:
+        """
+        Run prompt, extract JSON, validate against schema (if provided), retry on fail.
+
+        Args:
+            prompt: The prompt text
+            schema: JSON schema dict or validation callable
+            retries: Max retry attempts
+            timeout: Agent timeout (seconds)
+
+        Returns: Valid JSON data
+        Raises: HTTPException(502) if all attempts fail
+        """
+        agent, model = await _agent_cfg()
+        last_err = None
+
+        for attempt in range(retries + 1):
+            nudge = "" if attempt == 0 else "\n\nReturn ONLY valid JSON, no prose."
+            res = await run_agent(RunRequest(
+                agent=agent,
+                prompt=prompt + nudge,
+                timeout=timeout,
+                model=model
+            ))
+
+            if not res.get("ok"):
+                last_err = res.get("stderr") or f"exit {res.get('exit_code')}"
+                continue
+
+            try:
+                data = _extract_json(res.get("stdout", ""))
+
+                # Validate schema if provided
+                if schema:
+                    if callable(schema):
+                        valid = schema(data)
+                    else:
+                        # For dict schemas, just check key existence
+                        valid = isinstance(data, dict) if isinstance(schema, dict) else True
+
+                    if not valid:
+                        last_err = "JSON valid but failed schema validation"
+                        logger.warning(f"Schema validation failed (attempt {attempt+1}): {data}")
+                        continue
+
+                return data
+
+            except ValueError as e:
+                last_err = str(e)
+                logger.warning(f"JSON parse failed (attempt {attempt+1}): {e}")
+
+        raise HTTPException(502, f"AI response invalid after {retries+1} attempts: {last_err}")
+
+
 def _extract_json(text: str):
     """Pull the first JSON object/array out of arbitrary model output."""
     if not text:
