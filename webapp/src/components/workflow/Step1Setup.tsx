@@ -20,11 +20,12 @@ export default function Step1Setup() {
     model,
     language,
     customPromptHeader,
+    screenplayRaw,
     loading,
     error,
   } = state;
 
-  const isGenerateDisabled = !idea.trim() || !style.trim() || loading;
+  const isGenerateDisabled = !idea.trim() || !style.trim() || loading || !!screenplayRaw;
 
   const handleGenerateClick = async () => {
     await actions.generateScreenplay();
@@ -169,7 +170,7 @@ export default function Step1Setup() {
               : "bg-indigo-600 text-white hover:bg-indigo-700"
           }`}
         >
-          {loading ? "Generating screenplay..." : "Generate Screenplay"}
+          {loading ? "Generating screenplay..." : screenplayRaw ? "✓ Screenplay generated" : "Generate Screenplay"}
         </button>
       </div>
     </div>

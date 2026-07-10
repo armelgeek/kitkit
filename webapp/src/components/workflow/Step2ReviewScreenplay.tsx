@@ -3,10 +3,10 @@ import { useWorkflow } from "../../context/WorkflowContext";
 
 export default function Step2ReviewScreenplay() {
   const { state, actions } = useWorkflow();
-  const { screenplayRaw, scenes, loading, error } = state;
+  const { screenplayRaw, scenes, beats, loading, error } = state;
 
   const sceneCount = scenes.length;
-  const isApproveDisabled = !screenplayRaw.trim() || loading;
+  const isApproveDisabled = !screenplayRaw.trim() || loading || beats.length > 0;
 
   const handleRedo = () => {
     actions.redoScreenplay();
@@ -73,7 +73,7 @@ export default function Step2ReviewScreenplay() {
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
             }`}
           >
-            Looks Good
+            {loading ? "Generating storyboard..." : beats.length > 0 ? "✓ Storyboard created" : "Looks Good"}
           </button>
         </div>
       </div>

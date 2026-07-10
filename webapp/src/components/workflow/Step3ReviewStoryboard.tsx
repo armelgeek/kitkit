@@ -5,10 +5,10 @@ import NodeEditor, { type EditorTarget } from "../nodeeditor/NodeEditor";
 
 export default function Step3ReviewStoryboard() {
   const { state, actions } = useWorkflow();
-  const { beats, editedBeatIds, loading, error } = state;
+  const { beats, editedBeatIds, generationJobId, loading, error } = state;
   const [editor, setEditor] = useState<EditorTarget | null>(null);
 
-  const isGenerateDisabled = beats.length === 0 || loading;
+  const isGenerateDisabled = beats.length === 0 || loading || !!generationJobId;
 
   const handleRedo = () => {
     actions.redoAllBeats();
@@ -113,7 +113,7 @@ export default function Step3ReviewStoryboard() {
                   : "bg-indigo-600 text-white hover:bg-indigo-700"
               }`}
             >
-              Generate Images
+              {loading ? "Starting generation..." : generationJobId ? "✓ Generation started" : "Generate Images"}
             </button>
           </div>
         </div>
