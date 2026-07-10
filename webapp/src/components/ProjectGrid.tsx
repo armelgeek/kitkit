@@ -3,6 +3,9 @@ import { api, thumbUrl, type Project, type FlowProject } from "../api/client";
 import Thumb from "./Thumb";
 import { useConfirm } from "./common/Confirm";
 
+// Feature flag: set to false to use old 6-tab UI, true for new 4-step workflow UI
+export const USE_NEW_WORKFLOW = true;
+
 interface Props {
   onOpen: (p: Project) => void;
 }

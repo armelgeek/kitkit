@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { type Project } from "./api/client";
 import StatusPills from "./components/StatusPills";
-import ProjectGrid from "./components/ProjectGrid";
+import ProjectGrid, { USE_NEW_WORKFLOW } from "./components/ProjectGrid";
 import ProjectWorkspace from "./components/ProjectWorkspace";
+import ProjectWorkspaceNew from "./components/workflow/ProjectWorkspaceNew";
 import SettingsDrawer from "./components/settings/SettingsDrawer";
 
 export default function App() {
@@ -36,7 +37,11 @@ export default function App() {
 
       <main className={`flex-1 ${open ? "overflow-hidden" : "overflow-auto"}`}>
         {open ? (
-          <ProjectWorkspace project={open} onBack={() => setOpen(null)} />
+          USE_NEW_WORKFLOW ? (
+            <ProjectWorkspaceNew project={open} onBack={() => setOpen(null)} />
+          ) : (
+            <ProjectWorkspace project={open} onBack={() => setOpen(null)} />
+          )
         ) : (
           <ProjectGrid onOpen={setOpen} />
         )}
