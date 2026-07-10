@@ -63,6 +63,7 @@ export interface WorkflowState {
   generationJobId: string | null;
 
   // Meta
+  flowProjectId: string | null;
   currentStep: WorkflowStep;
   loading: boolean;
   error: string | null;

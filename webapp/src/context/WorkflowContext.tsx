@@ -70,6 +70,7 @@ const initialState: WorkflowState = {
   generationJobId: null,
 
   // Meta
+  flowProjectId: null,
   currentStep: 1,
   loading: false,
   error: null,
@@ -159,15 +160,38 @@ export function WorkflowProvider({ children, initialProject }: WorkflowProviderP
       setState({
         ...currentState,
         loading: true,
-        loadingMessage: "Generating screenplay...",
+        loadingMessage: "Creating Flow project and generating screenplay...",
         error: null,
       });
 
-      // Build prompt from step 1 inputs
-      const shotCount = Math.ceil(currentState.duration / 8);
-      const wordEstimate = Math.ceil(currentState.duration * 5);
+      try {
+        // 1. Create Flow project first
+        let flowProjectId: string | null = null;
+        try {
+          const projectResponse = await fetch(`/api/flow/create-project`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: `Video Flow ${Date.now()}`,
+            }),
+          });
 
-      const prompt = `You are a professional screenwriter. Write a screenplay in FOUNTAIN format.
+          if (projectResponse.ok) {
+            const projectData = await projectResponse.json();
+            flowProjectId = projectData.flow_project_id || projectData.project_id;
+            console.log("Created Flow project:", flowProjectId);
+          } else {
+            console.warn("Failed to create Flow project:", projectResponse.statusText);
+          }
+        } catch (e) {
+          console.error("Error creating Flow project:", e);
+        }
+
+        // 2. Generate screenplay
+        const shotCount = Math.ceil(currentState.duration / 8);
+        const wordEstimate = Math.ceil(currentState.duration * 5);
+
+        const prompt = `You are a professional screenwriter. Write a screenplay in FOUNTAIN format.
 
 WRITE THE SCREENPLAY IN ${currentState.language}: all action lines must be in ${currentState.language}
 
@@ -183,13 +207,13 @@ Follow FOUNTAIN format: scene headings (INT./EXT. LOCATION - TIME), action, dial
 
 Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
 
-      try {
         const result = await apiClient.generateScreenplay(prompt, currentState.model, 120);
         const screenplay = result.screenplay;
         const parsedScenes = parseScenes(screenplay);
 
         setState((s) => ({
           ...s,
+          flowProjectId,
           screenplayRaw: screenplay,
           scenes: parsedScenes,
           loading: false,
@@ -388,7 +412,11 @@ Studio lighting, isolated on white background, professional product reference sh
       });
 
       try {
-        const result = await apiClient.generateImages(currentState.beats, currentState.model);
+        const result = await apiClient.generateImages(
+          currentState.beats,
+          currentState.model,
+          currentState.flowProjectId
+        );
 
         setState((s) => ({
           ...s,

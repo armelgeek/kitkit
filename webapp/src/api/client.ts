@@ -705,6 +705,7 @@ Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"..."
 export async function generateImages(
   beats: any[],
   model: string,
+  projectId: string | null,
   timeout: number = 60
 ): Promise<{ jobId: string; images: any[] }> {
   // Generate images by using AI agent to enhance beat prompts
@@ -762,31 +763,12 @@ Return ONLY JSON: {
     console.warn("Could not parse enhanced prompts:", e);
   }
 
-  // Create Flow project first
-  let projectId: string | null = null;
-  try {
-    const createProjectResponse = await fetch(`/api/flow/create-project`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: `Beat Images ${Date.now()}`,
-      }),
-    });
-
-    if (createProjectResponse.ok) {
-      const projectData = await createProjectResponse.json();
-      projectId = projectData.flow_project_id || projectData.project_id;
-      console.log("Created Flow project:", projectId);
-    } else {
-      console.warn("Failed to create Flow project:", createProjectResponse.statusText);
-    }
-  } catch (e) {
-    console.error("Error creating Flow project:", e);
-  }
-
+  // Use existing Flow project
   if (!projectId) {
-    throw new Error("Failed to create Flow project for image generation");
+    throw new Error("No Flow project ID provided for image generation");
   }
+
+  console.log("Using Flow project:", projectId);
 
   // Generate images using Flow API
   const images: any[] = [];
