@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { useWorkflow } from "../../context/WorkflowContext";
 
 const MODEL_OPTIONS = [
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-  { value: "claude-opus-4-1", label: "Claude Opus 4.1" },
+  { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+  { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
 ];
 
 const LANGUAGE_OPTIONS = ["English", "French", "Spanish"];

@@ -52,11 +52,9 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # Supported Claude models (latest first)
 CLAUDE_MODELS = [
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-haiku-20241022",
-    "claude-3-opus-20250219",
-    "claude-3-sonnet-20240229",
-    "claude-3-haiku-20240307",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-haiku-4-5-20251001",
 ]
 
 DEFAULT_AGENT = "claude"
@@ -95,7 +93,7 @@ AI_AGENTS = {
     "claude": {
         # Set use_api=true to call Claude API directly instead of CLI
         "use_api": os.environ.get("AGENT_CLAUDE_USE_API", "1") == "1",
-        "model": os.environ.get("AGENT_CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+        "model": os.environ.get("AGENT_CLAUDE_MODEL", "claude-opus-4-8"),
         # Only used if use_api=false
         "bin": os.environ.get("AGENT_CLAUDE_BIN", "claude"),
         "prompt_mode": "stdin",
