@@ -762,9 +762,34 @@ Return ONLY JSON: {
     console.warn("Could not parse enhanced prompts:", e);
   }
 
+  // Create Flow project first
+  let projectId: string | null = null;
+  try {
+    const createProjectResponse = await fetch(`/api/flow/create-project`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: `Beat Images ${Date.now()}`,
+      }),
+    });
+
+    if (createProjectResponse.ok) {
+      const projectData = await createProjectResponse.json();
+      projectId = projectData.flow_project_id || projectData.project_id;
+      console.log("Created Flow project:", projectId);
+    } else {
+      console.warn("Failed to create Flow project:", createProjectResponse.statusText);
+    }
+  } catch (e) {
+    console.error("Error creating Flow project:", e);
+  }
+
+  if (!projectId) {
+    throw new Error("Failed to create Flow project for image generation");
+  }
+
   // Generate images using Flow API
   const images: any[] = [];
-  const projectId = `project-${Date.now()}`; // Use a temporary project ID
 
   for (let idx = 0; idx < beats.length; idx++) {
     const beat = beats[idx];
