@@ -660,6 +660,50 @@ def scene_plan_prompt(voiceover: str, entities: list[dict], style: str,
     )
 
 
+def extract_scene_exit_state(beats: list[dict], scene_heading: str) -> dict:
+    """
+    From the final beat, infer: who's present, lighting, location, key props.
+
+    Returns: {present: [...], lighting: "...", location: "...", props: [...], last_action: "..."}
+    """
+    from agent.studio.validation import (
+        extract_braced_names, extract_location_from_description,
+        extract_lighting, extract_props
+    )
+
+    if not beats:
+        return {
+            "present": [],
+            "lighting": None,
+            "location": None,
+            "props": [],
+            "last_action": None
+        }
+
+    last_beat = beats[-1]
+    description = last_beat.get("description", "")
+
+    # Location: extracted from "At {Location}..." pattern
+    location = extract_location_from_description(description)
+
+    # Present: entities mentioned in last beat
+    present = list(extract_braced_names(description))
+
+    # Lighting: inferred from keywords
+    lighting = extract_lighting(description)
+
+    # Props: from description + motion_prompt
+    props = list(extract_props(description + (last_beat.get("motion_prompt") or "")))
+
+    return {
+        "present": present,
+        "lighting": lighting,
+        "location": location,
+        "props": props,
+        "last_action": last_beat.get("beat_action", "")
+    }
+
+
 def unified_scene_beats_prompt(voiceover: str, scene_heading: str, scene_action: str,
                                 entities: list[dict], style: str,
                                 previous_scene_exit: dict | None = None) -> str:
