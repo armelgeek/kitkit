@@ -150,11 +150,11 @@ export default function ProjectGrid({ onOpen }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {projects.map((p) => (
           <div
             key={p.id}
-            className="group overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/50 transition hover:border-neutral-600"
+            className="group overflow-hidden rounded-xl bg-neutral-900/70 shadow-sm transition-shadow duration-200 hover:shadow-md"
           >
             <button onClick={() => onOpen(p)} className="block w-full text-left">
               <Thumb
@@ -164,25 +164,38 @@ export default function ProjectGrid({ onOpen }: Props) {
                 className="aspect-video w-full"
               />
             </button>
-            <div className="flex items-center justify-between gap-2 p-3">
-              <button onClick={() => onOpen(p)} className="min-w-0 flex-1 text-left">
-                <div className="truncate font-medium">{p.title}</div>
-                <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
+            <div className="flex flex-col gap-2 p-4">
+              <button onClick={() => onOpen(p)} className="text-left">
+                <div className="truncate font-semibold text-base text-white">{p.title}</div>
+              </button>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1 truncate text-xs text-neutral-500">
                   <span>{p.style}</span>
                   {p.storytelling ? (
-                    <span className="rounded bg-amber-500/15 px-1.5 text-amber-300">
-                      storytelling
-                    </span>
+                    <>
+                      <span> • </span>
+                      <span className="rounded bg-amber-500/15 px-1.5 text-amber-300 inline">
+                        storytelling
+                      </span>
+                    </>
                   ) : null}
+                  <span> • </span>
+                  <span>{new Date(p.updated_at * 1000).toISOString().split('T')[0]}</span>
+                  {p.target_duration && (
+                    <>
+                      <span> • </span>
+                      <span>{Math.round(p.target_duration / 60)} min</span>
+                    </>
+                  )}
                 </div>
-              </button>
-              <button
-                onClick={() => remove(p)}
-                title="Delete"
-                className="rounded-md p-1.5 text-neutral-500 opacity-0 transition hover:bg-neutral-800 hover:text-rose-400 group-hover:opacity-100"
-              >
-                🗑
-              </button>
+                <button
+                  onClick={() => remove(p)}
+                  title="Delete"
+                  className="rounded-md p-2 text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors duration-150 flex-shrink-0"
+                >
+                  🗑
+                </button>
+              </div>
             </div>
           </div>
         ))}
