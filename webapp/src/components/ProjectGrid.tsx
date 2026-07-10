@@ -1,20 +1,14 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, thumbUrl, type Project, type FlowProject } from "../api/client";
 import Thumb from "./Thumb";
 import { useConfirm } from "./common/Confirm";
 
-// Feature flag: set to false to use old 6-tab UI, true for new 4-step workflow UI
-export const USE_NEW_WORKFLOW = true;
-
-interface Props {
-  onOpen: (p: Project) => void;
-}
-
-export default function ProjectGrid({ onOpen }: Props) {
+export default function ProjectGrid() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [flow, setFlow] = useState<FlowProject[]>([]);
   const [showImport, setShowImport] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -26,7 +20,7 @@ export default function ProjectGrid({ onOpen }: Props) {
     try {
       const p = await api.importProjectZip(file);
       await refresh();
-      onOpen(p);
+      navigate(`/project/${p.id}`);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -107,7 +101,7 @@ export default function ProjectGrid({ onOpen }: Props) {
           Import from Flow
           </button>
           <button
-            onClick={() => setCreating(true)}
+            onClick={() => navigate("/project/new")}
             className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors duration-150"
           >
             + New project
@@ -156,7 +150,7 @@ export default function ProjectGrid({ onOpen }: Props) {
             key={p.id}
             className="group overflow-hidden rounded-xl bg-neutral-900/70 shadow-sm transition-shadow duration-200 hover:shadow-md"
           >
-            <button onClick={() => onOpen(p)} className="block w-full text-left">
+            <button onClick={() => navigate(`/project/${p.id}`)} className="block w-full text-left">
               <Thumb
                 src={p.thumb_media_key ? thumbUrl(p.thumb_media_key) : null}
                 alt={p.title}
@@ -207,133 +201,6 @@ export default function ProjectGrid({ onOpen }: Props) {
         )}
       </div>
 
-      {creating && (
-        <CreateModal
-          onClose={() => setCreating(false)}
-          onCreated={(project) => {
-            setCreating(false);
-            onOpen(project);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function CreateModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (project: Project) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [aspect, setAspect] = useState("VIDEO_ASPECT_RATIO_LANDSCAPE");
-  const [style, setStyle] = useState("Realistic");
-  const [scriptLang, setScriptLang] = useState("English");
-  const [storytelling, setStorytelling] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  // Pre-fill from global defaults (Settings §2.7A) so new projects inherit them.
-  useEffect(() => {
-    api.getSettings().then((g) => {
-      if (g.aspect_ratio) setAspect(g.aspect_ratio);
-      if (g.style) setStyle(g.style);
-      if (g.script_lang) setScriptLang(g.script_lang);
-      if (g.storytelling != null) setStorytelling(!!g.storytelling);
-    }).catch(() => {});
-  }, []);
-
-  const submit = async () => {
-    if (!title.trim()) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const project = await api.createProject({ title, aspect_ratio: aspect, style, storytelling,
-        script_lang: scriptLang.trim() || "English" });
-      onClose();
-      onCreated(project);
-    } catch (e: any) {
-      setErr(e.message);
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="mb-4 text-lg font-semibold">New project</h2>
-        <label className="mb-1 block text-xs text-neutral-400">Project title</label>
-        <input
-          autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Example: The story of the magic tree"
-          className="mb-4 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-        />
-        <div className="mb-4 grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">Frame ratio</label>
-            <select
-              value={aspect}
-              onChange={(e) => setAspect(e.target.value)}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-            >
-              <option value="VIDEO_ASPECT_RATIO_LANDSCAPE">16:9 landscape</option>
-              <option value="VIDEO_ASPECT_RATIO_PORTRAIT">9:16 portrait</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">Style</label>
-            <input
-              value={style}
-              onChange={(e) => setStyle(e.target.value)}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-            />
-          </div>
-        </div>
-        <div className="mb-4">
-          <label className="mb-1 block text-xs text-neutral-400">Script / narration language</label>
-          <input
-            value={scriptLang}
-            onChange={(e) => setScriptLang(e.target.value)}
-            placeholder="English"
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-          />
-        </div>
-        <label className="mb-4 flex items-center gap-2 text-sm text-neutral-300">
-          <input
-            type="checkbox"
-            checked={storytelling}
-            onChange={(e) => setStorytelling(e.target.checked)}
-            className="h-4 w-4 accent-indigo-500"
-          />
-          Storytelling mode (guided narration)
-        </label>
-        {err && <div className="mb-3 text-sm text-rose-400">{err}</div>}
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition-colors duration-150"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={busy || !title.trim()}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors duration-150"
-          >
-            {busy ? "Creating..." : "Create"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
