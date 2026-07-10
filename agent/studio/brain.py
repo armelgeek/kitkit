@@ -660,6 +660,93 @@ def scene_plan_prompt(voiceover: str, entities: list[dict], style: str,
     )
 
 
+def unified_scene_beats_prompt(voiceover: str, scene_heading: str, scene_action: str,
+                                entities: list[dict], style: str,
+                                previous_scene_exit: dict | None = None) -> str:
+    """
+    UNIFIED prompt: Returns BOTH plan + beats in one AI call.
+
+    Input: voiceover (narration text), heading, action, entities, style
+    Output: JSON with plan + beats + exit_state
+
+    Key features:
+    - Enforces entity wrapping: {Entity}
+    - Requires shot size alternation
+    - Injects previous scene state for continuity
+    """
+    roster = "\n".join([
+        f"- {{{e['name']}}} ({e['type']}): {e.get('description', '')}"
+        for e in entities
+    ]) or "(none)"
+
+    context_lines = [
+        f"SCENE HEADING: {scene_heading}",
+        f"SCENE ACTION: {scene_action}",
+    ]
+
+    if previous_scene_exit:
+        context_lines.append(
+            f"\nPREVIOUS SCENE STATE:\n"
+            f"  Present: {', '.join(previous_scene_exit.get('present', []))}\n"
+            f"  Lighting: {previous_scene_exit.get('lighting')}\n"
+            f"  Location: {previous_scene_exit.get('location')}\n\n"
+            f"Maintain visual continuity: if characters from previous scene are in this one, show them; "
+            f"if location is same, keep lighting/architecture consistent."
+        )
+
+    return f"""
+You are a film director. Read this scene, then:
+
+1) Create a SHORT PLAN (present, blocking, coverage)
+2) Segment into visual BEATS (~8s each), ensuring:
+   - Shot sizes ALTERNATE: wide → medium → close, never wide → wide
+   - Each frame wraps entity names in {{{{braces}}}}: {{{{{{"Entity"}}}}}}
+   - No hallucinations: all wrapped names must exist in AVAILABLE ENTITIES
+   - Lighting stays consistent (or intentionally changes)
+
+CINEMATOGRAPHY REQUIREMENTS:
+{_CINE}
+
+MOTION REQUIREMENTS:
+{_MOTION}
+
+CONTEXT:
+{chr(10).join(context_lines)}
+
+VOICEOVER (this is what will be read/narrated):
+{voiceover}
+
+AVAILABLE ENTITIES:
+{roster}
+
+Return ONLY valid JSON:
+{{
+  "plan": {{
+    "present": ["entity_name"],
+    "blocking": "one sentence: spatial layout and relationships",
+    "coverage": "one sentence: camera strategy (e.g., wide establishing, then close-ups)"
+  }},
+  "beats": [
+    {{
+      "text": "verbatim voiceover slice for this beat",
+      "beat_action": "what visually happens",
+      "description": "At {{{{Location}}}}, <SPECIFIC shot size + angle>, <action> with {{{{Entity}}}}",
+      "visual_prompt": "full image generation prompt with ALL cinematography elements",
+      "motion_prompt": "camera movement + subject motion during ~8s clip",
+      "ref_entity_names": ["Location", "Entity"],
+      "key_phrases": ["phrase1", "phrase2"]
+    }}
+  ],
+  "exit_state": {{
+    "present": ["who is still present at end"],
+    "lighting": "current lighting (e.g., warm golden hour)",
+    "location": "current location name",
+    "props": ["important objects still visible"]
+  }}
+}}
+"""
+
+
 def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
                          location: str | None = None, target_beats: int | None = None,
                          plan: dict | None = None) -> str:
