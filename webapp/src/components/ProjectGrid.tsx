@@ -180,6 +180,7 @@ export default function ProjectGrid({ onOpen }: Props) {
                     </>
                   ) : null}
                   <span> • </span>
+                  {/* Note: using updated_at (Project has no created_at field) */}
                   <span>{new Date(p.updated_at * 1000).toISOString().split('T')[0]}</span>
                   {p.target_duration && (
                     <>
