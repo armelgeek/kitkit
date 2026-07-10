@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useWorkflow } from "../../context/WorkflowContext";
 
-export default function Step4Done() {
+export default function Step5Done() {
   const { state, actions } = useWorkflow();
   const { videoStatus, videoUrl, error, generationJobId } = state;
 

@@ -58,7 +58,10 @@ const initialState: WorkflowState = {
   beats: [],
   editedBeatIds: new Set(),
 
-  // Step 4 data
+  // Step 4 data (Assets)
+  entities: [],
+
+  // Step 5 data (Video)
   videoStatus: "pending",
   videoUrl: null,
   generationJobId: null,
@@ -274,6 +277,94 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
         editedBeatIds: new Set(),
         currentStep: 2,
       }));
+    },
+
+    extractAndGenerateAssets: async () => {
+      const currentState = state;
+
+      setState({
+        ...currentState,
+        loading: true,
+        loadingMessage: "Extracting entities and generating asset references...",
+        error: null,
+      });
+
+      try {
+        // Extract unique entities from beats
+        const entityMap = new Map<string, any>();
+        const characterDescriptions: Record<string, string> = {};
+        const locationDescriptions: Record<string, string> = {};
+        const propDescriptions: Record<string, string> = {};
+
+        currentState.beats.forEach((beat) => {
+          beat.entities.forEach((entity) => {
+            if (!entityMap.has(entity.name)) {
+              entityMap.set(entity.name, {
+                name: entity.name,
+                type: entity.type as "character" | "location" | "prop",
+                description: entity.description,
+              });
+
+              if (entity.type === "character") {
+                characterDescriptions[entity.name] = entity.description;
+              } else if (entity.type === "location") {
+                locationDescriptions[entity.name] = entity.description;
+              } else if (entity.type === "prop") {
+                propDescriptions[entity.name] = entity.description;
+              }
+            }
+          });
+        });
+
+        // Convert to array and create ref prompts
+        const entities = Array.from(entityMap.values()).map((e, idx) => {
+          let ref_prompt = "";
+
+          if (e.type === "character") {
+            ref_prompt = `Character reference sheet: ${e.name}. ${e.description}. Create a full character design with:
+- Full body front view
+- Turnaround angles (front, 3/4, side, back)
+- Facial expressions (neutral, happy, sad, angry)
+- Detailed costume and distinctive features
+All on plain white background, professional character design sheet.`;
+          } else if (e.type === "location") {
+            ref_prompt = `Location reference sheet: ${e.name}. ${e.description}. Create establishing shots showing:
+- Wide establishing view
+- Reverse angle view
+- Overhead/bird's eye view
+- Close detail view
+As a 2x2 grid showing the same location from 4 camera angles, consistent architecture and lighting.`;
+          } else if (e.type === "prop") {
+            ref_prompt = `Prop design sheet: ${e.name}. ${e.description}. Create multiple angles showing:
+- Front view
+- 3/4 angle
+- Side view
+- Top-down view
+Studio lighting, isolated on white background, professional product reference sheet.`;
+          }
+
+          return {
+            id: `entity-${idx}`,
+            name: e.name,
+            type: e.type,
+            description: e.description,
+            ref_prompt,
+          };
+        });
+
+        setState((s) => ({
+          ...s,
+          entities,
+          loading: false,
+          currentStep: 4,
+        }));
+      } catch (error: any) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: error.message || "Failed to extract and generate assets",
+        }));
+      }
     },
 
     approveStoryboard: async () => {

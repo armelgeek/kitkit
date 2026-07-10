@@ -3,7 +3,8 @@ import { useWorkflow } from "../../context/WorkflowContext";
 import Step1Setup from "./Step1Setup";
 import Step2ReviewScreenplay from "./Step2ReviewScreenplay";
 import Step3ReviewStoryboard from "./Step3ReviewStoryboard";
-import Step4Done from "./Step4Done";
+import Step4ReviewAssets from "./Step4ReviewAssets";
+import Step5Done from "./Step5Done";
 
 export default function MainContent() {
   const { state } = useWorkflow();
@@ -17,7 +18,9 @@ export default function MainContent() {
     case 3:
       return <Step3ReviewStoryboard />;
     case 4:
-      return <Step4Done />;
+      return <Step4ReviewAssets />;
+    case 5:
+      return <Step5Done />;
     default:
       return <div className="flex-1 flex items-center justify-center bg-neutral-950 text-neutral-400">Unknown step</div>;
   }

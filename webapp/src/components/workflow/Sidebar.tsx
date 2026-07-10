@@ -6,7 +6,8 @@ const STEPS = [
   { number: 1, label: "Setup Your Story" },
   { number: 2, label: "Review Screenplay" },
   { number: 3, label: "Review Storyboard" },
-  { number: 4, label: "Done" },
+  { number: 4, label: "Generate Assets" },
+  { number: 5, label: "Video Done" },
 ];
 
 export default function Sidebar() {
@@ -14,7 +15,7 @@ export default function Sidebar() {
   const { currentStep } = state;
 
   const canGoBack = currentStep > 1;
-  const canGoForward = currentStep < 4;
+  const canGoForward = currentStep < 5;
 
   const handleBack = () => {
     actions.goToStep((currentStep - 1) as WorkflowStep);

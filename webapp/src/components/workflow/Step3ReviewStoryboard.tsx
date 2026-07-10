@@ -15,7 +15,7 @@ export default function Step3ReviewStoryboard() {
   };
 
   const handleGenerate = async () => {
-    await actions.approveStoryboard();
+    await actions.extractAndGenerateAssets();
   };
 
   const handleEditBeat = (beatId: string) => {
