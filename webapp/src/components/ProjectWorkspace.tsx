@@ -11,7 +11,7 @@ import ProjectSettings from "./settings/ProjectSettings";
 import { JobsProvider } from "../jobs/JobsContext";
 import JobProgress from "./common/JobProgress";
 
-const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble", "Ảnh"] as const;
+const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble", "Images"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ProjectWorkspace({
@@ -70,7 +70,7 @@ export default function ProjectWorkspace({
           onClick={onBack}
           className="rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
         >
-          ← Dự án
+          ← Projects
         </button>
         <div className="min-w-0">
           <div className="truncate font-medium">{project.title}</div>
@@ -101,7 +101,7 @@ export default function ProjectWorkspace({
           />
           <button
             onClick={() => setSettingsOpen(true)}
-            title="Cấu hình dự án (prompt header/footer, culture, model)"
+            title="Project settings (prompt header/footer, culture, model)"
             className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
           >
             ⚙
@@ -130,7 +130,7 @@ export default function ProjectWorkspace({
         )}
         {pane("Shots", <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
         {pane("Assemble", <AssembleTab key={project.id + reload} project={project} />)}
-        {pane("Ảnh", <AllImages key={project.id + reload} project={project} />)}
+        {pane("Images", <AllImages key={project.id + reload} project={project} />)}
       </div>
 
       {editor && (

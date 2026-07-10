@@ -59,7 +59,7 @@ export default function ShotsTab({
     onAdvance: reloadAllShots,
     onDone: (j) => {
       reloadAllShots();
-      if (j.errors.length) setErr(`Auto gen video: ${j.done}/${j.total} xong, ${j.errors.length} lỗi.`);
+      if (j.errors.length) setErr(`Auto gen video: ${j.done}/${j.total} done, ${j.errors.length} errors.`);
     },
   });
 
@@ -80,7 +80,7 @@ export default function ShotsTab({
 
   const genVideo = async (shot: Shot): Promise<boolean> => {
     if (!shot.image_path) {
-      setErr("Shot chưa có ảnh frame — tạo ở Storyboard trước");
+      setErr("Shot has no frame image - create it in Storyboard first");
       return false;
     }
     mark(shot.id, true);
@@ -102,7 +102,7 @@ export default function ShotsTab({
     const all = scenes.flatMap((sc) => byScene[sc.id] || []);
     const todo = all.filter((s) => s.image_media_id && !s.video_path);
     if (!todo.length) {
-      setErr("Không có shot nào (có ảnh, chưa có video) để render.");
+      setErr("No shots with images and without video are available to render.");
       return;
     }
     if (!(await creditGuard(confirm, todo.length, CREDIT_COST.video, "Render video"))) return;
@@ -120,14 +120,14 @@ export default function ShotsTab({
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold">Cinematic Shots</h2>
-            <p className="text-sm text-neutral-500">Render video từ ảnh storyboard</p>
+            <p className="text-sm text-neutral-500">Render video from storyboard images</p>
           </div>
           <button
             disabled={busy || !!videoJob}
             onClick={genAll}
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
           >
-            {videoJob ? `Đang render ${videoJob.done}/${videoJob.total}…` : "✦ Auto gen video"}
+            {videoJob ? `Rendering ${videoJob.done}/${videoJob.total}…` : "✦ Auto gen video"}
           </button>
         </div>
         {progress && (
@@ -160,7 +160,7 @@ export default function ShotsTab({
                     subtitle={sh.video_path ? "▶ video" : sh.status}
                     selected={sel?.id === sh.id}
                     busy={running.has(sh.id)}
-                    busyLabel="Đang render…"
+                    busyLabel="Rendering..."
                     onClick={() => setSel(sh)}
                     onPreview={sh.video_path || sh.image_path ? () => setLightbox(sh) : undefined}
                     onEdit={
@@ -199,7 +199,7 @@ export default function ShotsTab({
                 ))}
                 {!list.length && (
                   <div className="col-span-full rounded-xl border border-dashed border-neutral-800 py-6 text-center text-xs text-neutral-600">
-                    Chưa có frame — làm Storyboard trước.
+                    No frame - create it in Storyboard first.
                   </div>
                 )}
               </div>
@@ -290,7 +290,7 @@ function ShotPanel({
             <img src={shot.image_path} className="aspect-video w-full object-cover" />
           ) : (
             <div className="grid aspect-video w-full place-items-center text-xs text-neutral-600">
-              chưa có ảnh
+              missing image
             </div>
           )}
         </div>
@@ -331,7 +331,7 @@ function ShotPanel({
           disabled={running || !shot.image_path}
           className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
-          {running ? "Đang render…" : "Generate Video"}
+          {running ? "Rendering..." : "Generate Video"}
         </button>
         {shot.video_path && (
           <button
@@ -339,7 +339,7 @@ function ShotPanel({
             disabled={upBusy}
             className="w-full rounded-lg border border-neutral-700 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
           >
-            {upBusy ? "Đang upscale…" : "Upscale 4K"}
+            {upBusy ? "Upscaling..." : "Upscale 4K"}
           </button>
         )}
       </div>

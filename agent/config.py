@@ -3,6 +3,12 @@ import json
 import os
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv is optional
+
 # ─── Paths ───────────────────────────────────────────────────
 BASE_DIR = Path(os.environ.get("FLOW_AGENT_DIR", Path(__file__).parent.parent))
 
@@ -32,7 +38,7 @@ OMNIVOICE_BASE_URL = os.environ.get("OMNIVOICE_BASE_URL", "http://localhost:8000
 OMNIVOICE_TTS_TIMEOUT = float(os.environ.get("OMNIVOICE_TTS_TIMEOUT", "300"))
 
 # ─── AI Agent CLIs (headless subprocess runners) ────────────
-# Chạy các agent CLI (Claude Code, Antigravity, ...) như subprocess headless.
+# Chạy các agent CLI (Codex, Claude Code, Antigravity, ...) như subprocess headless.
 # Timeout (giây) cho mỗi lần chạy — agent có thể chạy lâu.
 AGENT_CLI_TIMEOUT = float(os.environ.get("AGENT_CLI_TIMEOUT", "600"))
 # Mặc định bypass permission để chạy không cần người xác nhận (automation).
@@ -40,6 +46,20 @@ AGENT_SKIP_PERMISSIONS = os.environ.get("AGENT_SKIP_PERMISSIONS", "1") == "1"
 # Kích thước PTY giả cho agent dạng TUI (vd Antigravity).
 AGENT_PTY_COLS = int(os.environ.get("AGENT_PTY_COLS", "120"))
 AGENT_PTY_ROWS = int(os.environ.get("AGENT_PTY_ROWS", "40"))
+
+# ─── Anthropic API (for Claude via API instead of CLI) ────────
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Supported Claude models (latest first)
+CLAUDE_MODELS = [
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
+    "claude-3-opus-20250219",
+    "claude-3-sonnet-20240229",
+    "claude-3-haiku-20240307",
+]
+
+DEFAULT_AGENT = "gemini"
 
 # Prompt mode "arg" nhét prompt vào dòng lệnh; Windows giới hạn độ dài command-line
 # (~32k, ConPTY/winpty còn thấp hơn) → prompt dài báo "The filename or extension is too
@@ -59,7 +79,24 @@ def _env_args(name: str, default: list[str]) -> list[str]:
 
 
 AI_AGENTS = {
+    "codex": {
+        # Codex CLI non-interactive mode. `-` reads the prompt from stdin, which avoids
+        # command-line length/escaping issues for long Studio JSON prompts.
+        "bin": os.environ.get("AGENT_CODEX_BIN", "codex"),
+        "prompt_mode": "stdin",
+        "base_args": _env_args("AGENT_CODEX_ARGS", ["exec", "--color", "never", "-"]),
+        "model_flag": os.environ.get("AGENT_CODEX_MODEL_FLAG", "--model"),
+        "skip_perm": _env_args(
+            "AGENT_CODEX_SKIP_ARGS",
+            ["--dangerously-bypass-approvals-and-sandbox"],
+        ),
+        "pty": os.environ.get("AGENT_CODEX_PTY", "0") == "1",
+    },
     "claude": {
+        # Set use_api=true to call Claude API directly instead of CLI
+        "use_api": os.environ.get("AGENT_CLAUDE_USE_API", "1") == "1",
+        "model": os.environ.get("AGENT_CLAUDE_MODEL", "claude-3-haiku-20240307"),
+        # Only used if use_api=false
         "bin": os.environ.get("AGENT_CLAUDE_BIN", "claude"),
         "prompt_mode": "stdin",
         "base_args": _env_args("AGENT_CLAUDE_ARGS", ["-p", "--output-format", "text"]),
@@ -80,7 +117,31 @@ AI_AGENTS = {
         # agy là TUI — print mode chỉ render ra terminal, phải chạy dưới PTY.
         "pty": os.environ.get("AGENT_ANTIGRAVITY_PTY", "1") == "1",
     },
+    "gemini": {
+        # Gemini CLI — binary `gemini` (npm i -g @google/gemini-cli).
+        # `-p <prompt>` = non-interactive headless mode (prompt_mode "arg").
+        # `-o text` = plain-text stdout (no ANSI/JSON). No PTY needed.
+        # `--yolo` = auto-approve all tool calls (equivalent to skip_permissions).
+        # `-m <model>` = model override (e.g. "gemini-2.5-flash", "gemini-2.5-pro").
+        # IMPORTANT: base_args order matters — `-p` must be LAST so the prompt
+        # is appended directly after it (argv: gemini [--yolo] [-m M] -o text -p <PROMPT>).
+        "bin": os.environ.get("AGENT_GEMINI_BIN", "gemini"),
+        "prompt_mode": os.environ.get("AGENT_GEMINI_PROMPT_MODE", "arg"),
+        "base_args": _env_args("AGENT_GEMINI_ARGS", ["-o", "text", "-p"]),
+        "model_flag": os.environ.get("AGENT_GEMINI_MODEL_FLAG", "-m") or None,
+        "skip_perm": _env_args("AGENT_GEMINI_SKIP_ARGS", ["--yolo"]),
+        "pty": os.environ.get("AGENT_GEMINI_PTY", "0") == "1",
+    },
 }
+
+# Remove CLI fields from Claude if using API mode and disabling CLI
+if AI_AGENTS.get("claude", {}).get("use_api") and \
+   os.environ.get("AGENT_CLAUDE_DISABLE_CLI", "1") == "1":
+    # Keep the agent but remove CLI-specific fields
+    claude_cfg = AI_AGENTS["claude"]
+    for key in ["bin", "prompt_mode", "base_args", "model_flag", "skip_perm", "pty"]:
+        claude_cfg.pop(key, None)
+
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"

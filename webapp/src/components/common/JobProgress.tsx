@@ -7,8 +7,8 @@ const LABEL: Record<string, string> = {
   assets: "Asset",
   storyboard: "Storyboard",
   videos: "Video",
-  beats: "Lời đọc + beats",
-  revary: "Đa dạng góc máy",
+  beats: "Narration + beats",
+  revary: "Vary camera angles",
 };
 
 function statusTone(j: Job): string {
@@ -36,19 +36,19 @@ export default function JobProgress() {
           >
             <div className="flex items-center gap-2">
               <span className="truncate font-medium text-neutral-100">
-                {LABEL[j.type] || j.type}: {j.label || `${j.total} mục`}
+                {LABEL[j.type] || j.type}: {j.label || `${j.total} items`}
               </span>
               {j.status === "running" && (
                 <button
                   onClick={() => cancel(j.id)}
                   className="ml-auto rounded bg-black/30 px-1.5 py-0.5 text-[11px] text-neutral-300 hover:bg-black/50"
                 >
-                  Dừng
+                  Stop
                 </button>
               )}
               {j.status !== "running" && (
                 <span className="ml-auto text-[11px] text-neutral-400">
-                  {j.status === "done" ? "✓ xong" : j.status === "cancelled" ? "đã dừng" : "lỗi"}
+                  {j.status === "done" ? "✓ done" : j.status === "cancelled" ? "stopped" : "errors"}
                 </span>
               )}
             </div>
@@ -66,7 +66,7 @@ export default function JobProgress() {
               </span>
               <span className="shrink-0 pl-2">
                 {seen}/{j.total}
-                {j.errors.length ? ` · ${j.errors.length} lỗi` : ""}
+                {j.errors.length ? ` · ${j.errors.length} errors` : ""}
               </span>
             </div>
           </div>

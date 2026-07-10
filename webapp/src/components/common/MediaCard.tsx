@@ -24,7 +24,7 @@ export default function MediaCard({
   index,
   subtitle,
   busy,
-  busyLabel = "Đang tạo…",
+  busyLabel = "Generating...",
   selected,
   actions,
   onClick,
@@ -70,7 +70,7 @@ export default function MediaCard({
                 e.stopPropagation();
                 onPreview();
               }}
-              title="Phóng to"
+              title="Enlarge"
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
             >
               ⤢

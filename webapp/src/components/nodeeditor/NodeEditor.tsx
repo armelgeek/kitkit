@@ -31,7 +31,7 @@ import "@xyflow/react/dist/style.css";
 import { api, graphApi, storyboard, thumbUrl, type Entity, type GraphTemplate, type Shot } from "../../api/client";
 import Lightbox from "../common/Lightbox";
 
-// A picture the "Nguồn ảnh" node can reference: project assets (entities) AND every
+// A picture the "Image source" node can reference: project assets (entities) AND every
 // storyboard shot image — so any generated frame can feed back in as a reference.
 export interface RefImage {
   key: string; // "e:<id>" | "s:<id>" | "m:<media_id>"
@@ -57,29 +57,29 @@ export interface EditorTarget {
 
 // ─── Node type metadata (icon / label / accent color) ───────
 const META: Record<string, { label: string; icon: string; color: string }> = {
-  source: { label: "Nguồn ảnh", icon: "🖼", color: "#f59e0b" },
-  prompt: { label: "Prompt đầu vào", icon: "≣", color: "#3b82f6" },
+  source: { label: "Image source", icon: "🖼", color: "#f59e0b" },
+  prompt: { label: "Input prompt", icon: "≣", color: "#3b82f6" },
   refs: { label: "References", icon: "🔗", color: "#0ea5e9" },
-  image: { label: "Tạo ảnh AI", icon: "🎨", color: "#a855f7" },
-  editImage: { label: "Sửa ảnh AI", icon: "🖌", color: "#f59e0b" },
-  removebg: { label: "Tách nền AI", icon: "✂", color: "#f43f5e" },
-  replacebg: { label: "Thay nền (ảnh)", icon: "🏞", color: "#f43f5e" },
-  filter: { label: "Filter ảnh", icon: "🎚", color: "#14b8a6" },
+  image: { label: "Generate AI image", icon: "🎨", color: "#a855f7" },
+  editImage: { label: "Edit AI image", icon: "🖌", color: "#f59e0b" },
+  removebg: { label: "AI background removal", icon: "✂", color: "#f43f5e" },
+  replacebg: { label: "Replace background (image)", icon: "🏞", color: "#f43f5e" },
+  filter: { label: "Filter images", icon: "🎚", color: "#14b8a6" },
   colorgrade: { label: "Color grade", icon: "🎞", color: "#0d9488" },
-  text: { label: "Chèn chữ", icon: "🔤", color: "#22c55e" },
-  upscale: { label: "Upscale / nét", icon: "🔍", color: "#06b6d4" },
-  crop: { label: "Crop / tỉ lệ", icon: "🖼", color: "#84cc16" },
+  text: { label: "Add text", icon: "🔤", color: "#22c55e" },
+  upscale: { label: "Upscale / sharpen", icon: "🔍", color: "#06b6d4" },
+  crop: { label: "Crop / ratio", icon: "🖼", color: "#84cc16" },
   vignette: { label: "Vignette", icon: "🌑", color: "#8b5cf6" },
-  border: { label: "Khung viền", icon: "🔲", color: "#eab308" },
-  blend: { label: "Ghép / Blend", icon: "🔀", color: "#ec4899" },
-  collage: { label: "Ghép lưới", icon: "▦", color: "#ec4899" },
+  border: { label: "Border", icon: "🔲", color: "#eab308" },
+  blend: { label: "Merge / Blend", icon: "🔀", color: "#ec4899" },
+  collage: { label: "Grid collage", icon: "▦", color: "#ec4899" },
   watermark: { label: "Watermark / Logo", icon: "💧", color: "#0ea5e9" },
-  video: { label: "Tạo video AI", icon: "🎬", color: "#a855f7" },
-  note: { label: "Ghi chú", icon: "📝", color: "#a3a3a3" },
+  video: { label: "Generate AI video", icon: "🎬", color: "#a855f7" },
+  note: { label: "Note", icon: "📝", color: "#a3a3a3" },
   output: { label: "Output", icon: "📤", color: "#64748b" },
 };
 
-// "refs" intentionally dropped — use one "Nguồn ảnh" (source) node per reference image.
+// "refs" intentionally dropped — use one "Image source" (source) node per reference image.
 const PALETTE = ["source", "prompt", "image", "editImage", "removebg", "replacebg", "filter", "colorgrade", "text", "upscale", "crop", "vignette", "border", "blend", "collage", "watermark", "video", "note", "output"];
 
 const prettyModel = (m: string) =>
@@ -154,14 +154,14 @@ function Shell({
           <span className="ml-auto flex items-center gap-1">
             <button
               onClick={() => duplicate(id)}
-              title="Nhân bản node"
+              title="Duplicate node"
               className="nodrag grid h-5 w-5 place-items-center rounded text-neutral-500 hover:bg-neutral-700 hover:text-white"
             >
               ⧉
             </button>
             <button
               onClick={() => remove(id)}
-              title="Xóa node"
+              title="Delete node"
               className="nodrag grid h-5 w-5 place-items-center rounded text-neutral-500 hover:bg-rose-600/80 hover:text-white"
             >
               ✕
@@ -187,7 +187,7 @@ function Preview({
 }: {
   nodeId?: string;
   src?: string;
-  video?: boolean;
+  videos?: boolean;
   label: string;
 }) {
   const { results, preview } = useContext(NodeOps);
@@ -208,7 +208,7 @@ function Preview({
       <video key={effSrc} src={effSrc} controls className="aspect-video w-full rounded-md bg-black object-cover" />
       <button
         onClick={open}
-        title="Phóng to"
+        title="Enlarge"
         className="nodrag absolute right-1 top-1 grid h-6 w-6 place-items-center rounded bg-black/60 text-xs text-white hover:bg-black/80"
       >
         ⛶
@@ -219,7 +219,7 @@ function Preview({
       key={effSrc}
       src={effSrc}
       onClick={open}
-      title="Phóng to"
+      title="Enlarge"
       className="nodrag aspect-video w-full cursor-zoom-in rounded-md object-cover"
     />
   );
@@ -322,10 +322,10 @@ function SourceNode({ id, data }: NodeProps) {
         entity_id: null,
         media_id: r.media_id,
         web: r.web,
-        label: r.name || "ảnh tải lên",
+        label: r.name || "uploaded image",
       });
     } catch (err: any) {
-      setUpErr(err.message || "Upload lỗi");
+      setUpErr(err.message || "Upload errors");
     } finally {
       setUploading(false);
     }
@@ -336,9 +336,9 @@ function SourceNode({ id, data }: NodeProps) {
   const selected = d.src_key || (d.entity_id ? `e:${d.entity_id}` : "");
   return (
     <Shell type="source" id={id} inputs={false}>
-      <Preview nodeId={id} src={d.web} label="Chọn / tải ảnh" />
+      <Preview nodeId={id} src={d.web} label="Choose / upload image" />
       <select className={fieldCls} value={selected} onChange={(e) => pick(e.target.value)}>
-        <option value="">{d.web ? "(ảnh hiện tại)" : "— chọn ảnh —"}</option>
+        <option value="">{d.web ? "(current image)" : "-- choose image --"}</option>
         {entImgs.length > 0 && (
           <optgroup label="Ảnh asset">
             {entImgs.map((x) => (
@@ -354,7 +354,7 @@ function SourceNode({ id, data }: NodeProps) {
           </optgroup>
         )}
         {mediaImgs.length > 0 && (
-          <optgroup label="Ảnh khác trong dự án">
+          <optgroup label="Other project images">
             {mediaImgs.map((x) => (
               <option key={x.key} value={x.key}>{x.label}</option>
             ))}
@@ -362,7 +362,7 @@ function SourceNode({ id, data }: NodeProps) {
         )}
       </select>
       <label className="nodrag block cursor-pointer rounded-md border border-dashed border-neutral-700 px-2 py-1 text-center text-[10px] text-neutral-400 hover:bg-neutral-800">
-        {uploading ? "Đang tải lên…" : "⬆ Tải ảnh từ máy"}
+        {uploading ? "Uploading..." : "⬆ Upload image from computer"}
         <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={onUpload} />
       </label>
       {upErr && <div className="text-[10px] text-rose-400">{upErr}</div>}
@@ -377,7 +377,7 @@ function PromptNode({ id, data }: NodeProps) {
   // Local state for the textarea so typing updates synchronously and the caret stays put.
   // Binding `value` straight to node data round-trips through React Flow's store, which
   // reverts the value for a frame on each keystroke and jumps the cursor to the end.
-  // We still adopt an external change (re-seed / "Đa dạng góc máy") via the effect below,
+  // We still adopt an external change (re-seed / "Vary camera angles") via the effect below,
   // distinguished from our own edits by `lastPushed`.
   const [text, setText] = useState<string>(d.text ?? "");
   const lastPushed = useRef<string>(d.text ?? "");
@@ -431,7 +431,7 @@ function PromptNode({ id, data }: NodeProps) {
     return entities.filter((e) => !q || e.name.toLowerCase().includes(q)).slice(0, 8);
   }, [menu, entities]);
 
-  // Replace the "{query" with "{Name}", drop the caret after "}", AND auto-add a "Nguồn ảnh"
+  // Replace the "{query" with "{Name}", drop the caret after "}", AND auto-add a "Image source"
   // node for that entity wired to whatever this prompt feeds (so the {Name} actually binds).
   const pick = (ent: Entity) => {
     if (!menu) return;
@@ -459,7 +459,7 @@ function PromptNode({ id, data }: NodeProps) {
           ref={taRef}
           className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
           value={text}
-          placeholder="Nhập prompt…"
+          placeholder="Enter prompt..."
           onChange={onChange}
           onKeyDown={onKeyDown}
           onBlur={() => setTimeout(() => setMenu(null), 150)}
@@ -482,7 +482,7 @@ function PromptNode({ id, data }: NodeProps) {
           </div>
         )}
       </div>
-      <div className="text-[10px] text-neutral-500">{'ⓘ gõ "{" để chèn tên entity'}</div>
+      <div className="text-[10px] text-neutral-500">{'ⓘ type "{" to insert an entity name'}</div>
     </Shell>
   );
 }
@@ -497,7 +497,7 @@ function RefsNode({ id, data }: NodeProps) {
   return (
     <Shell type="refs" id={id} inputs={false}>
       <div className="nodrag nowheel max-h-36 space-y-0.5 overflow-auto">
-        {entities.length === 0 && <p className="text-[11px] text-neutral-600">Chưa có asset.</p>}
+        {entities.length === 0 && <p className="text-[11px] text-neutral-600">No asset.</p>}
         {entities.map((e) => (
           <label key={e.id} className="flex items-center gap-1.5 rounded px-1 py-0.5 text-[11px] hover:bg-neutral-800">
             <input type="checkbox" checked={ids.includes(e.id)} onChange={() => toggle(e.id)} className="h-3 w-3 accent-indigo-500" />
@@ -526,7 +526,7 @@ function AspectModelRow({
   return (
     <div className="flex gap-2">
       <label className="flex-1">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Tỷ lệ</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Ratio</div>
         <select className={fieldCls} value={data.aspect || "16:9"} onChange={(e) => update(id, { aspect: e.target.value })}>
           {aspects.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
@@ -540,7 +540,7 @@ function AspectModelRow({
           </select>
         ) : (
           <select className={fieldCls} value={data.model || ""} onChange={(e) => update(id, { model: e.target.value })}>
-            <option value="">Mặc định</option>
+            <option value="">Default</option>
             {(models || []).map((m) => <option key={m} value={m}>{prettyModel(m)}</option>)}
           </select>
         )}
@@ -549,7 +549,7 @@ function AspectModelRow({
   );
 }
 
-// Per-node "tạo nhanh" (generate just this node) + lock (don't regenerate on full run).
+// Per-node "quick generate" (generate just this node) + lock (don't regenerate on full run).
 function GenControls({ id, data }: { id: string; data: any }) {
   const { genNode, genningId, update } = useContext(NodeOps);
   const busy = genningId === id;
@@ -560,22 +560,22 @@ function GenControls({ id, data }: { id: string; data: any }) {
         <button
           onClick={() => genNode(id)}
           disabled={!!genningId}
-          title="Tạo riêng node này (không chạy node phía sau)"
+          title="Generate only this node (does not run downstream nodes)"
           className="nodrag flex-1 rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
-          {busy ? "Đang tạo…" : "⚡ Tạo nhanh"}
+          {busy ? "Generating..." : "⚡ Quick generate"}
         </button>
         <button
           onClick={() => genNode(id, true)}
           disabled={!!genningId}
-          title="Tạo node này RỒI cập nhật mọi node phía sau (xuôi dòng) — chuỗi luôn đồng bộ"
+          title="Generate this node THEN update all downstream nodes so the chain stays in sync"
           className="nodrag grid h-[26px] w-7 place-items-center rounded-md border border-sky-600 text-xs text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
         >
           ⏬
         </button>
         <button
           onClick={() => update(id, { locked: !locked })}
-          title={locked ? "Đang khóa — bỏ khóa để cho phép tạo lại" : "Khóa: không tạo lại khi chạy toàn tuyến / cập nhật xuôi dòng"}
+          title={locked ? "Locked - unlock to allow regeneration" : "Lock: do not regenerate during full runs / downstream updates"}
           className={`nodrag grid h-[26px] w-7 place-items-center rounded-md border text-xs ${
             locked
               ? "border-amber-500 bg-amber-500/20 text-amber-300"
@@ -585,7 +585,7 @@ function GenControls({ id, data }: { id: string; data: any }) {
           {locked ? "🔒" : "🔓"}
         </button>
       </div>
-      {locked && <div className="text-[10px] text-amber-400/90">Đã khóa — giữ nguyên khi chạy toàn tuyến / xuôi dòng</div>}
+      {locked && <div className="text-[10px] text-amber-400/90">Locked - preserved during full runs / downstream updates</div>}
     </div>
   );
 }
@@ -595,9 +595,9 @@ function ImageNode({ id, data, type }: NodeProps) {
   const d = data as any;
   return (
     <Shell type={type || "image"} id={id}>
-      <Preview nodeId={id} src={d._result || d.preview} label="Kết quả ảnh" />
+      <Preview nodeId={id} src={d._result || d.preview} label="Image result" />
       <AspectModelRow id={id} data={d} models={imageModels} />
-      <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
+      <Slider label="Generation count" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -609,11 +609,11 @@ function VideoNode({ id, data }: NodeProps) {
   const isOmni = (d.model || "omni") === "omni";
   return (
     <Shell type="video" id={id}>
-      <Preview nodeId={id} src={d._result} video label="Kết quả video" />
+      <Preview nodeId={id} src={d._result} video label="Video result" />
       <AspectModelRow id={id} data={d} videoModels />
-      <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
+      <Slider label="Generation count" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
       {isOmni && (
-        <Slider label="Thời lượng" value={d.duration || 8} min={4} max={10} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
+        <Slider label="Duration" value={d.duration || 8} min={4} max={10} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
       )}
       <GenControls id={id} data={d} />
     </Shell>
@@ -630,7 +630,7 @@ function OutputNode({ id, data }: NodeProps) {
   const ext = live?.ext || d._ext || d.result_ext || "png";
   return (
     <Shell type="output" id={id} outputs={false}>
-      <Preview src={web} video={ext === "mp4"} label="Output cuối" />
+      <Preview src={web} video={ext === "mp4"} label="Final output" />
     </Shell>
   );
 }
@@ -643,21 +643,21 @@ function FilterNode({ id, data }: NodeProps) {
   const num = (k: string, dflt: number) => (d[k] ?? dflt);
   return (
     <Shell type="filter" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả filter" />
-      <Slider label="Sáng" value={num("brightness", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { brightness: v })} />
-      <Slider label="Tương phản" value={num("contrast", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { contrast: v })} />
-      <Slider label="Bão hòa" value={num("saturation", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { saturation: v })} />
-      <Slider label="Độ nét" value={num("sharpness", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { sharpness: v })} />
-      <Slider label="Làm mờ" value={num("blur", 0)} min={0} max={20} step={0.5} suffix="px" onChange={(v) => update(id, { blur: v })} />
+      <Preview nodeId={id} src={d._result} label="Filter result" />
+      <Slider label="Brightness" value={num("brightness", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { brightness: v })} />
+      <Slider label="Contrast" value={num("contrast", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { contrast: v })} />
+      <Slider label="Saturation" value={num("saturation", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { saturation: v })} />
+      <Slider label="Sharpness" value={num("sharpness", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { sharpness: v })} />
+      <Slider label="Blur" value={num("blur", 0)} min={0} max={20} step={0.5} suffix="px" onChange={(v) => update(id, { blur: v })} />
       <ToggleChips id={id} data={d} items={[
         { key: "auto", label: "Auto" },
-        { key: "grayscale", label: "Đen trắng" },
+        { key: "grayscale", label: "Black and white" },
         { key: "sepia", label: "Sepia" },
-        { key: "flip_h", label: "⇆ Lật ngang" },
-        { key: "flip_v", label: "⥯ Lật dọc" },
+        { key: "flip_h", label: "⇆ Flip horizontal" },
+        { key: "flip_v", label: "⥯ Flip vertical" },
       ]} />
       <label className="block">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Xoay</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Rotate</div>
         <select className={fieldCls} value={String(d.rotate || 0)} onChange={(e) => update(id, { rotate: Number(e.target.value) })}>
           {[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}
         </select>
@@ -672,16 +672,16 @@ function TextNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="text" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả chèn chữ" />
+      <Preview nodeId={id} src={d._result} label="Text result" />
       <textarea
         className={`${fieldCls} nowheel h-14 resize-none leading-snug`}
         value={d.text ?? ""}
-        placeholder="Nội dung chữ…"
+        placeholder="Text content..."
         onChange={(e) => update(id, { text: e.target.value })}
       />
       <div className="flex gap-2">
         <label className="flex-1">
-          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Vị trí</div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Position</div>
           <select className={fieldCls} value={d.anchor || "bottom"} onChange={(e) => update(id, { anchor: e.target.value })}>
             {["top", "center", "bottom", "top-left", "top-right", "bottom-left", "bottom-right"].map((a) => (
               <option key={a} value={a}>{a}</option>
@@ -689,13 +689,13 @@ function TextNode({ id, data }: NodeProps) {
           </select>
         </label>
         <label>
-          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Màu</div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Color</div>
           <input type="color" value={d.color || "#ffffff"} onChange={(e) => update(id, { color: e.target.value })}
             className="nodrag h-[26px] w-9 cursor-pointer rounded border border-neutral-700 bg-neutral-900" />
         </label>
       </div>
-      <Slider label="Cỡ chữ" value={d.font_scale ?? 0.06} min={0.02} max={0.3} step={0.01} onChange={(v) => update(id, { font_scale: v })} />
-      <ToggleChips id={id} data={d} items={[{ key: "stroke", label: "Viền đen" }]} />
+      <Slider label="Font size" value={d.font_scale ?? 0.06} min={0.02} max={0.3} step={0.01} onChange={(v) => update(id, { font_scale: v })} />
+      <ToggleChips id={id} data={d} items={[{ key: "stroke", label: "Black outline" }]} />
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -706,9 +706,9 @@ function UpscaleNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="upscale" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả upscale" />
-      <Slider label="Phóng to" value={d.scale ?? 2} min={1} max={4} step={0.5} suffix="×" onChange={(v) => update(id, { scale: v })} />
-      <ToggleChips id={id} data={d} items={[{ key: "sharpen", label: "Làm nét" }]} />
+      <Preview nodeId={id} src={d._result} label="Upscale result" />
+      <Slider label="Enlarge" value={d.scale ?? 2} min={1} max={4} step={0.5} suffix="×" onChange={(v) => update(id, { scale: v })} />
+      <ToggleChips id={id} data={d} items={[{ key: "sharpen", label: "Sharpen" }]} />
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -719,16 +719,16 @@ function CropNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="crop" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả crop" />
+      <Preview nodeId={id} src={d._result} label="Crop result" />
       <label className="block">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Khung tỉ lệ</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Aspect frame</div>
         <select className={fieldCls} value={d.aspect || "free"} onChange={(e) => update(id, { aspect: e.target.value })}>
           {["free", "16:9", "9:16", "1:1", "4:3", "3:4"].map((a) => (
-            <option key={a} value={a}>{a === "free" ? "Giữ nguyên" : a}</option>
+            <option key={a} value={a}>{a === "free" ? "Keep original" : a}</option>
           ))}
         </select>
       </label>
-      <Slider label="Phóng (punch-in)" value={d.zoom ?? 1} min={1} max={3} step={0.05} suffix="×" onChange={(v) => update(id, { zoom: v })} />
+      <Slider label="Zoom (punch-in)" value={d.zoom ?? 1} min={1} max={3} step={0.05} suffix="×" onChange={(v) => update(id, { zoom: v })} />
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -739,8 +739,8 @@ function VignetteNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="vignette" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả vignette" />
-      <Slider label="Độ tối viền" value={d.strength ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => update(id, { strength: v })} />
+      <Preview nodeId={id} src={d._result} label="Vignette result" />
+      <Slider label="Edge darkness" value={d.strength ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => update(id, { strength: v })} />
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -752,18 +752,18 @@ function BlendNode({ id, data }: NodeProps) {
   const mode = d.mode || "alpha";
   return (
     <Shell type="blend" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả ghép" />
+      <Preview nodeId={id} src={d._result} label="Merge result" />
       <label className="block">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Kiểu</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Mode</div>
         <select className={fieldCls} value={mode} onChange={(e) => update(id, { mode: e.target.value })}>
-          <option value="alpha">Hòa trộn (alpha)</option>
-          <option value="side">Cạnh nhau</option>
+          <option value="alpha">Blend (alpha)</option>
+          <option value="side">Side by side</option>
         </select>
       </label>
       {mode === "alpha" && (
-        <Slider label="Tỷ lệ trộn" value={d.alpha ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => update(id, { alpha: v })} />
+        <Slider label="Blend ratio" value={d.alpha ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => update(id, { alpha: v })} />
       )}
-      <div className="text-[10px] text-neutral-500">ⓘ nối 2 nguồn ảnh vào node này</div>
+      <div className="text-[10px] text-neutral-500">ⓘ connect 2 image sources to this node</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -774,17 +774,17 @@ function RemoveBgNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="removebg" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả tách nền" />
+      <Preview nodeId={id} src={d._result} label="Background removal result" />
       <label className="block">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Nền mới</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">New background</div>
         <select className={fieldCls} value={d.bg || "white"} onChange={(e) => update(id, { bg: e.target.value })}>
-          <option value="white">Trắng</option>
-          <option value="black">Đen</option>
-          <option value="green">Phông xanh (chroma)</option>
-          <option value="gray">Xám trung tính</option>
+          <option value="white">White</option>
+          <option value="black">Black</option>
+          <option value="green">Green screen (chroma)</option>
+          <option value="gray">Neutral gray</option>
         </select>
       </label>
-      <div className="text-[10px] text-amber-400/80">⚠ Dùng AI (tốn credit)</div>
+      <div className="text-[10px] text-amber-400/80">⚠ Uses AI (costs credits)</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -795,13 +795,13 @@ function BorderNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="border" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả khung viền" />
+      <Preview nodeId={id} src={d._result} label="Border result" />
       <div className="flex items-end gap-2">
         <div className="flex-1">
-          <Slider label="Độ dày" value={d.width ?? 0.04} min={0} max={0.25} step={0.01} onChange={(v) => update(id, { width: v })} />
+          <Slider label="Thickness" value={d.width ?? 0.04} min={0} max={0.25} step={0.01} onChange={(v) => update(id, { width: v })} />
         </div>
         <label>
-          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Màu</div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Color</div>
           <input type="color" value={d.color || "#000000"} onChange={(e) => update(id, { color: e.target.value })}
             className="nodrag h-[26px] w-9 cursor-pointer rounded border border-neutral-700 bg-neutral-900" />
         </label>
@@ -816,16 +816,16 @@ function ColorGradeNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="colorgrade" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả color grade" />
+      <Preview nodeId={id} src={d._result} label="Color grade result" />
       <label className="block">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Tông màu</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Tone</div>
         <select className={fieldCls} value={d.preset || "teal_orange"} onChange={(e) => update(id, { preset: e.target.value })}>
-          {[["teal_orange", "Teal–Orange (điện ảnh)"], ["warm", "Ấm"], ["cold", "Lạnh"],
-            ["vintage", "Vintage"], ["noir", "Noir (đen trắng)"], ["vibrant", "Rực rỡ"], ["muted", "Trầm"]]
+          {[["teal_orange", "Teal-Orange (cinematic)"], ["warm", "Warm"], ["cold", "Cold"],
+            ["vintage", "Vintage"], ["noir", "Noir (black and white)"], ["vibrant", "Vibrant"], ["muted", "Muted"]]
             .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </label>
-      <Slider label="Cường độ" value={d.intensity ?? 1} min={0} max={1} step={0.05} onChange={(v) => update(id, { intensity: v })} />
+      <Slider label="Intensity" value={d.intensity ?? 1} min={0} max={1} step={0.05} onChange={(v) => update(id, { intensity: v })} />
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -836,19 +836,19 @@ function CollageNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="collage" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả ghép lưới" />
-      <Slider label="Số cột (0 = tự)" value={d.cols ?? 0} min={0} max={6} step={1} onChange={(v) => update(id, { cols: v })} />
+      <Preview nodeId={id} src={d._result} label="Grid collage result" />
+      <Slider label="Columns (0 = auto)" value={d.cols ?? 0} min={0} max={6} step={1} onChange={(v) => update(id, { cols: v })} />
       <div className="flex items-end gap-2">
         <div className="flex-1">
-          <Slider label="Khoảng cách" value={d.gap ?? 8} min={0} max={60} step={2} suffix="px" onChange={(v) => update(id, { gap: v })} />
+          <Slider label="Spacing" value={d.gap ?? 8} min={0} max={60} step={2} suffix="px" onChange={(v) => update(id, { gap: v })} />
         </div>
         <label>
-          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Nền</div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Background</div>
           <input type="color" value={d.bg || "#000000"} onChange={(e) => update(id, { bg: e.target.value })}
             className="nodrag h-[26px] w-9 cursor-pointer rounded border border-neutral-700 bg-neutral-900" />
         </label>
       </div>
-      <div className="text-[10px] text-neutral-500">ⓘ nối ≥2 nguồn ảnh vào node này</div>
+      <div className="text-[10px] text-neutral-500">ⓘ connect at least 2 image sources to this node</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -859,18 +859,18 @@ function WatermarkNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="watermark" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả watermark" />
+      <Preview nodeId={id} src={d._result} label="Watermark result" />
       <label className="block">
-        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Vị trí logo</div>
+        <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Position logo</div>
         <select className={fieldCls} value={d.position || "bottom-right"} onChange={(e) => update(id, { position: e.target.value })}>
           {["top-left", "top-right", "bottom-left", "bottom-right", "center"].map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </select>
       </label>
-      <Slider label="Cỡ logo" value={d.scale ?? 0.18} min={0.05} max={0.6} step={0.01} onChange={(v) => update(id, { scale: v })} />
-      <Slider label="Độ mờ" value={d.opacity ?? 0.85} min={0.05} max={1} step={0.05} onChange={(v) => update(id, { opacity: v })} />
-      <div className="text-[10px] text-neutral-500">ⓘ nối ảnh NỀN trước, LOGO sau</div>
+      <Slider label="Logo size" value={d.scale ?? 0.18} min={0.05} max={0.6} step={0.01} onChange={(v) => update(id, { scale: v })} />
+      <Slider label="Opacity" value={d.opacity ?? 0.85} min={0.05} max={1} step={0.05} onChange={(v) => update(id, { opacity: v })} />
+      <div className="text-[10px] text-neutral-500">ⓘ connect BACKGROUND image first, LOGO second</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -881,15 +881,15 @@ function ReplaceBgNode({ id, data }: NodeProps) {
   const d = data as any;
   return (
     <Shell type="replacebg" id={id}>
-      <Preview nodeId={id} src={d._result} label="Kết quả thay nền" />
+      <Preview nodeId={id} src={d._result} label="Background replacement result" />
       <textarea
         className={`${fieldCls} nowheel h-12 resize-none leading-snug`}
         value={d.text ?? ""}
-        placeholder="Mô tả thêm (không bắt buộc)…"
+        placeholder="Additional description (optional)..."
         onChange={(e) => update(id, { text: e.target.value })}
       />
-      <div className="text-[10px] text-neutral-500">ⓘ nối CHỦ THỂ trước, ẢNH NỀN sau</div>
-      <div className="text-[10px] text-amber-400/80">⚠ Dùng AI (tốn credit)</div>
+      <div className="text-[10px] text-neutral-500">ⓘ connect SUBJECT first, BACKGROUND IMAGE second</div>
+      <div className="text-[10px] text-amber-400/80">⚠ Uses AI (costs credits)</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -903,7 +903,7 @@ function NoteNode({ id, data }: NodeProps) {
       <textarea
         className="nodrag nowheel h-20 w-full resize-none rounded-md border border-amber-700/40 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-100 outline-none"
         value={d.text ?? ""}
-        placeholder="Ghi chú / nhãn nhóm…"
+        placeholder="Note / group label..."
         onChange={(e) => update(id, { text: e.target.value })}
       />
     </Shell>
@@ -936,7 +936,7 @@ const NODE_TYPES = {
 // ─── Default graph ──────────────────────────────────────────
 // Built from the target's goal (image vs video) + its seeded sources, so storyboard
 // edits open on an image graph and shot edits on a video graph. Each reference entity
-// becomes its own "Nguồn ảnh" (source) node, pre-filled with that entity's image.
+// becomes its own "Image source" (source) node, pre-filled with that entity's image.
 function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; edges: Edge[] } {
   const mk = (id: string, type: string, x: number, y: number, data: any = {}): Node => ({
     id,
@@ -1011,7 +1011,7 @@ function Editor({
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [imageModels, setImageModels] = useState<string[]>([]);
   const [shots, setShots] = useState<Shot[]>([]);
-  // Every image in the project (Flow), so "Nguồn ảnh" can reference any of them — not just
+  // Every image in the project (Flow), so "Image source" can reference any of them — not just
   // assets/storyboard. {media_id, name}.
   const [projMedia, setProjMedia] = useState<{ media_id: string; name: string }[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1134,7 +1134,7 @@ function Editor({
     },
     [setNodes, setEdges]
   );
-  // Auto-add a "Nguồn ảnh" node for `entityId` (prefilled with its image) and connect it to
+  // Auto-add a "Image source" node for `entityId` (prefilled with its image) and connect it to
   // whatever `fromId` (the prompt node) already feeds — so picking {Entity} in a prompt makes
   // that reference actually bind. Reuses an existing source node for the same entity.
   const bindEntitySource = useCallback(
@@ -1192,12 +1192,12 @@ function Editor({
     graphApi.listTemplates().then((r) => setTemplates(r.templates)).catch(() => {});
   }, []);
 
-  // All storyboard shot images of the project — so the "Nguồn ảnh" node can reference
+  // All storyboard shot images of the project — so the "Image source" node can reference
   // generated frames, not just assets. Skip the shot being edited (can't reference itself).
   useEffect(() => {
     if (!projectId) return;
     storyboard.projectShots(projectId).then((r) => setShots(r.shots)).catch(() => {});
-    // Every image in the project (Flow) — lets "Nguồn ảnh" reference ALL images, not just
+    // Every image in the project (Flow) — lets "Image source" reference ALL images, not just
     // assets/storyboard. Best-effort (needs the extension); failure just hides the group.
     api.projectImages(projectId)
       .then((r) => setProjMedia(r.media.map((m) => ({ media_id: m.media_id, name: m.name }))))
@@ -1216,7 +1216,7 @@ function Editor({
       }
     }
     // Number scenes by first appearance (projectShots is ordered by scene then shot), so a
-    // shot reads "SC001-S001-mô tả" — far easier to find in the dropdown than a bare blurb.
+    // shot reads "SC001-S001-description" - far easier to find in the dropdown than a bare blurb.
     const sceneNo = new Map<string, number>();
     for (const s of shots)
       if (!sceneNo.has(s.scene_id)) sceneNo.set(s.scene_id, sceneNo.size + 1);
@@ -1249,7 +1249,7 @@ function Editor({
     // Cancel a stale in-flight load: the effect re-runs when `entities` arrives, and the
     // graphApi.get of an EARLIER run (fired before entities loaded → a default graph with no
     // source nodes) must NOT overwrite the later, complete one. Without this the empty-entities
-    // graph can win the race (esp. under StrictMode's double-invoke) and every "Nguồn ảnh"
+    // graph can win the race (esp. under StrictMode's double-invoke) and every "Image source"
     // node disappears even though the shot has reference entities.
     let cancelled = false;
     // Saved graphs are serialized WITHOUT the transient _result preview, so re-seed the
@@ -1260,7 +1260,7 @@ function Editor({
     const entById = new Map(entities.map((e) => [e.id, e]));
 
     // If a loaded/default graph has NO source node but the shot DOES reference entities (and
-    // those assets are loaded), seed one "Nguồn ảnh" per reference wired into the gen node — so
+    // those assets are loaded), seed one "Image source" per reference wired into the gen node — so
     // a graph built before assets loaded, or a legacy graph saved without sources, still shows
     // the references the generation actually binds. Only when there are zero sources, so a
     // curated graph (user-arranged/removed sources) is left untouched.
@@ -1304,8 +1304,8 @@ function Editor({
             d.label = e.name;
           }
         }
-        // Sync the prompt node to the target's CURRENT description (e.g. after "Đa dạng góc
-        // máy" / an edit) so the node editor and the storyboard table use the same prompt.
+        // Sync the prompt node to the target's CURRENT description (e.g. after "Vary camera angles
+        // camera variation / an edit) so the node editor and the storyboard table use the same prompt.
         // Only when it was untouched since seeding, so manual prompt edits are preserved.
         // Legacy nodes have no seed_prompt → treat as unedited so old stale graphs refresh.
         if (n.type === "prompt" && target.prompt != null) {
@@ -1427,7 +1427,7 @@ function Editor({
         addNode(dndType, rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
         return;
       }
-      // 2) image file(s) from the desktop → uploaded "Nguồn ảnh" node(s)
+      // 2) image file(s) from the desktop → uploaded "Image source" node(s)
       const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith("image/"));
       if (!files.length) return;
       e.preventDefault();
@@ -1438,14 +1438,14 @@ function Editor({
         setNodes((ns) => [
           ...ns,
           { id, type: "source", position: { x: at.x + i * 36, y: at.y + i * 36 },
-            data: { _type: "source", label: "Đang tải…" } },
+            data: { _type: "source", label: "Loading..." } },
         ]);
         try {
           const r = await api.uploadImage(projectId, f);
-          update(id, { media_id: r.media_id, web: r.web, label: r.name || "ảnh tải lên" });
+          update(id, { media_id: r.media_id, web: r.web, label: r.name || "uploaded image" });
         } catch (err: any) {
-          update(id, { label: "Tải lỗi" });
-          setErr(err.message || "Upload lỗi");
+          update(id, { label: "Upload failed" });
+          setErr(err.message || "Upload errors");
         }
       }
     },
@@ -1491,7 +1491,7 @@ function Editor({
 
   // ── Graph presets (templates) — reuse a chain across shots/assets ──
   const saveAsPreset = async () => {
-    const name = window.prompt("Tên preset cho sơ đồ node hiện tại:");
+    const name = window.prompt("Preset name for the current node graph:");
     if (!name?.trim()) return;
     try {
       const r = await graphApi.saveTemplate(name.trim(), serialize(), goal);
@@ -1503,7 +1503,7 @@ function Editor({
   const loadPreset = (tid: string) => {
     const t = templates.find((x) => x.id === tid);
     if (!t) return;
-    if (!window.confirm(`Thay sơ đồ hiện tại bằng preset "${t.name}"?`)) return;
+    if (!window.confirm(`Replace the current graph with preset "${t.name}"?`)) return;
     const ns: Node[] = (t.graph.nodes || []).map((n: any) => ({
       id: n.id,
       type: n.type || n.data?._type || "prompt",
@@ -1519,7 +1519,7 @@ function Editor({
   };
   const deletePreset = async (tid: string) => {
     const t = templates.find((x) => x.id === tid);
-    if (!t || !window.confirm(`Xóa preset "${t.name}"?`)) return;
+    if (!t || !window.confirm(`Delete preset "${t.name}"?`)) return;
     try {
       const r = await graphApi.deleteTemplate(tid);
       setTemplates(r.templates);
@@ -1685,7 +1685,7 @@ function Editor({
 
   const applyOutput = async () => {
     if (!outputMedia) {
-      setErr("Node Output chưa có ảnh/video — hãy nối Output tới một node có kết quả.");
+      setErr("Output node has no image/video - connect Output to a node with a result.");
       return;
     }
     setBusy(true);
@@ -1720,7 +1720,7 @@ function Editor({
                 e.dataTransfer.setData("application/flowkit-node", p);
                 e.dataTransfer.effectAllowed = "move";
               }}
-              title="Bấm để thêm, hoặc kéo thả xuống canvas"
+              title="Click to add, or drag onto the canvas"
               className="cursor-grab rounded-md border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 active:cursor-grabbing"
               style={{ borderLeftColor: META[p].color, borderLeftWidth: 3 }}
             >
@@ -1729,26 +1729,26 @@ function Editor({
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {done && <span className="text-xs text-emerald-400">✓ Đã tạo & áp dụng</span>}
+          {done && <span className="text-xs text-emerald-400">✓ Generated & applied</span>}
           <div className="flex items-center gap-1">
-            <button onClick={undo} disabled={!canUndo} title="Hoàn tác (Ctrl+Z)"
+            <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"
               className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800 disabled:opacity-30">
               ↶
             </button>
-            <button onClick={redo} disabled={!canRedo} title="Làm lại (Ctrl+Shift+Z)"
+            <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)"
               className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800 disabled:opacity-30">
               ↷
             </button>
-            <button onClick={autoLayout} title="Tự sắp xếp node theo luồng"
+            <button onClick={autoLayout} title="Auto-layout nodes by flow"
               className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800">
-              ⤢ Sắp xếp
+              ⤢ Layout
             </button>
           </div>
           <div className="flex items-center gap-1">
             <select
               value={presetSel}
               onChange={(e) => { setPresetSel(e.target.value); if (e.target.value) loadPreset(e.target.value); }}
-              title="Nạp một preset sơ đồ node đã lưu"
+              title="Load a saved node graph preset"
               className="rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 outline-none"
             >
               <option value="">Preset…</option>
@@ -1757,36 +1757,36 @@ function Editor({
               ))}
             </select>
             {presetSel && (
-              <button onClick={() => deletePreset(presetSel)} title="Xóa preset đang chọn"
+              <button onClick={() => deletePreset(presetSel)} title="Delete selected preset"
                 className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs text-rose-300 hover:bg-rose-950/40">
                 🗑
               </button>
             )}
-            <button onClick={saveAsPreset} title="Lưu sơ đồ hiện tại thành preset"
+            <button onClick={saveAsPreset} title="Save current graph as a preset"
               className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800">
               💾 Preset
             </button>
           </div>
           <button onClick={save} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm hover:bg-neutral-800">
-            Lưu
+            Save
           </button>
           <button
             onClick={applyOutput}
             disabled={busy || !outputMedia}
-            title="Đưa ảnh/video ở node Output vào dự án (không tạo lại)"
+            title="Apply the Output node image/video to the project (without regenerating)"
             className="rounded-lg border border-emerald-700/60 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
           >
-            ✓ Áp dụng Output
+            ✓ Apply Output
           </button>
           <button
             onClick={run}
             disabled={busy}
             className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
           >
-            {busy ? "Đang chạy…" : "▶ Run"}
+            {busy ? "Running..." : "▶ Run"}
           </button>
           <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800">
-            Đóng
+            Close
           </button>
         </div>
       </div>
@@ -1827,7 +1827,7 @@ function Editor({
         </NodeOps.Provider>
       </div>
       <div className="border-t border-neutral-800 px-4 py-1 text-[11px] text-neutral-500">
-        ⓘ ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ · Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không tốn credit) · Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · Kéo đầu đường nối ra chỗ trống để xóa · ✕ xóa node
+        ⓘ ⚡ Generate one node · ⏬ Update downstream · 🔒 Lock · ⧉ Duplicate node · 💾 Preset for saving/loading graphs · Filter/Color grade/Crop/Vignette/Border/Merge/Grid/Watermark run locally (no credit cost) · Drag images from your computer onto the canvas to create Image source nodes · Click an image to enlarge · Drag a connector endpoint to empty space to delete it · ✕ delete node
       </div>
       {lightbox && (
         <Lightbox

@@ -71,7 +71,7 @@ export default function AssembleTab({ project }: { project: Project }) {
 
   const doDavinci = () =>
     run("xml", async () => {
-      setProgress("Đang tạo timeline DaVinci… (có thể mất chút thời gian)");
+      setProgress("Creating DaVinci timeline... (this may take a moment)");
       const r = await asm.davinci(project.id);
       setXmlUrl(r.web_path + "?t=" + Date.now());
       setSrtUrl(r.captions_srt ? r.captions_srt + "?t=" + Date.now() : null);
@@ -82,14 +82,14 @@ export default function AssembleTab({ project }: { project: Project }) {
     <div className="mx-auto max-w-4xl px-6 py-6">
       <h2 className="mb-1 text-xl font-semibold">Assemble & Export</h2>
       <p className="mb-5 text-sm text-neutral-400">
-        Lồng tiếng → ghép video → xuất bản
+        Narrate → assemble video → publish
       </p>
 
       <div className="mb-6 grid grid-cols-4 gap-3 text-center text-sm">
         <Stat n={allShots.length} label="shots" />
-        <Stat n={withImage.length} label="có ảnh" />
-        <Stat n={withVideo.length} label="có video" />
-        <Stat n={withNarr.length} label="có narration" />
+        <Stat n={withImage.length} label="with images" />
+        <Stat n={withVideo.length} label="with video" />
+        <Stat n={withNarr.length} label="with narration" />
       </div>
 
       {err && (
@@ -102,39 +102,39 @@ export default function AssembleTab({ project }: { project: Project }) {
       <div className="mb-6 flex flex-wrap gap-3">
         <button onClick={narrateAll} disabled={!!busy}
           className="rounded-lg border border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40">
-          {busy === "narr" ? "Đang lồng tiếng…" : "🎙 Lồng tiếng tất cả"}
+          {busy === "narr" ? "Narrating..." : "🎙 Narrate all"}
         </button>
         <button onClick={doAssemble} disabled={!!busy || !withVideo.length}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
-          {busy === "assemble" ? "Đang ghép…" : "🎬 Ghép video"}
+          {busy === "assemble" ? "Assembling..." : "🎬 Assemble video"}
         </button>
         <button onClick={doAssembleImages} disabled={!!busy || !withImage.length}
-          title="Gộp các ảnh shot thành 1 video, mỗi ảnh dài bằng narration của shot"
+          title="Merge shot images into a single video, each image lasting as long as the shot narration"
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-40">
-          {busy === "assemble-img" ? "Đang ghép ảnh…" : "🖼 Tạo video từ ảnh"}
+          {busy === "assemble-img" ? "Assembling images..." : "🖼 Build video from images"}
         </button>
         <label className="flex items-center gap-2 text-sm text-neutral-300">
           <input type="checkbox" checked={kenBurns} onChange={(e) => setKenBurns(e.target.checked)}
             className="h-4 w-4 accent-emerald-500" />
-          Ken Burns (zoom nhẹ)
+          Ken Burns (subtle zoom)
         </label>
         <button onClick={doExport} disabled={!!busy}
           className="rounded-lg border border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40">
-          {busy === "export" ? "…" : "📝 Export SEO + SRT + Thumbnail"}
+          {busy === "export" ? "..." : "📝 Export SEO + SRT + Thumbnail"}
         </button>
         <button onClick={doDavinci} disabled={!!busy || (!withVideo.length && !withImage.length)}
-          title="Tạo timeline cho DaVinci Resolve: dùng video shot, hoặc ẢNH shot (still) khi chưa có video. Kèm narration từng scene + caption (.srt)"
+          title="Create a DaVinci Resolve timeline: use shot video, or shot still images when video is unavailable. Includes scene narration + caption (.srt)"
           className="rounded-lg border border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40">
-          {busy === "xml" ? "…" : "🎞 Export DaVinci XML"}
+          {busy === "xml" ? "..." : "🎞 Export DaVinci XML"}
         </button>
       </div>
 
       {finalUrl && (
         <div className="mb-6">
-          <h3 className="mb-2 text-sm font-medium text-neutral-300">Video hoàn chỉnh</h3>
+          <h3 className="mb-2 text-sm font-medium text-neutral-300">Final video</h3>
           <video src={finalUrl} controls className="w-full rounded-xl border border-neutral-800" />
           <a href={finalUrl} download className="mt-2 inline-block text-sm text-indigo-400 hover:text-indigo-300">
-            ⭳ Tải final.mp4
+            ⭳ Download final.mp4
           </a>
         </div>
       )}
@@ -143,30 +143,30 @@ export default function AssembleTab({ project }: { project: Project }) {
         <div className="mb-6 rounded-lg border border-neutral-800 bg-neutral-900/50 p-3 text-sm">
           {xmlInfo && (
             <div className="mb-1 text-emerald-400">
-              ✓ Đã tạo timeline: {xmlInfo.clips} clip · {xmlInfo.captions} caption
-              {xmlInfo.bgm ? " · có nhạc nền" : ""}
+              ✓ Timeline created: {xmlInfo.clips} clip · {xmlInfo.captions} caption
+              {xmlInfo.bgm ? " · background music included" : ""}
             </div>
           )}
           {xmlInfo && xmlInfo.missing > 0 && (
             <div className="mb-2 text-amber-400">
-              ⚠ {xmlInfo.missing} shot bị bỏ qua (thiếu ảnh/video local, tải lại từ Flow không được):
+              ⚠ {xmlInfo.missing} shots were skipped (missing local image/video, could not re-download from Flow):
               {" "}
-              {xmlInfo.missingTitles.join(" · ")}. Hãy tạo lại ảnh cho các shot này rồi export lại.
+              {xmlInfo.missingTitles.join(" · ")}. Regenerate those shot images and export again.
             </div>
           )}
           DaVinci timeline:{" "}
           <a href={xmlUrl} download className="text-indigo-400 hover:text-indigo-300">
             ⭳ timeline.xml
           </a>
-          <span className="ml-2 text-neutral-500">Import Timeline trong Resolve, media relink từ ./media</span>
+          <span className="ml-2 text-neutral-500">Import the timeline in Resolve, media relink from ./media</span>
           {srtUrl && (
             <div className="mt-2 text-neutral-300">
-              Caption từ khoá:{" "}
+              Keyword captions:{" "}
               <a href={srtUrl} download className="text-indigo-400 hover:text-indigo-300">
                 ⭳ captions.srt
               </a>
               <span className="ml-2 text-neutral-500">
-                Kéo vào timeline Resolve → subtitle track (chạy cả bản Free; title track trong XML chỉ vào ở bản Studio)
+                Drag into the Resolve timeline → subtitle track (works in Free; title track in XML is Studio-only)
               </span>
             </div>
           )}
@@ -176,11 +176,11 @@ export default function AssembleTab({ project }: { project: Project }) {
       {meta?.metadata && (
         <div className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
           <div>
-            <div className="text-xs text-neutral-500">Tiêu đề</div>
+            <div className="text-xs text-neutral-500">Title</div>
             <div className="font-medium">{meta.metadata.title}</div>
           </div>
           <div>
-            <div className="text-xs text-neutral-500">Mô tả</div>
+            <div className="text-xs text-neutral-500">Description</div>
             <p className="whitespace-pre-wrap text-sm text-neutral-300">{meta.metadata.description}</p>
           </div>
           <div>

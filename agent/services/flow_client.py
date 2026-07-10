@@ -30,12 +30,13 @@ class FlowClient:
         self._extension_ws = None  # Set by WS server when extension connects
         self._pending: dict[str, asyncio.Future] = {}
         self._flow_key: Optional[str] = None
-        # Single-flight queue (video-app.md §9.1): the extension is ONE shared WS channel,
+        # Single-flight queue (video-app.md §9.1): the extension is one shared WS channel,
         # so every mutating Flow command (generate / edit / upscale / upload / rename /
-        # get-url) is serialized through this lock — only one is in flight at a time. This
-        # stops a batch and a manual op (⚡ quick-gen, Node Editor) from interleaving requests
-        # and corrupting rate-limit/captcha state. Read-only polls (check-status, credits) opt
-        # out (serialize=False) so they don't block submits — they run on their own cadence.
+        # get-url) is serialized through this lock - only one is in flight at a time. This
+        # keeps batch jobs and manual ops (⚡ quick-gen, Node Editor) from interleaving
+        # requests and corrupting rate-limit/captcha state. Read-only polls (check-status,
+        # credits) opt out (serialize=False) so they do not block submits; they run on their
+        # own cadence.
         self._flow_lock = asyncio.Lock()
         # WS stats
         self._ws_connect_count = 0
@@ -114,19 +115,19 @@ class FlowClient:
         """Refresh media URLs for a project.
 
         Note: Google Flow's get_media API returns encoded content (base64),
-        not fresh signed URLs. URL refresh requires TRPC intercept from
+        not fresh signed URLs. URL refresh requires TRPC interception from
         the extension when the user opens the project in Chrome.
         The video reviewer falls back to get_media content directly.
         """
-        logger.info("URL refresh requested for project %s — TRPC endpoint no longer available, "
-                     "use extension passive intercept (open project in Chrome)", project_id[:12])
+        logger.info("URL refresh requested for project %s - TRPC endpoint no longer available, "
+                     "use extension passive interception (open project in Chrome)", project_id[:12])
         return {"refreshed": 0, "found": 0, "note": "TRPC endpoint unavailable. "
-                "Video reviewer uses get_media fallback automatically. "
+                "Video reviewer uses the get_media fallback automatically. "
                 "For URL refresh, open the project in Google Flow in Chrome."}
 
     async def _send(self, method: str, params: dict, timeout: float = 300,
                     *, serialize: bool = True) -> dict:
-        """Send request to extension and wait for response.
+        """Send a request to the extension and wait for the response.
 
         Always returns a dict. On error, returns {"error": "<reason>"} — callers
         must check result.get("error") or use _is_ws_error() before reading data.
@@ -167,11 +168,11 @@ class FlowClient:
             self._pending.pop(req_id, None)
 
     def _build_url(self, endpoint_key: str, **kwargs) -> str:
-        """Build full API URL.
+        """Build the full API URL.
 
         The ?key= param is only appended when GOOGLE_API_KEY is set. Auth to
         aisandbox-pa.googleapis.com is carried by the extension's Bearer token,
-        so the API key is optional — leave GOOGLE_API_KEY empty to omit it.
+        so the API key is optional - leave GOOGLE_API_KEY empty to omit it.
         """
         path = ENDPOINTS[endpoint_key].format(**kwargs)
         url = f"{GOOGLE_FLOW_API}{path}"

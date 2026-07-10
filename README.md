@@ -1,112 +1,108 @@
-# Flow Kit — Proxy API Google Flow + Flow Studio
+# Flow Kit - Google Flow API Proxy + Flow Studio
 
-Một server cục bộ (FastAPI + WebSocket) ghép cặp với một extension Chrome để biến API
-sinh ảnh/video của **Google Flow** thành các endpoint HTTP thường tại
-`http://127.0.0.1:8100`. Bên trên lớp proxy đó là **Flow Studio** — một webapp dựng cả
-video từ một ý tưởng: Kịch bản → Nhân vật/Bối cảnh → Storyboard → Shot → Ghép & Xuất bản.
+A local server (FastAPI + WebSocket) paired with a Chrome extension turns the **Google Flow**
+image/video APIs into ordinary HTTP endpoints at `http://127.0.0.1:8100`. On top of that
+proxy layer sits **Flow Studio** - a web app for building videos from an idea:
+screenplay → characters/locations → storyboard → shot → assemble & export.
 
-- **Lõi proxy Flow** không giữ trạng thái: chỉ chuyển tiếp request tới extension rồi trả
-  kết quả về.
-- **Flow Studio** mới là phần có trạng thái — lưu dự án/scene/shot trong SQLite
-  (`agent/studio.db`), cache media ở `./media/`, render cuối ở `./studio_media/`.
+- **Flow proxy core** is stateless: it forwards requests to the extension and returns the result.
+- **Flow Studio** is the stateful part - it stores projects/scenes/shots in SQLite
+  (`agent/studio.db`), caches media in `./media/`, and renders outputs to `./studio_media/`.
 
-Extension Chrome lo phần lấy bearer token của Google Flow, giải reCAPTCHA và gọi thẳng
-`aisandbox-pa.googleapis.com`. Agent Python chỉ là cầu nối WebSocket mỏng.
+The Chrome extension handles the Google Flow bearer token, solves reCAPTCHA, and calls
+`aisandbox-pa.googleapis.com` directly. The Python agent is just a thin WebSocket bridge.
 
-## Thành phần
+## Components
 
-- **`extension/`** — Extension Chrome MV3. Bắt bearer token, nói chuyện với Google Flow,
-  kết nối agent qua WebSocket (`ws://127.0.0.1:9222`), trả kết quả qua HTTP callback
+- **`extension/`** — MV3 Chrome extension. Captures the bearer token, talks to Google Flow,
+  connects to the agent over WebSocket (`ws://127.0.0.1:9222`), and returns results via HTTP callback
   (`POST /api/ext/callback`).
-- **`agent/`** — Server FastAPI + WebSocket.
-  - `main.py` — entry app, WebSocket cho extension, `/health`, `/api/ext/callback`, mount
-    SPA + thư mục media tĩnh.
-  - `api/flow.py` — toàn bộ endpoint `/api/flow/*` (relay tới Flow).
-  - `api/tts.py` — `/api/tts/*`, proxy tới server OmniVoice chạy trên Google Colab.
-  - `api/ai_agent.py` — `/api/agent/*`, chạy các coding-agent CLI headless.
-  - `api/studio.py` — `/api/studio/*`, toàn bộ orchestration của Flow Studio.
-  - `studio/` — lớp nghiệp vụ của Studio: `db.py` (SQLite + migration), `brain.py` (prompt
-    cho AI), `assembler.py` (ghép video bằng ffmpeg), `davinci_xml.py` (xuất timeline
-    Resolve), `vntext.py` (chuẩn hoá tiếng Việt trước TTS), `media_store.py`, `graph.py`.
-  - `services/flow_client.py` — relay request sang extension và chờ phản hồi.
-  - `services/headers.py` — header request ngẫu nhiên hoá.
-  - `config.py`, `models.json` — danh sách endpoint + key model.
-- **`webapp/`** — SPA React + Vite + Tailwind (giao diện Flow Studio).
+- **`agent/`** — FastAPI + WebSocket server.
+  - `main.py` — app entry point, extension WebSocket, `/health`, `/api/ext/callback`, and the mounted SPA + static media.
+  - `api/flow.py` — all `/api/flow/*` endpoints (relay to Flow).
+  - `api/tts.py` — `/api/tts/*`, proxy to an OmniVoice server running on Google Colab.
+  - `api/ai_agent.py` — `/api/agent/*`, runs headless coding-agent CLIs.
+  - `api/studio.py` — `/api/studio/*`, the full Flow Studio orchestration layer.
+  - `studio/` — Studio business logic: `db.py` (SQLite + migration), `brain.py` (AI prompts),
+    `assembler.py` (ffmpeg video assembly), `davinci_xml.py` (Resolve timeline export),
+    `vntext.py` (Vietnamese normalization before TTS), `media_store.py`, `graph.py`.
+  - `services/flow_client.py` — relays requests to the extension and waits for responses.
+  - `services/headers.py` — randomized request headers.
+  - `config.py`, `models.json` — endpoint definitions and model keys.
+- **`webapp/`** — React + Vite + Tailwind SPA for Flow Studio.
 
-## Cài đặt & Chạy
+## Install & Run
 
 ```bash
 pip install -r requirements.txt
 
-# (lần đầu / khi sửa webapp) build SPA — agent sẽ phục vụ nó
+# (first time / after editing the webapp) build the SPA - the agent serves it
 cd webapp && npm install && npm run build && cd ..
 
-# chạy server: HTTP tại :8100, WebSocket cho extension tại :9222
+# run the server: HTTP on :8100, extension WebSocket on :9222
 python -m agent.main
 ```
 
-Mở <http://127.0.0.1:8100>. Nạp thư mục `extension/` dạng *unpacked extension* trong
-Chrome rồi đăng nhập Google Flow.
+Open <http://127.0.0.1:8100>. Load `extension/` as an *unpacked extension* in Chrome and
+sign in to Google Flow.
 
-Chế độ dev có hot-reload: `cd webapp && npm run dev` (tự proxy `/api` + `/media` về
-`:8100`).
+Dev mode has hot reload: `cd webapp && npm run dev` (it proxies `/api` and `/media` back to `:8100`).
 
-## Kiểm tra nhanh (pre-flight)
+## Quick Check (Pre-flight)
 
 ```bash
 curl -s http://127.0.0.1:8100/health
 # {"status":"ok", "extension_connected": true, ...}
 ```
 
-`extension_connected: false` nghĩa là chưa có extension — mở Google Flow trong Chrome với
-extension đã nạp. Mọi việc sinh media đều phải đi qua extension đang kết nối.
+`extension_connected: false` means the extension is not connected - open Google Flow in Chrome with
+the extension loaded. All media generation must go through the connected extension.
 
-## Yêu cầu môi trường
+## Environment Requirements
 
-| Cần cho | Yêu cầu |
+| For | Requirement |
 |---------|---------|
-| Sinh ảnh/video Flow | Extension Chrome đã kết nối + đăng nhập Google Flow |
-| Ghép & xuất video | `ffmpeg` + `ffprobe` trong PATH |
-| Lồng tiếng (TTS) | Đặt URL server OmniVoice (xem mục TTS) |
-| AI agent | `claude` và/hoặc `agy` đã đăng nhập sẵn trên máy chạy server |
+| Flow image/video generation | Connected Chrome extension + signed in to Google Flow |
+| Video assembly & export | `ffmpeg` + `ffprobe` in PATH |
+| Voiceover (TTS) | OmniVoice server URL configured (see TTS) |
+| AI agent | `codex`, `claude` and/or `agy` logged in on the server machine |
 
-`GOOGLE_API_KEY` là tuỳ chọn — auth tới `aisandbox-pa.googleapis.com` do bearer token của
-extension gánh. Để trống (mặc định) thì bỏ luôn tham số `?key=`.
+`GOOGLE_API_KEY` is optional - auth to `aisandbox-pa.googleapis.com` is handled by the
+extension bearer token. Leave it empty (default) to omit the `?key=` param.
 
 ---
 
 ## Flow Studio
 
-Quy trình dựng video chạy trên các API bên dưới, có một AI agent làm "bộ não" sinh
-kịch bản/prompt, một **Node Editor** cho pipeline tuỳ biến, và xuất **DaVinci Resolve XML**.
+The video-building pipeline uses the APIs below, with an AI agent as the "brain" for
+scripts/prompts, a **Node Editor** for customizable pipelines, and **DaVinci Resolve XML** export.
 
-**Quy trình:** Ý tưởng → Kịch bản (Fountain) → tách Nhân vật/Bối cảnh/Đạo cụ (asset có ảnh
-tham chiếu) → Storyboard (chia frame) → Shot (ảnh frame + video) → Ghép → Xuất bản.
+**Workflow:** Idea → screenplay (Fountain) → extract characters/locations/props (assets with
+reference images) → storyboard (split into frames) → shots (frame images + video) → assemble → publish.
 
-**Các khả năng chính:**
+**Key capabilities:**
 
-- **Chế độ Storytelling (audio-first):** mỗi scene được viết lời đọc liền mạch, **TTS cả
-  scene trong một lần đọc** (giữ trọn cảm xúc, không cắt vụn), rồi các *beat* hình ảnh được
-  ánh xạ lên đúng timeline của audio thật ("đọc tới đâu, hình tới đó").
-- **Chuẩn hoá tiếng Việt trước TTS** (`vntext.py`): đổi số → chữ, viết tắt, giờ, ngày,
-  tiền tệ, ký tự đặc biệt (`-`, `_`, `%`…) sang dạng đọc chuẩn rồi mới cắt đoạn cho TTS.
-- **Tuỳ chọn ngôn ngữ theo dự án:** ngôn ngữ **kịch bản/lời thoại/lời đọc** (`script_lang`,
-  mặc định Tiếng Việt) và ngôn ngữ **chữ viết/vẽ trong ảnh** (`image_text_lang`); từ đặc thù
-  tiếng nước ngoài (thuật ngữ/nhãn hiệu) được giữ nguyên.
-- **Prompt shot giàu điện ảnh:** mỗi shot được ép nêu rõ cỡ cảnh, góc & độ cao máy, tiêu cự
-  + DOF, ánh sáng, bố cục/layout — và một lớp **chuyển động** riêng cho video (loại chuyển
-  động máy, rack focus, biến đổi ánh sáng/khói theo thời gian) đúng kiểu image-to-video.
-- **Video nối dài >8s:** beat dài hơn một clip Veo (~8s) được render thành nhiều clip i2v
-  nối tiếp (clip sau bắt đầu từ frame cuối của clip trước) rồi concat thành một shot liền.
-- **Caption từ khoá định giờ:** cụm từ then chốt được vẽ lên video đúng lúc lời đọc chạm
-  tới, và xuất kèm vào XML/SRT cho Resolve.
-- **Nhạc nền:** tải một file nhạc cho dự án → khi ghép, nhạc tự được lặp cho đủ độ dài và
-  trộn **dưới** giọng đọc ở mức âm lượng cấu hình được (giọng đọc giữ nguyên). Không có file
-  thì bỏ qua.
-- **Xuất DaVinci Resolve XML (FCP7/xmeml):** track video + track title (caption) + track
-  audio (lời đọc từng scene), kèm `captions.srt` (chạy được cả bản Resolve Free).
-- **Node Editor:** đồ thị tuỳ biến cho asset/shot (tạo ảnh → sửa ảnh → tạo video), có
-  "⚡ Tạo nhanh" từng node và "🔒 Lock" để giữ media ưng ý khi chạy lại toàn tuyến.
+- **Storytelling mode (audio-first):** each scene gets a continuous narration, **the whole scene is
+  synthesized in one pass** (preserving emotion, no fragmentation), then visual beats are mapped to
+  the exact timeline of the real audio ("as the narration progresses, so do the visuals").
+- **Vietnamese normalization before TTS** (`vntext.py`): converts numbers to words, expands abbreviations,
+  times, dates, currency, and special characters (`-`, `_`, `%`...) into a speakable form before segmenting for TTS.
+- **Per-project language options:** narration/screenplay language (`script_lang`, default English) and
+  written text in images (`image_text_lang`); foreign names/terms/brands are preserved.
+- **Cinematic shot prompts:** every shot is forced to specify shot size, camera angle/height, focal length
+  + DOF, lighting, and layout - plus a separate **motion** layer for video (camera movement, rack focus,
+  lighting/smoke changes over time) in true image-to-video style.
+- **Long videos >8s:** beats longer than a Veo clip (~8s) are rendered into multiple i2v clips in sequence
+  (the next clip starts on the final frame of the previous one) and then concatenated into one continuous shot.
+- **Timed keyword captions:** key phrases are burned into the video exactly when narration reaches them, and
+  also exported into XML/SRT for Resolve.
+- **Background music:** upload a music file for the project - during assembly, it loops to fill the full
+  duration and is mixed **under** narration at a configurable volume (narration remains unchanged). If no
+  music is provided, it is skipped.
+- **DaVinci Resolve XML export (FCP7/xmeml):** video track + title track (captions) + audio track (scene narration),
+  plus `captions.srt` (works in Resolve Free).
+- **Node Editor:** customizable graph for assets/shots (create image → edit image → create video), with
+  "⚡ Quick Gen" on each node and "🔒 Lock" to keep a media result when rerunning the whole pipeline.
 
 Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết trong
 [agent/api/studio.py](agent/api/studio.py)):
@@ -178,7 +174,7 @@ curl -X POST http://127.0.0.1:8100/api/tts/synthesize \
 
 ## Endpoint AI Agent (`/api/agent/*`)
 
-Chạy các coding-agent CLI (Claude Code, Antigravity, …) headless như subprocess để tự động
+Chạy các coding-agent CLI (Codex, Claude Code, Antigravity, …) headless như subprocess để tự động
 hoá: viết script, sinh prompt, sửa file trong một thư mục làm việc. Agent chạy
 non-interactive, **mặc định bypass permission** (ghi file / chạy lệnh tự do) — chỉ expose
 trên `127.0.0.1`.
@@ -192,7 +188,7 @@ Body `POST /run`:
 
 | Trường | Mặc định | Mô tả |
 |--------|----------|-------|
-| `agent` | — | Key trong registry (`claude`, `antigravity`) |
+| `agent` | — | Key trong registry (`codex`, `claude`, `antigravity`) |
 | `prompt` | — | Nội dung giao cho agent |
 | `cwd` | thư mục hiện tại | Thư mục làm việc của agent |
 | `model` | mặc định CLI | Override model key |
@@ -205,24 +201,25 @@ Body `POST /run`:
 # Xem agent nào đã cài
 curl -s http://127.0.0.1:8100/api/agent/agents
 
-# Giao việc cho Claude Code trong một thư mục
+# Giao việc cho Codex trong một thư mục
 curl -X POST http://127.0.0.1:8100/api/agent/run \
   -H 'Content-Type: application/json' \
-  -d '{"agent":"claude","prompt":"Tóm tắt README.md trong 3 gạch đầu dòng","cwd":"D:/youtube/editor/flowkit"}'
+  -d '{"agent":"codex","prompt":"Tóm tắt README.md trong 3 gạch đầu dòng","cwd":"D:/youtube/editor/flowkit"}'
 ```
 
-Agent có sẵn: `claude` (Claude Code, prompt qua stdin) và `antigravity` (binary `agy`, cú
-pháp `agy -p "<prompt>" --model X --dangerously-skip-permissions`). Cả hai CLI phải được
-**đăng nhập sẵn** trên máy chạy server — nếu chưa auth, agent sẽ treo tới khi timeout (504).
+Available agents: `codex` (Codex CLI, `codex exec`, prompt via stdin), `claude` (Claude Code,
+prompt via stdin), and `antigravity` (binary `agy`, syntax
+`agy -p "<prompt>" --model X --dangerously-skip-permissions`). The CLIs must be
+logged in on the server machine; otherwise the agent can hang until timeout (504).
 
-Antigravity (`agy`) là một ứng dụng **TUI**: ở print mode nó chỉ render ra terminal thật,
-nên khi bị pipe stdout sẽ rỗng. Server tự chạy `agy` dưới một **PTY giả** (ConPTY qua
-`pywinpty` trên Windows, module `pty` trên POSIX) rồi strip ANSI để trả về plain text —
-bật/tắt qua cờ `pty` trong registry. Cài `pywinpty` (đã có trong `requirements.txt`) để
-dùng được agent này trên Windows.
+Antigravity (`agy`) is a **TUI** app: in print mode it only renders to a real terminal,
+so piping stdout yields nothing. The server runs `agy` under a **pseudo-PTY** (ConPTY via
+`pywinpty` on Windows, `pty` on POSIX), strips ANSI, and returns plain text. This is
+controlled by the `pty` flag in the registry. Install `pywinpty` (already listed in
+`requirements.txt`) to use this agent on Windows.
 
 Registry agent + cờ mặc định nằm ở [`agent/config.py`](agent/config.py) (`AI_AGENTS`),
-override được hết qua env (`AGENT_CLAUDE_BIN`, `AGENT_ANTIGRAVITY_BIN`,
+override được hết qua env (`AGENT_CODEX_BIN`, `AGENT_CODEX_ARGS`, `AGENT_CLAUDE_BIN`, `AGENT_ANTIGRAVITY_BIN`,
 `AGENT_ANTIGRAVITY_ARGS`, `AGENT_CLI_TIMEOUT`, `AGENT_SKIP_PERMISSIONS`, …).
 
 ## Repo gốc

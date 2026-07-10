@@ -49,15 +49,15 @@ export default function MediaHistory({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
-          <h3 className="font-semibold">🕘 Lịch sử phiên bản{title ? ` — ${title}` : ""}</h3>
+          <h3 className="font-semibold">🕘 Version history{title ? ` — ${title}` : ""}</h3>
           <button onClick={onClose} className="ml-auto text-neutral-500 hover:text-neutral-300">✕</button>
         </div>
 
         <div className="flex-1 overflow-auto p-5">
           {err && <div className="mb-3 rounded-lg bg-rose-950/40 px-3 py-2 text-sm text-rose-300">{err}</div>}
-          {items === null && <p className="text-sm text-neutral-500">Đang tải…</p>}
+          {items === null && <p className="text-sm text-neutral-500">Loading...</p>}
           {items !== null && !items.length && (
-            <p className="text-sm text-neutral-500">Chưa có phiên bản nào được lưu.</p>
+            <p className="text-sm text-neutral-500">No versions have been saved yet.</p>
           )}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             {(items || []).map((h, i) => (
@@ -75,12 +75,12 @@ export default function MediaHistory({
                   )}
                   <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/50">
                     <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
-                      {restoring === h.id ? "Đang khôi phục…" : "↩ Khôi phục"}
+                      {restoring === h.id ? "Restoring..." : "↩ Restore"}
                     </span>
                   </div>
                   {i === 0 && (
                     <span className="absolute left-1.5 top-1.5 rounded bg-emerald-600/90 px-1.5 py-0.5 text-[10px] text-white">
-                      hiện tại
+                      current
                     </span>
                   )}
                 </div>

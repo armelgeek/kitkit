@@ -27,11 +27,11 @@ export async function creditGuard(
   const need = count * perItem;
   if (credits == null || need <= credits) return true;
   return confirm({
-    title: "Có thể không đủ credit",
+    title: "Not enough credits may be available",
     message:
-      `${label}: ~${count} mục × ${perItem} ≈ ${need} credit, nhưng chỉ còn ${credits}. ` +
-      "Vẫn tiếp tục? Batch sẽ dừng lại khi hết credit.",
-    confirmText: "Vẫn chạy",
+      `${label}: ~${count} items × ${perItem} ≈ ${need} credit, but only ${credits}. ` +
+      "Continue anyway? The batch will stop when credits run out.",
+    confirmText: "Run anyway",
     danger: true,
   });
 }

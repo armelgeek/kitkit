@@ -1,4 +1,4 @@
-"""The "brain" — wraps the AI-agent CLI (claude / agy) for Studio tasks.
+"""The "brain" — wraps the AI-agent CLI (codex / claude / agy) for Studio tasks.
 
 Builds a prompt that demands strict JSON, runs it through /api/agent/run's underlying
 handler, then extracts + parses the JSON (tolerant of code fences / surrounding prose).
@@ -28,7 +28,7 @@ async def _agent_cfg() -> tuple[str, str | None]:
     None → let the CLI use its own default. Passing a fast model (e.g. gemini-flash) here
     speeds up every brain call — script/scene/shot generation."""
     settings = await db.kv_get_all()
-    agent = settings.get("agent") or "claude"
+    agent = settings.get("agent") or "codex"
     model = (settings.get("agent_model") or os.environ.get("AGENT_MODEL") or "").strip() or None
     return agent, model
 
@@ -50,10 +50,12 @@ def _extract_json(text: str):
     try:
         return json.loads(text.strip())
     except json.JSONDecodeError:
+        logger.debug("JSONDecodeError on text: %s", text)
         pass
     # balance-scan from the first { or [
     start = min((i for i in (text.find("{"), text.find("[")) if i >= 0), default=-1)
     if start < 0:
+        logger.error("No JSON found in text. Output: %s", text)
         raise ValueError("no JSON found in agent output")
     open_ch = text[start]
     close_ch = "}" if open_ch == "{" else "]"
@@ -76,7 +78,8 @@ def _extract_json(text: str):
                 depth -= 1
                 if depth == 0:
                     return json.loads(text[start:i + 1])
-    raise ValueError("unbalanced JSON in agent output")
+    logger.error("Unbalanced JSON. Text slice: %s... Depth at end: %d", text[start:start+100], depth)
+    raise ValueError(f"unbalanced JSON in agent output (depth={depth})")
 
 
 async def run_json(prompt: str, *, timeout: float = _AGENT_TIMEOUT, retries: int = 2):

@@ -54,13 +54,13 @@ export default function CandidatePicker({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
-          <h3 className="font-semibold">🎲 Chọn ảnh đẹp nhất{title ? ` — ${title}` : ""}</h3>
+          <h3 className="font-semibold">🎲 Pick the best image{title ? ` — ${title}` : ""}</h3>
           <button
             onClick={load}
             disabled={busy}
             className="ml-auto rounded-md border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:opacity-40"
           >
-            ↻ Tạo lại
+            ↻ Regenerate
           </button>
           <button onClick={onClose} className="text-neutral-500 hover:text-neutral-300">✕</button>
         </div>
@@ -70,7 +70,7 @@ export default function CandidatePicker({
           {busy && (
             <p className="text-sm text-indigo-300">
               <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
-              Đang tạo {n} ảnh ứng viên…
+              Generating {n} candidate images...
             </p>
           )}
           {cands && (
@@ -86,7 +86,7 @@ export default function CandidatePicker({
                     <img src={c.web} alt="candidate" className="aspect-video w-full object-cover" />
                     <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/50">
                       <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
-                        {applying === c.media_id ? "Đang áp dụng…" : "✓ Chọn ảnh này"}
+                        {applying === c.media_id ? "Applying..." : "✓ Use this image"}
                       </span>
                     </div>
                   </div>

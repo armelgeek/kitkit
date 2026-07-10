@@ -123,7 +123,7 @@ export const api = {
   },
   clearBgm: (id: string) =>
     req<Project>(`/projects/${id}/bgm`, { method: "DELETE" }),
-  // Every image in the project's Flow project (for the Node Editor "Nguồn ảnh" picker).
+  // Every image in the project's Flow project (for the Node Editor source-image picker).
   projectImages: (id: string) => req<{ media: FlowMedia[] }>(`/projects/${id}/images`),
   // Upload an image from the user's machine → Flow (gets a media_id) + local cache.
   uploadImage: async (
@@ -199,7 +199,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ n }),
     }),
-  // Media version history (§13#8): list past versions + restore one.
+  // Media version history (§13#8): list past versions and restore one.
   entityHistory: (eid: string) =>
     req<{ history: MediaVersion[] }>(`/entities/${eid}/history`),
   shotHistory: (sid: string, slot = "image") =>
@@ -215,7 +215,7 @@ export const api = {
       `/projects/${id}/assets/generate-all`,
       { method: "POST" }
     ),
-  // Background jobs (§9): list active + cancel.
+  // Background jobs (§9): list active jobs and cancel them.
   listJobs: (project_id?: string) =>
     req<{ jobs: Job[] }>(`/jobs${project_id ? `?project_id=${project_id}` : ""}`),
   cancelJob: (jid: string) =>
@@ -371,7 +371,7 @@ export const storyboard = {
       body: JSON.stringify({ order }),
     }),
   // Content-align the source prose to scenes (force) so each scene reads the part that matches
-  // its location — fixes narration landing in the wrong scene. Then rebuild "Dựng theo lời đọc".
+  // its location — fixes narration landing in the wrong scene. Then rebuild "Build from narration".
   alignSource: (pid: string) =>
     req<{ scenes: Scene[] }>(`/projects/${pid}/align-source`, { method: "POST" }),
   // Split ONE over-long scene into ~90s sub-scenes (same location) so each gets a coherent shot
@@ -400,7 +400,7 @@ export const shots = {
   upscale: (sid: string) => req<Shot>(`/shots/${sid}/upscale`, { method: "POST" }),
   genAllVideos: (pid: string) =>
     req<{ job_id: string; total: number }>(`/projects/${pid}/shots/generate-all`, { method: "POST" }),
-  narration: (sid: string, language = "Vietnamese") =>
+  narration: (sid: string, language = "English") =>
     req<Shot>(`/shots/${sid}/narration`, { method: "POST", body: JSON.stringify({ language }) }),
 };
 
@@ -515,28 +515,11 @@ export const projectExportUrl = (pid: string) =>
 export const storyboardExportUrl = (pid: string) =>
   `/api/studio/projects/${pid}/storyboard/export`;
 
-// OmniVoice base URL config lives on the tts router (not /studio).
-export async function getTtsConfig(): Promise<{ base_url: string }> {
-  const res = await fetch("/api/tts/config");
-  if (!res.ok) throw new Error("Không đọc được OmniVoice URL");
-  return res.json();
-}
-
-export async function setTtsConfig(base_url: string): Promise<any> {
-  const res = await fetch("/api/tts/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ base_url }),
-  });
-  if (!res.ok) throw new Error("Không đặt được OmniVoice URL");
-  return res.json();
-}
-
-// ─── Voices (OmniVoice TTS) ──────────────────────────────────
+// ─── Voices (ElevenLabs TTS) ──────────────────────────────────
 export interface Voice {
-  voice_id: number;
+  voice_id: string;
   title: string;
-  desciption?: string; // OmniVoice spelling
+  description?: string;
 }
 
 async function ttsReq<T>(path: string, init?: RequestInit): Promise<T> {
@@ -556,31 +539,25 @@ async function ttsReq<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** Normalize OmniVoice's list response (array or {voices:[…]}, varied key names). */
 export async function listVoices(): Promise<Voice[]> {
-  const raw = await ttsReq<any>("/voices");
-  const arr: any[] = Array.isArray(raw) ? raw : raw?.voices || raw?.data || [];
-  return arr.map((v, i) => ({
-    voice_id: Number(v.voice_id ?? v.id ?? v.index ?? i),
-    title: String(v.title ?? v.name ?? v.voice ?? `Voice ${v.voice_id ?? i}`),
-    desciption: v.desciption ?? v.description ?? "",
-  }));
+  const raw = await ttsReq<{ voices: Voice[] }>("/voices");
+  return raw.voices || [];
 }
 
-export const addVoice = (voice: string, title: string, desciption?: string) =>
+export const addVoice = (voice: string, title: string, description?: string) =>
   ttsReq<any>("/voices", {
     method: "POST",
-    body: JSON.stringify({ voice, title, desciption }),
+    body: JSON.stringify({ voice, title, description }),
   });
 
-export const removeVoice = (voice_id: number) =>
+export const removeVoice = (voice_id: string) =>
   ttsReq<any>("/voices/remove", {
     method: "POST",
     body: JSON.stringify({ voice_id }),
   });
 
-/** Synthesize speech → returns base64 audio (WAV). */
-export const synthesize = (text: string, voice_id = 0, speed = 1.0) =>
+/** Synthesize speech → returns base64 audio (MP3/WAV). */
+export const synthesize = (text: string, voice_id: string, speed = 1.0) =>
   ttsReq<{ audio: string; status?: string; msg?: string }>("/synthesize", {
     method: "POST",
     body: JSON.stringify({ text, voice_id, speed }),
@@ -591,7 +568,7 @@ export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).split(",").pop() || "");
-    r.onerror = () => reject(new Error("Không đọc được file"));
+    r.onerror = () => reject(new Error("Could not read file"));
     r.readAsDataURL(file);
   });
 }

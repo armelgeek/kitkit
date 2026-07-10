@@ -78,11 +78,11 @@ export default function ScriptTab({
           <span className="text-sm text-neutral-400">
             {hasScript
               ? `Screenplay (Fountain) · ${scenes.length} scene`
-              : "Chưa có kịch bản"}
+              : "No screenplay yet"}
           </span>
           {hasScript && (
             <div className="flex items-center gap-2">
-              {/* Xem (trang screenplay) ⇄ Sửa (Fountain thô) */}
+              {/* Preview (screenplay page) ⇄ Edit (raw Fountain) */}
               <div className="flex rounded-lg bg-neutral-900 p-0.5 text-xs">
                 <button
                   onClick={() => setView("preview")}
@@ -90,7 +90,7 @@ export default function ScriptTab({
                     view === "preview" ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  📖 Xem
+                  📖 Preview
                 </button>
                 <button
                   onClick={() => setView("edit")}
@@ -98,7 +98,7 @@ export default function ScriptTab({
                     view === "edit" ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  ✏️ Sửa
+                  ✏️ Edit
                 </button>
               </div>
               {view === "edit" && (
@@ -107,22 +107,22 @@ export default function ScriptTab({
                   onClick={() => wrap("save", () => api.saveScript(project.id, script))}
                   className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
                 >
-                  {busy === "save" ? "Đang lưu…" : dirty ? "Lưu" : "Đã lưu"}
+                  {busy === "save" ? "Saving..." : dirty ? "Save" : "Saved"}
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* Screenplay toolbar — chèn phần tử Fountain chuẩn ngành tại con trỏ (chỉ khi Sửa) */}
+        {/* Screenplay toolbar — insert standard Fountain elements at the cursor (edit mode only) */}
         {view === "edit" && (
           <div className="flex flex-wrap gap-1 px-4 pb-2">
-            <TBtn onClick={() => insertSnippet("INT. ĐỊA ĐIỂM - DAY\n")} title="Scene Heading (INT./EXT.)">🎬 Cảnh</TBtn>
-            <TBtn onClick={() => insertSnippet("Mô tả hành động đang diễn ra.\n")} title="Action — dòng mô tả">Hành động</TBtn>
-            <TBtn onClick={() => insertSnippet("TÊN NHÂN VẬT\n")} title="Character cue (in hoa)">👤 Nhân vật</TBtn>
-            <TBtn onClick={() => insertSnippet("(diễn giải)\n")} title="Parenthetical">(Diễn giải)</TBtn>
-            <TBtn onClick={() => insertSnippet("Lời thoại.\n")} title="Dialogue">💬 Thoại</TBtn>
-            <TBtn onClick={() => insertSnippet("CUT TO:\n")} title="Transition (căn phải)">Chuyển →</TBtn>
+            <TBtn onClick={() => insertSnippet("INT. LOCATION - DAY\n")} title="Scene heading (INT./EXT.)">🎬 Scene</TBtn>
+            <TBtn onClick={() => insertSnippet("Describe the action taking place.\n")} title="Action line">Action</TBtn>
+            <TBtn onClick={() => insertSnippet("CHARACTER NAME\n")} title="Character cue (uppercase)">👤 Character</TBtn>
+            <TBtn onClick={() => insertSnippet("(beat)\n")} title="Parenthetical">(Beat)</TBtn>
+            <TBtn onClick={() => insertSnippet("Dialogue.\n")} title="Dialogue">💬 Dialogue</TBtn>
+            <TBtn onClick={() => insertSnippet("CUT TO:\n")} title="Transition (right aligned)">Transition →</TBtn>
           </div>
         )}
 
@@ -140,7 +140,7 @@ export default function ScriptTab({
                 setDirty(true);
               }}
               spellCheck={false}
-              placeholder={hasScript ? "" : "Kịch bản sẽ hiện ở đây. Nhập ý tưởng bên dưới để tạo…"}
+              placeholder={hasScript ? "" : "The screenplay will appear here. Enter an idea below to generate..."}
               className="absolute inset-0 mx-4 resize-none overflow-auto rounded-xl border border-neutral-800 bg-neutral-950 p-4 font-mono text-[13px] leading-6 text-neutral-200 outline-none focus:border-indigo-500"
               style={{ fontFamily: '"Courier New", ui-monospace, monospace', paddingBottom: 180 }}
             />
@@ -188,7 +188,7 @@ export default function ScriptTab({
             </div>
           ))}
           {!scenes.length && (
-            <p className="px-1 text-xs text-neutral-600">Chưa có scene.</p>
+            <p className="px-1 text-xs text-neutral-600">No scenes yet.</p>
           )}
         </div>
       </aside>
@@ -233,8 +233,8 @@ function Composer({
       <div className="pointer-events-auto rounded-2xl border border-neutral-700 bg-neutral-900/90 p-2.5 shadow-2xl backdrop-blur">
         {hasScript && (
           <div className="mb-2 flex gap-1">
-            <Chip active={mode === "edit"} onClick={() => setMode("edit")}>✏️ Sửa</Chip>
-            <Chip active={mode === "idea"} onClick={() => setMode("idea")}>✦ Tạo lại từ ý tưởng</Chip>
+            <Chip active={mode === "edit"} onClick={() => setMode("edit")}>✏️ Edit</Chip>
+            <Chip active={mode === "idea"} onClick={() => setMode("idea")}>✦ Regenerate from idea</Chip>
           </div>
         )}
 
@@ -243,7 +243,7 @@ function Composer({
             <textarea
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
-              placeholder="Ý tưởng ngắn hoặc dán nội dung dài (vd: Sự tích cây khế)…"
+              placeholder="Short idea or paste longer content (e.g. a folktale synopsis)..."
               className="h-20 w-full resize-none rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-sm outline-none focus:border-indigo-500"
             />
             <div className="flex items-center gap-3">
@@ -254,7 +254,7 @@ function Composer({
                   onChange={(e) => setUseDur(e.target.checked)}
                   className="h-4 w-4 accent-indigo-500"
                 />
-                Thời lượng
+                Duration
               </label>
               {useDur ? (
                 <div className="flex items-center gap-1.5">
@@ -265,17 +265,17 @@ function Composer({
                     onChange={(e) => setDur(parseInt(e.target.value) || 0)}
                     className="w-20 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1 text-sm outline-none focus:border-indigo-500"
                   />
-                  <span className="text-xs text-neutral-500">giây</span>
+                  <span className="text-xs text-neutral-500">sec</span>
                 </div>
               ) : (
-                <span className="text-xs text-neutral-600">(không đặt → giữ đầy đủ nội dung)</span>
+	                <span className="text-xs text-neutral-600">(leave empty to keep the full content)</span>
               )}
               <button
                 disabled={busy === "gen" || !idea.trim()}
                 onClick={() => onGenerate(idea, useDur ? dur : null)}
                 className="ml-auto rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
               >
-                {busy === "gen" ? "AI đang viết…" : "✦ Tạo kịch bản"}
+	                {busy === "gen" ? "AI is writing..." : "✦ Generate screenplay"}
               </button>
             </div>
           </div>
@@ -286,7 +286,7 @@ function Composer({
               value={instr}
               onChange={(e) => setInstr(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendEdit()}
-              placeholder="Mô tả thay đổi, sửa cảnh, đổi lời thoại…"
+	              placeholder="Describe changes, revise a scene, rewrite dialogue..."
               disabled={busy === "chat"}
               className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500 placeholder:text-neutral-600"
             />

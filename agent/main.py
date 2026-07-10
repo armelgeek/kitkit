@@ -1,4 +1,7 @@
 """Flow Kit — FastAPI + WebSocket server entry point (Flow proxy only)."""
+from dotenv import load_dotenv
+load_dotenv() # Load environment variables from .env file
+
 import asyncio
 import json
 import logging

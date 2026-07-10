@@ -5,7 +5,6 @@ import VoiceManager from "./VoiceManager";
 export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
   const [opts, setOpts] = useState<any>(null);
   const [s, setS] = useState<Record<string, any>>({});
-  const [ttsUrl, setTtsUrl] = useState("");
   const [fonts, setFonts] = useState<{ name: string; path: string }[]>([]);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [saved, setSaved] = useState(false);
@@ -14,8 +13,6 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     api.options().then(setOpts).catch((e) => setErr(e.message));
     api.getSettings().then(setS).catch(() => {});
-    // Show the currently-saved OmniVoice URL so it doesn't look lost on reopen.
-    getTtsConfig().then((c) => setTtsUrl(c.base_url || "")).catch(() => {});
     api.listFonts().then((r) => setFonts(r.fonts)).catch(() => {});
     listVoices().then(setVoices).catch(() => {});
   }, []);
@@ -29,7 +26,6 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
     setErr(null);
     try {
       await api.putSettings(s);
-      if (ttsUrl.trim()) await setTtsConfig(ttsUrl.trim());
       setSaved(true);
     } catch (e: any) {
       setErr(e.message);
@@ -38,7 +34,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
 
   const agents = opts?.agents || [];
   const deps = [
-    { ok: agents.some((a: any) => a.available), label: "AI agent (claude/agy)" },
+    { ok: agents.some((a: any) => a.available), label: "AI agent (codex/claude/agy)" },
     { ok: !!opts, label: "Studio API" },
   ];
 
@@ -57,14 +53,14 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
           {err && <div className="rounded-lg bg-rose-950/40 px-3 py-2 text-sm text-rose-300">{err}</div>}
 
           <Field label="AI Agent">
-            <select value={s.agent || "claude"} onChange={(e) => set("agent", e.target.value)} className={inp}>
-              {(agents.length ? agents.map((a: any) => a.key) : ["claude", "antigravity"]).map((k: string) => (
+            <select value={s.agent || "gemini"} onChange={(e) => set("agent", e.target.value)} className={inp}>
+              {(agents.length ? agents.map((a: any) => a.key) : ["gemini", "codex", "claude", "antigravity"]).map((k: string) => (
                 <option key={k} value={k}>{k}</option>
               ))}
             </select>
           </Field>
 
-          <Field label="AI Agent model (để trống = mặc định của CLI)">
+          <Field label="AI Agent model (leave empty to use the CLI default)">
             <input
               value={s.agent_model || ""}
               onChange={(e) => set("agent_model", e.target.value)}
@@ -72,21 +68,22 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
               className={inp}
             />
             <p className="mt-1 text-xs text-neutral-600">
-              Truyền qua <code>--model</code> cho agent. Chọn model nhanh (gemini-flash) để tăng
-              tốc tạo script/scene/shot. Phải đúng tên model mà CLI chấp nhận.
+              Passed through as <code>--model</code> to the agent. Pick a fast model
+              (e.g. gemini-flash) to speed up script/scene/shot generation. Must match a model
+              name accepted by the CLI.
             </p>
           </Field>
 
           <Field label="Image model">
             <select value={s.image_model || ""} onChange={(e) => set("image_model", e.target.value)} className={inp}>
-              <option value="">(mặc định)</option>
+              <option value="">(default)</option>
               {(opts?.image_models || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
             </select>
           </Field>
 
-          <Field label="Style mặc định">
+          <Field label="Default style">
             <input value={s.style || ""} onChange={(e) => set("style", e.target.value)}
-              placeholder="vd: Cinematic, teal-orange, 35mm" className={inp} />
+              placeholder="e.g.: Cinematic, teal-orange, 35mm" className={inp} />
             <div className="mt-1.5 flex flex-wrap gap-1">
               {(opts?.style_presets || []).map((p: string) => (
                 <button key={p} onClick={() => set("style", p)}
@@ -97,17 +94,17 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
 
           <div className="border-t border-neutral-800 pt-4">
             <div className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
-              Mặc định cho project mới
+              Defaults for new projects
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Khung hình">
+              <Field label="Frame ratio">
                 <select value={s.aspect_ratio || "VIDEO_ASPECT_RATIO_LANDSCAPE"}
                   onChange={(e) => set("aspect_ratio", e.target.value)} className={inp}>
-                  <option value="VIDEO_ASPECT_RATIO_LANDSCAPE">16:9 ngang</option>
-                  <option value="VIDEO_ASPECT_RATIO_PORTRAIT">9:16 dọc</option>
+                  <option value="VIDEO_ASPECT_RATIO_LANDSCAPE">16:9 landscape</option>
+                  <option value="VIDEO_ASPECT_RATIO_PORTRAIT">9:16 portrait</option>
                 </select>
               </Field>
-              <Field label="Độ dài shot (giây)">
+              <Field label="Shot length (seconds)">
                 <input type="number" min={1} max={10} value={s.shot_duration ?? 8}
                   onChange={(e) => set("shot_duration", Math.min(10, Math.max(1, Number(e.target.value) || 8)))}
                   className={inp} />
@@ -115,7 +112,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
             </div>
             <Field label="Video model">
               <select value={s.video_model || ""} onChange={(e) => set("video_model", e.target.value)} className={inp}>
-                <option value="">(mặc định)</option>
+                <option value="">(default)</option>
                 {(opts?.video_models?.veo_tiers || []).length > 0 && (
                   <optgroup label="Veo (i2v)">
                     {(opts?.video_models?.veo_tiers || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
@@ -128,19 +125,18 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
                 )}
               </select>
             </Field>
-            <Field label="Ngôn ngữ kịch bản / lời đọc">
+            <Field label="Script / narration language">
               <input value={s.script_lang || ""} onChange={(e) => set("script_lang", e.target.value)}
-                placeholder="Tiếng Việt" className={inp} />
+                placeholder="English" className={inp} />
             </Field>
-            <Field label="Giọng đọc mặc định">
-              <select value={s.voice_id ?? 0} onChange={(e) => set("voice_id", Number(e.target.value))} className={inp}>
-                <option value={0}>Mặc định (id 0)</option>
+            <Field label="Default voice">
+              <select value={s.voice_id ?? "21m00Tcm4TlvDq8ikWAM"} onChange={(e) => set("voice_id", e.target.value)} className={inp}>
                 {voices.map((v) => (
-                  <option key={v.voice_id} value={v.voice_id}>{v.title} (id {v.voice_id})</option>
+                  <option key={v.voice_id} value={v.voice_id}>{v.title}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Tốc độ đọc mặc định">
+            <Field label="Default narration speed">
               <div className="flex items-center gap-3">
                 <input type="range" min={0.5} max={1.5} step={0.05} value={s.tts_speed ?? 1.0}
                   onChange={(e) => set("tts_speed", parseFloat(e.target.value))}
@@ -154,25 +150,20 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
               <input type="checkbox" checked={s.storytelling ?? true}
                 onChange={(e) => set("storytelling", e.target.checked)}
                 className="h-4 w-4 accent-indigo-500" />
-              Bật Storytelling mặc định
+              Enable Storytelling by default
             </label>
           </div>
 
-          <Field label="OmniVoice base URL (TTS)">
-            <input value={ttsUrl} onChange={(e) => setTtsUrl(e.target.value)}
-              placeholder="https://xxxx.ngrok-free.app" className={inp} />
-            <p className="mt-1 text-xs text-neutral-600">
-              Đặt URL rồi “Lưu cấu hình” trước khi quản lý/test giọng bên dưới.
-            </p>
-          </Field>
-
           <div className="border-t border-neutral-800 pt-4">
-            <VoiceManager />
+            <div className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+              TTS Settings (ElevenLabs)
+            </div>
+            <VoiceManager defaultSpeed={s.tts_speed ?? 1.0} />
           </div>
 
-          <Field label="Font caption (vẽ chữ lên video)">
+          <Field label="Caption font (text drawn on video)">
             <select value={s.caption_font || ""} onChange={(e) => set("caption_font", e.target.value)} className={inp}>
-              <option value="">(tự dò theo hệ điều hành)</option>
+              <option value="">(auto-detect from the OS)</option>
               {fonts.map((f) => (
                 <option key={f.path} value={f.path}>{f.name}</option>
               ))}
@@ -180,7 +171,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
           </Field>
 
           <div>
-            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Trạng thái</div>
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Status</div>
             <div className="space-y-1.5">
               {deps.map((d) => (
                 <div key={d.label} className="flex items-center gap-2 text-sm">
@@ -195,7 +186,7 @@ export default function SettingsDrawer({ onClose }: { onClose: () => void }) {
         <div className="border-t border-neutral-800 p-4">
           <button onClick={save}
             className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500">
-            {saved ? "✓ Đã lưu" : "Lưu cấu hình"}
+            {saved ? "✓ Saved" : "Save configuration"}
           </button>
         </div>
       </div>

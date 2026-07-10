@@ -18,9 +18,9 @@ import { creditGuard, CREDIT_COST } from "../../lib/credits";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
 const GROUPS: { type: Entity["type"]; label: string }[] = [
-  { type: "character", label: "Nhân vật" },
-  { type: "location", label: "Bối cảnh" },
-  { type: "prop", label: "Đạo cụ" },
+  { type: "character", label: "Characters" },
+  { type: "location", label: "Locations" },
+  { type: "prop", label: "Props" },
 ];
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -59,7 +59,7 @@ export default function AssetsTab({
     onAdvance: load,
     onDone: (j) => {
       load();
-      if (j.errors.length) setErr(`Auto gen: ${j.done}/${j.total} xong, ${j.errors.length} lỗi.`);
+      if (j.errors.length) setErr(`Auto gen: ${j.done}/${j.total} done, ${j.errors.length} errors.`);
     },
   });
 
@@ -100,10 +100,10 @@ export default function AssetsTab({
   const autoGen = async () => {
     const todo = entities.filter((e) => !e.image_path);
     if (!todo.length) {
-      setErr("Tất cả asset đã có ảnh.");
+      setErr("All assets already have images.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh asset"))) return;
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Generate asset images"))) return;
     setErr(null);
     try {
       await api.generateAllAssets(project.id);
@@ -116,11 +116,11 @@ export default function AssetsTab({
   // (deletes existing assets incl. their reference images), so confirm first.
   const rebuildAll = async () => {
     const ok = await confirm({
-      title: "Dựng lại tất cả asset?",
+      title: "Rebuild all assets?",
       message:
-        `XOÁ toàn bộ ${entities.length} asset hiện tại (nhân vật, bối cảnh, đạo cụ — kể cả ` +
-        "ảnh tham chiếu đã tạo) rồi để AI trích xuất lại danh sách entity mới từ kịch bản.",
-      confirmText: "Xoá & trích lại",
+        `DELETE all ${entities.length} current assets (characters, locations, props — including ` +
+        "generated reference images) then let AI extract a fresh entity list from the script.",
+      confirmText: "Delete & re-extract",
       danger: true,
     });
     if (!ok) return;
@@ -137,7 +137,7 @@ export default function AssetsTab({
   };
 
   const addManual = async (type: Entity["type"]) => {
-    const name = prompt(`Tên ${type}?`);
+    const name = prompt(`Name ${type}?`);
     if (!name) return;
     wrap("add", () => api.addEntity(project.id, { type, name }));
   };
@@ -147,41 +147,41 @@ export default function AssetsTab({
       <div className="mx-auto max-w-6xl px-6 py-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Thư viện Asset</h2>
+          <h2 className="text-xl font-semibold">Asset Library</h2>
           <p className="text-sm text-neutral-400">
-            Nhân vật, bối cảnh, đạo cụ — ảnh tham chiếu cho storyboard
+            Characters, locations, props - reference images for the storyboard
           </p>
         </div>
         <div className="flex gap-2">
           <button
             disabled={!!busy}
             onClick={rebuildAll}
-            title="Xoá toàn bộ asset hiện tại rồi trích xuất lại entity mới từ kịch bản"
+            title="Delete all current assets and extract fresh entities from the script"
             className="rounded-lg border border-rose-800 px-3 py-2 text-sm text-rose-300 hover:bg-rose-950/40 disabled:opacity-40"
           >
-            {busy === "rebuild" ? "Đang trích lại…" : "↻ Dựng lại tất cả"}
+            {busy === "rebuild" ? "Re-extracting..." : "↻ Rebuild all"}
           </button>
           <button
             disabled={!!busy}
             onClick={() => setPicker({ mode: "import" })}
-            title="Dùng asset có sẵn từ dự án khác (thư viện chung)"
+            title="Use existing assets from another project (shared library)"
             className="rounded-lg border border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
           >
-            📚 Dùng từ dự án khác
+            📚 Use from another project
           </button>
           <button
             disabled={!!busy}
             onClick={() => wrap("extract", () => api.extractEntities(project.id))}
             className="rounded-lg border border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
           >
-            {busy === "extract" ? "Đang trích…" : "Trích từ kịch bản"}
+            {busy === "extract" ? "Extracting..." : "Extract from script"}
           </button>
           <button
             disabled={!!busy || !!assetsJob}
             onClick={autoGen}
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
           >
-            {assetsJob ? `Đang tạo ${assetsJob.done}/${assetsJob.total}…` : "✦ Auto gen"}
+            {assetsJob ? `Generating ${assetsJob.done}/${assetsJob.total}…` : "✦ Auto gen"}
           </button>
         </div>
       </div>
@@ -212,7 +212,7 @@ export default function AssetsTab({
                 onClick={() => addManual(g.type)}
                 className="ml-auto rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
               >
-                + Thêm
+                + Add
               </button>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -248,7 +248,7 @@ export default function AssetsTab({
               ))}
               {!items.length && (
                 <div className="col-span-full rounded-xl border border-dashed border-neutral-800 py-8 text-center text-xs text-neutral-600">
-                  Chưa có {g.label.toLowerCase()}.
+                  No {g.label.toLowerCase()}.
                 </div>
               )}
             </div>
@@ -290,10 +290,10 @@ export default function AssetsTab({
           projectId={project.id}
           title={
             picker.mode === "link"
-              ? `🔗 Tham chiếu vào "${picker.entity.name}"`
-              : "📚 Asset từ dự án khác"
+              ? `🔗 Reference "${picker.entity.name}"`
+              : "📚 Asset from another project"
           }
-          actionLabel={picker.mode === "link" ? "Tham chiếu" : "+ Dùng"}
+          actionLabel={picker.mode === "link" ? "Reference" : "+ Use"}
           onClose={() => setPicker(null)}
           onPickEntity={async (e) => {
             if (picker.mode === "link") await api.linkEntity(picker.entity.id, e.id);
@@ -350,14 +350,14 @@ function AssetCard({
         </div>
         {generating && (
           <div className="absolute inset-0 grid place-items-center bg-black/60 text-sm text-neutral-200">
-            <span className="animate-pulse">Đang tạo ảnh…</span>
+            <span className="animate-pulse">Generating images…</span>
           </div>
         )}
         <div className="absolute inset-x-1.5 top-1.5 flex flex-wrap justify-end gap-1 opacity-0 transition group-hover:opacity-100">
           {onPreview && (
             <button
               onClick={onPreview}
-              title="Phóng to"
+              title="Enlarge"
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
             >
               ⤢
@@ -375,7 +375,7 @@ function AssetCard({
             <button
               onClick={onCandidates}
               disabled={generating}
-              title="Tạo nhiều mẫu rồi chọn ảnh đẹp nhất"
+              title="Generate several variants and choose the best image"
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
             >
               🎲
@@ -384,7 +384,7 @@ function AssetCard({
           {onHistory && (
             <button
               onClick={onHistory}
-              title="Lịch sử phiên bản — khôi phục bản cũ"
+              title="Version history - restore an older version"
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
             >
               🕘
@@ -393,7 +393,7 @@ function AssetCard({
           {onLink && (
             <button
               onClick={onLink}
-              title="Tham chiếu ảnh từ asset dự án khác (giữ nguyên tên)"
+              title="Reference an image from another project asset (keep the same name)"
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-sky-600"
             >
               🔗
@@ -411,7 +411,7 @@ function AssetCard({
           {onCover && (
             <button
               onClick={onCover}
-              title="Đặt làm ảnh đại diện dự án"
+              title="Set as project cover image"
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-amber-600"
             >
               ★
@@ -419,7 +419,7 @@ function AssetCard({
           )}
           <button
             onClick={onDelete}
-            title="Xóa"
+            title="Delete"
             className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-rose-600"
           >
             🗑
@@ -437,9 +437,9 @@ function AssetCard({
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  character: "Nhân vật",
-  location: "Bối cảnh",
-  prop: "Đạo cụ",
+  character: "Characters",
+  location: "Locations",
+  prop: "Props",
 };
 
 // Picker to reuse an asset from another STUDIO project OR directly from a project on
@@ -485,8 +485,8 @@ function AssetPicker({
         <div className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
           <h3 className="font-semibold">{title}</h3>
           <div className="ml-auto flex gap-1 rounded-lg bg-neutral-900 p-1">
-            <TabBtn active={tab === "studio"} onClick={() => setTab("studio")}>Dự án Studio</TabBtn>
-            <TabBtn active={tab === "flow"} onClick={() => setTab("flow")}>Dự án Flow</TabBtn>
+            <TabBtn active={tab === "studio"} onClick={() => setTab("studio")}>Studio Projects</TabBtn>
+            <TabBtn active={tab === "flow"} onClick={() => setTab("flow")}>Flow Projects</TabBtn>
           </div>
           <button onClick={onClose} className="text-neutral-500 hover:text-neutral-300">✕</button>
         </div>
@@ -551,7 +551,7 @@ function PickCard({
         <Thumb src={src} alt={title} rounded="rounded-none" className="aspect-video w-full" />
         <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/50">
           <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
-            {busy ? "Đang xử lý…" : actionLabel}
+            {busy ? "Processing..." : actionLabel}
           </span>
         </div>
       </div>
@@ -601,18 +601,18 @@ function StudioSource({
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Tìm theo tên / dự án…"
+        placeholder="Search by name / project..."
         className="mb-4 w-72 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
       />
       {err && <p className="text-sm text-rose-300">{err}</p>}
-      {items === null && <p className="text-sm text-neutral-500">Đang tải…</p>}
+      {items === null && <p className="text-sm text-neutral-500">Loading...</p>}
       {items !== null && !filtered.length && (
-        <p className="text-sm text-neutral-500">Chưa có asset nào (dự án này lẫn dự án khác).</p>
+        <p className="text-sm text-neutral-500">No assets found in this project or other projects.</p>
       )}
       {sections.map(([proj, list]) => (
         <section key={proj} className="mb-6">
           <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
-            {proj}{isCurrent(list) ? " · dự án này" : ""}
+            {proj}{isCurrent(list) ? " · this project" : ""}
           </h4>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {list.map((e) => (
@@ -677,7 +677,7 @@ function FlowSource({
           onChange={(e) => loadMedia(e.target.value)}
           className="w-72 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
         >
-          <option value="">— chọn project —</option>
+          <option value="">-- choose project --</option>
           {(projects || []).map((p) => (
             <option key={p.flow_project_id} value={p.flow_project_id}>
               {p.title || p.flow_project_id.slice(0, 8)}
@@ -686,10 +686,10 @@ function FlowSource({
         </select>
       </div>
       {err && <p className="mb-2 text-sm text-rose-300">{err}</p>}
-      {!sel && <p className="text-sm text-neutral-500">Chọn một project Flow để xem ảnh bên trong.</p>}
-      {loadingMedia && <p className="text-sm text-neutral-500">Đang tải media…</p>}
+      {!sel && <p className="text-sm text-neutral-500">Choose a Flow project to view its images.</p>}
+      {loadingMedia && <p className="text-sm text-neutral-500">Loading media...</p>}
       {media !== null && !media.length && !loadingMedia && (
-        <p className="text-sm text-neutral-500">Không tìm thấy ảnh trong project này.</p>
+        <p className="text-sm text-neutral-500">No images found in this project.</p>
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {(media || []).map((m) => (

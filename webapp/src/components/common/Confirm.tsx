@@ -106,7 +106,7 @@ function ConfirmDialog({
             onClick={() => onClose(false)}
             className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 transition hover:bg-neutral-800"
           >
-            {opts.cancelText || "Huỷ"}
+            {opts.cancelText || "Cancel"}
           </button>
           <button
             ref={okRef}
@@ -117,7 +117,7 @@ function ConfirmDialog({
                 : "bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500"
             }`}
           >
-            {opts.confirmText || "Đồng ý"}
+            {opts.confirmText || "OK"}
           </button>
         </div>
       </div>

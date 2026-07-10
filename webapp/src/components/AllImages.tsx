@@ -15,7 +15,7 @@ export default function AllImages({ project }: { project: Project }) {
   const sync = async () => {
     if (
       !window.confirm(
-        "Đồng bộ với Flow: media nào đã bị xoá trên Flow sẽ bị gỡ khỏi entity / shot / lịch sử và xoá file local. Tiếp tục?"
+        "Sync with Flow: any media deleted on Flow will be removed from entities / shots / history and deleted locally. Continue?"
       )
     )
       return;
@@ -27,10 +27,10 @@ export default function AllImages({ project }: { project: Project }) {
       const rm = r.removed;
       setSyncMsg(
         r.total_removed === 0
-          ? `Đã đồng bộ — mọi media còn trên Flow (${r.flow_media}). Không có gì để xoá.`
-          : `Đã gỡ ${r.total_removed} media đã xoá trên Flow: ` +
-              `${rm.entities.length} ảnh asset, ${rm.shot_images.length} ảnh shot, ` +
-              `${rm.shot_videos.length} video shot, ${rm.extra_views} view phụ, ${rm.history} lịch sử.`
+          ? `Synced — all media still present on Flow (${r.flow_media}). Nothing to delete.`
+          : `Removed ${r.total_removed} media deleted on Flow: ` +
+              `${rm.entities.length} asset images, ${rm.shot_images.length} shot images, ` +
+              `${rm.shot_videos.length} shot videos, ${rm.extra_views} extra views, ${rm.history} history items.`
       );
       load();
     } catch (e: any) {
@@ -44,7 +44,7 @@ export default function AllImages({ project }: { project: Project }) {
     setItems(null);
     setErr(null);
     if (!project.flow_project_id) {
-      setErr("Dự án chưa gắn với project trên Flow.");
+      setErr("The project is not linked to a Flow project yet.");
       setItems([]);
       return;
     }
@@ -64,31 +64,31 @@ export default function AllImages({ project }: { project: Project }) {
       <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-5 flex flex-wrap items-center gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Tất cả ảnh</h1>
+            <h1 className="text-2xl font-semibold">All images</h1>
             <p className="text-sm text-neutral-400">
               {items === null
-                ? "Đang quét ảnh của dự án…"
-                : `${filtered.length}/${items.length} ảnh · ${project.title}`}
+                ? "Scanning project images..."
+                : `${filtered.length}/${items.length} images · ${project.title}`}
             </p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm theo tên ảnh…"
+              placeholder="Search by image name..."
               className="w-64 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
             />
             <button
               onClick={sync}
               disabled={syncing || !project.flow_project_id}
-              title="Đồng bộ với Flow — gỡ media đã bị xoá trên Flow khỏi local"
+              title="Sync with Flow - remove local media deleted on Flow"
               className="rounded-lg border border-amber-700/60 px-3 py-1.5 text-sm text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
             >
-              {syncing ? "Đang đồng bộ…" : "⇄ Đồng bộ Flow"}
+              {syncing ? "Syncing..." : "⇄ Sync Flow"}
             </button>
             <button
               onClick={load}
-              title="Tải lại"
+              title="Refresh"
               className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm hover:bg-neutral-800"
             >
               ↻
@@ -107,11 +107,11 @@ export default function AllImages({ project }: { project: Project }) {
           </div>
         )}
         {items === null && (
-          <div className="py-16 text-center text-sm text-neutral-500">Đang tải ảnh của dự án…</div>
+          <div className="py-16 text-center text-sm text-neutral-500">Loading project images...</div>
         )}
         {items !== null && !filtered.length && !err && (
           <div className="rounded-2xl border border-dashed border-neutral-800 py-16 text-center text-neutral-500">
-            Không có ảnh nào khớp.
+            No matching images.
           </div>
         )}
 

@@ -25,7 +25,7 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
 - `agent/api/flow.py` — all `/api/flow/*` endpoints
 - `agent/api/tts.py` — `/api/tts/*` proxy to the OmniVoice server on Google Colab
   (set the rotating Colab URL via `PUT /api/tts/config` or `OMNIVOICE_BASE_URL`)
-- `agent/api/ai_agent.py` — `/api/agent/*` runs coding-agent CLIs (Claude Code,
+- `agent/api/ai_agent.py` — `/api/agent/*` runs coding-agent CLIs (Codex, Claude Code,
   Antigravity) headless as subprocesses. Registry in `config.py` (`AI_AGENTS`),
   env-overridable. Defaults to bypassing CLI permissions — local-only.
 - `agent/services/flow_client.py` — relays requests to the extension over WS

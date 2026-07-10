@@ -153,7 +153,7 @@ export default function ScreenplayPreview({ script }: { script: string }) {
         style={{ fontFamily: '"Courier Prime", "Courier New", ui-monospace, monospace', paddingBottom: 200 }}
       >
         {empty ? (
-          <p className="py-16 text-center text-neutral-400">Chưa có kịch bản để hiển thị.</p>
+          <p className="py-16 text-center text-neutral-400">No script to display.</p>
         ) : (
           blocks.map((b, i) => <BlockView key={i} b={b} />)
         )}

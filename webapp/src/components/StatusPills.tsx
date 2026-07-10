@@ -52,7 +52,7 @@ export default function StatusPills() {
   return (
     <div className="flex items-center gap-2">
       {tier && (
-        <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300" title="Paygate tier (từ Flow credits)">
+        <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300" title="Paygate tier (from Flow credits)">
           {tier.replace("PAYGATE_TIER_", "Tier ")}
         </span>
       )}

@@ -72,7 +72,7 @@ export default function StoryboardTab({
   const [history, setHistory] = useState<Shot | null>(null);
   const confirm = useConfirm();
   const { jobFor } = useJobs();
-  // Scenes currently being rebuilt by a per-scene "Lời đọc" job (shots cleared optimistically).
+  // Scenes currently being rebuilt by a per-scene narration job (shots cleared optimistically).
   const [rebuilding, setRebuilding] = useState<Set<string>>(new Set());
   // Scenes currently having their camera angles re-varied (per-scene 🎬).
   const [revarying, setRevarying] = useState<Set<string>>(new Set());
@@ -88,7 +88,7 @@ export default function StoryboardTab({
     try {
       await api.setCover(project.id, shot.image_media_id);
       onCoverSet?.(shot.image_media_id);
-      setNotice(`Đã đặt "${shot.title}" làm ảnh đại diện dự án`);
+      setNotice(`Set "${shot.title}" as project cover image`);
       setTimeout(() => setNotice(null), 2500);
     } catch (e: any) {
       setErr(e.message);
@@ -153,10 +153,10 @@ export default function StoryboardTab({
   const sceneAll = async (sid: string) => {
     const todo = (shotsByScene[sid] || []).filter((s) => !s.image_path);
     if (!todo.length) {
-      setErr("Mọi frame trong scene đã có ảnh.");
+      setErr("Every frame in this scene already has images.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Generate storyboard images"))) return;
     setErr(null);
     try {
       await storyboard.genSceneAll(sid);
@@ -166,20 +166,20 @@ export default function StoryboardTab({
   };
 
   // Rebuild ONE scene by its narration (TTS) — the escape hatch when the project-wide
-  // "Dựng theo lời đọc" misses a scene (so you don't fall back to a silent Autofill).
+  // "Build from narration" misses a scene (so you don't fall back to a silent Autofill).
   const buildSceneBeats = async (sid: string) => {
     const ok = await confirm({
-      title: "Dựng lại scene này theo lời đọc?",
+      title: "Rebuild this scene from narration?",
       message:
-        "Đọc (TTS) phần nội dung gốc của RIÊNG scene này, đo thời lượng và cắt beat bám " +
-        "đúng audio. Thao tác này XOÁ các shot hiện tại của scene.",
-      confirmText: "Dựng theo lời đọc",
+        "Read (TTS) this scene's own source content, measure duration, and cut beats that follow " +
+        "the audio. This will DELETE the current shots in this scene.",
+      confirmText: "Build from narration",
       danger: true,
     });
     if (!ok) return;
     setErr(null);
     // Optimistic: clear this scene's shots right away so the delete is visible, and mark
-    // it "đang dựng" — the background job streams state to the banner; the "beats" watcher
+    // mark it as building; the background job streams state to the banner; the "beats" watcher
     // reloads shots + scene meta when it finishes.
     setShotsByScene((m) => ({ ...m, [sid]: [] }));
     setRebuilding((s) => new Set(s).add(sid));
@@ -196,7 +196,7 @@ export default function StoryboardTab({
     }
   };
 
-  // Play / stop a scene's narration WAV (nghe thử).
+  // Play / stop a scene's narration WAV.
   const toggleAudio = (sc: Scene) => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -210,14 +210,14 @@ export default function StoryboardTab({
     a.onended = () => setPlaying(null);
     a.onerror = () => {
       setPlaying(null);
-      setErr("Không phát được audio scene.");
+      setErr("Could not play scene audio.");
     };
     void a.play();
     audioRef.current = a;
     setPlaying(sc.id);
   };
 
-  // Play / stop ONE shot's slice of the scene WAV (nghe thử lời đọc của shot này).
+  // Play / stop ONE shot's slice of the scene WAV.
   // The scene WAV concatenates all beats; this shot starts at sh.start_time and runs
   // for sh.narration_duration (read + trailing gap), so we seek + stop at the boundary.
   const toggleShotAudio = (sc: Scene, sh: Shot) => {
@@ -246,7 +246,7 @@ export default function StoryboardTab({
     a.onended = stop;
     a.onerror = () => {
       stop();
-      setErr("Không phát được audio shot.");
+      setErr("Could not play shot audio.");
     };
     void a.play();
     audioRef.current = a;
@@ -262,7 +262,7 @@ export default function StoryboardTab({
     return { measured, dur, hasNarr };
   };
 
-  // ── Reorder (kéo-thả / mũi tên) ──
+  // Reorder (drag-and-drop / arrow buttons).
   const dragShot = useRef<{ sceneId: string; id: string } | null>(null);
 
   const moveScene = async (pos: number, dir: -1 | 1) => {
@@ -318,11 +318,11 @@ export default function StoryboardTab({
     onAdvance: reloadAll,
     onDone: (j) => {
       reloadAll();
-      if (j.errors.length) setErr(`Auto gen ảnh: ${j.done}/${j.total} xong, ${j.errors.length} lỗi.`);
+      if (j.errors.length) setErr(`Auto gen images: ${j.done}/${j.total} done, ${j.errors.length} errors.`);
     },
   });
 
-  // Storytelling "Dựng theo lời đọc" runs as a job too (TTS is slow). Reload shots scene
+  // Storytelling "Build from narration" runs as a job too (TTS is slow). Reload shots scene
   // by scene as each is rebuilt, and announce the result.
   const beatsJob = jobFor("beats");
   // Refetch scenes too so narration badges (🎙 / ⏱) update after a beats run.
@@ -340,15 +340,15 @@ export default function StoryboardTab({
       refreshScenes();
       setRebuilding(new Set());
       if (j.errors.length) {
-        setErr(`Dựng lời đọc: ${j.done}/${j.total} scene xong, ${j.errors.length} lỗi.`);
+        setErr(`Build narration: ${j.done}/${j.total} scenes done, ${j.errors.length} errors.`);
       } else {
-        setNotice(`Đã dựng lời đọc + beats cho ${j.done}/${j.total} scene.`);
+        setNotice(`Built narration + beats for ${j.done}/${j.total} scene.`);
         setTimeout(() => setNotice(null), 6000);
       }
     },
   });
 
-  // "Đa dạng góc máy": rewrites shot descriptions only (keeps audio) → regen images after.
+  // "Vary camera angles": rewrites shot descriptions only (keeps audio) → regen images after.
   const revaryJob = jobFor("revary");
   useJobWatcher("revary", {
     onAdvance: reloadAll,
@@ -356,9 +356,9 @@ export default function StoryboardTab({
       reloadAll();
       setRevarying(new Set());
       if (j.errors.length) {
-        setErr(`Đa dạng góc máy: ${j.done}/${j.total} scene xong, ${j.errors.length} lỗi.`);
+        setErr(`Vary camera angles: ${j.done}/${j.total} scenes done, ${j.errors.length} errors.`);
       } else {
-        setNotice(`Đã đổi góc máy cho ${j.done}/${j.total} scene — bấm “Auto gen all” để vẽ lại ảnh.`);
+        setNotice(`Changed camera angles for ${j.done}/${j.total} scene — click "Auto gen all" to redraw images.`);
         setTimeout(() => setNotice(null), 8000);
       }
     },
@@ -403,7 +403,7 @@ export default function StoryboardTab({
             : s
         )
       );
-      setNotice(`Đã tạo lại audio (${Math.round(r.scene_duration)}s) — đã căn lại thời gian & caption`);
+      setNotice(`Regenerated audio (${Math.round(r.scene_duration)}s) — timing & captions updated`);
       setTimeout(() => setNotice(null), 3500);
     } catch (e: any) {
       setErr(e.message);
@@ -432,13 +432,13 @@ export default function StoryboardTab({
   // Storytelling (§2.6): TTS each scene as ONE continuous read first, then map beats.
   const buildBeats = async () => {
     const ok = await confirm({
-      title: "Dựng shots theo lời đọc?",
+      title: "Build shots from narration?",
       message:
-        "Mỗi scene được đọc (TTS) liền mạch MỘT lần để giữ cảm xúc, rồi cắt thành beat " +
-        "(1 cảnh) bám đúng thời điểm audio; từ khoá quan trọng được canh giờ để hiện chữ " +
-        "lên video. Cần BẬT OmniVoice (TTS); nếu tắt sẽ ước lượng theo số từ.\n\n" +
-        "Thao tác này XOÁ các shot hiện tại.",
-      confirmText: "Dựng theo lời đọc",
+        "Each scene is read once continuously by TTS to preserve emotion, then split into beats " +
+        "(1 image) aligned to the audio timing; important keywords are timed to appear as text " +
+        "on the video. Requires OmniVoice (TTS) to be enabled; otherwise duration is estimated from word count.\n\n" +
+        "This will DELETE the current shots.",
+      confirmText: "Build from narration",
       danger: true,
     });
     if (!ok) return;
@@ -453,14 +453,14 @@ export default function StoryboardTab({
   };
 
   // Re-align the source prose to scenes by CONTENT (fixes narration landing in the wrong
-  // scene). Doesn't touch shots/audio — you rebuild "Dựng theo lời đọc" after.
+  // scene). Doesn't touch shots/audio — you rebuild "Build from narration" after.
   const alignSource = async () => {
     const ok = await confirm({
-      title: "Căn lại nội dung vào đúng scene?",
+      title: "Realign content to the right scene?",
       message:
-        "Dùng AI gán lại từng đoạn của nội dung gốc vào scene khớp bối cảnh của nó (theo " +
-        "heading/địa điểm), thay cho cách chia đều theo độ dài. Sau đó hãy 'Dựng theo lời đọc' lại.",
-      confirmText: "Căn lại nội dung",
+        "Use AI to assign each source-content segment to the scene whose context matches it (by " +
+        "heading/location), instead of splitting evenly by length. Then run 'Build from narration' again.",
+      confirmText: "Realign content",
     });
     if (!ok) return;
     setBusy("align");
@@ -475,15 +475,15 @@ export default function StoryboardTab({
   };
 
   // Split ONE over-long scene into ~90s sub-scenes (same location) so each gets its own
-  // coherent shot plan. Clears the scene's shots — rebuild after with "Dựng theo lời đọc".
+  // coherent shot plan. Clears the scene's shots — rebuild after with "Build from narration".
   const splitScene = async (sc: Scene) => {
     const ok = await confirm({
-      title: "Tách scene dài này?",
+      title: "Split this long scene?",
       message:
-        "Chia scene thành nhiều scene ngắn (~90s) THEO THỜI LƯỢNG, GIỮ NGUYÊN địa điểm. " +
-        "Các shot hiện tại của scene sẽ bị xoá — sau đó bấm 'Dựng theo lời đọc' để dựng lại. " +
-        "Dùng khi cả chương bị gộp thành 1 scene / shot quá dài.",
-      confirmText: "Tách scene",
+        "Split the scene into multiple short scenes (~90s) BY DURATION, KEEPING the same location. " +
+        "The current scene shots will be deleted - afterward click 'Build from narration' to rebuild again. " +
+        "Use when a whole chapter was merged into one scene / very long shot.",
+      confirmText: "Split scene",
       danger: true,
     });
     if (!ok) return;
@@ -492,7 +492,7 @@ export default function StoryboardTab({
     try {
       const r = await storyboard.splitScene(sc.id);
       await reloadAll();
-      setNotice(`Đã tách thành ${r.split_into} scene (cùng địa điểm) — hãy 'Dựng theo lời đọc' lại.`);
+      setNotice(`Split into ${r.split_into} scenes (same location) — please 'Build from narration' again.`);
       setTimeout(() => setNotice(null), 4000);
     } catch (e: any) {
       setErr(e.message);
@@ -505,10 +505,10 @@ export default function StoryboardTab({
   // shots (incl. manual edits) and re-splits via AI. Confirm because it's destructive.
   const rebuildAll = async () => {
     const ok = await confirm({
-      title: "Dựng lại tất cả shots từ kịch bản?",
+      title: "Rebuild all shots from the script?",
       message:
-        "Thao tác này XOÁ các shot hiện tại (kể cả prompt/ảnh đã chỉnh tay) và để AI tách lại từ script.",
-      confirmText: "Dựng lại tất cả",
+        "This DELETES the current shots (including manually edited prompts/images) and lets AI split them again from the script.",
+      confirmText: "Rebuild all",
       danger: true,
     });
     if (!ok) return;
@@ -517,7 +517,7 @@ export default function StoryboardTab({
     try {
       const r = await storyboard.autofillAll(project.id, undefined, true);
       await reloadAll();
-      setNotice(`Đã dựng lại shots cho ${r.done}/${r.requested} scene`);
+      setNotice(`Rebuilt shots for ${r.done}/${r.requested} scene`);
       setTimeout(() => setNotice(null), 3000);
     } catch (e: any) {
       setErr(e.message);
@@ -530,10 +530,10 @@ export default function StoryboardTab({
   const projectAll = async () => {
     const todo = scenes.flatMap((sc) => (shotsByScene[sc.id] || []).filter((s) => !s.image_path));
     if (!todo.length) {
-      setErr("Mọi frame đã có ảnh.");
+      setErr("Every frame already has images.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
+    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Generate storyboard images"))) return;
     setErr(null);
     try {
       await storyboard.genProjectAll(project.id);
@@ -548,67 +548,67 @@ export default function StoryboardTab({
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">Storyboard</h2>
-            <p className="text-sm text-neutral-500">Ảnh từng frame theo scene</p>
+            <p className="text-sm text-neutral-500">Frame images by scene</p>
           </div>
           <div className="flex gap-2">
             <button
               disabled={!!busy || !scenes.length}
               onClick={autofillAll}
-              title="Autofill các scene CHƯA có shot (bỏ qua scene đã có)"
+              title="Autofill scenes that DO NOT have shots yet (skip scenes that already do)"
               className="rounded-lg border border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
             >
-              {busy === "autofill-all" ? "Đang autofill…" : "✨ Autofill all"}
+              {busy === "autofill-all" ? "Autofilling..." : "✨ Autofill all"}
             </button>
             <button
               disabled={!!busy || !scenes.length}
               onClick={rebuildAll}
-              title="Dựng lại shots từ kịch bản cho MỌI scene (xóa shot cũ)"
+              title="Rebuild shots from the script for EVERY scene (deletes old shots)"
               className="rounded-lg border border-amber-700/60 px-3 py-2 text-sm text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
             >
-              {busy === "rebuild-all" ? "Đang dựng lại…" : "↻ Dựng lại tất cả"}
+              {busy === "rebuild-all" ? "Rebuilding..." : "↻ Rebuild all"}
             </button>
             {!!project.storytelling && (
               <>
                 <button
                   disabled={!!busy || !!beatsJob || !scenes.length}
                   onClick={alignSource}
-                  title="Căn nội dung gốc vào đúng scene theo bối cảnh (sửa lệch nội dung giữa các scene). Sau đó dựng lại theo lời đọc."
+                  title="Align source content to the correct scene by context (fixes content drift between scenes). Then rebuild from narration."
                   className="rounded-lg border border-sky-700/60 px-3 py-2 text-sm text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
                 >
-                  {busy === "align" ? "Đang căn nội dung…" : "🧭 Căn nội dung scene"}
+                  {busy === "align" ? "Aligning content..." : "🧭 Align scene content"}
                 </button>
                 <button
                   disabled={!!busy || !!beatsJob || !scenes.length}
                   onClick={buildBeats}
-                  title="Storytelling: dựng shots theo độ dài lời đọc (beat audio-driven)"
+                  title="Storytelling: build shots by narration duration (audio-driven beats)"
                   className="rounded-lg border border-violet-700/60 px-3 py-2 text-sm text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
                 >
-                  {beatsJob ? `Đang dựng beat ${beatsJob.done}/${beatsJob.total}…` : "🎙 Dựng theo lời đọc"}
+                  {beatsJob ? `Building beat ${beatsJob.done}/${beatsJob.total}…` : "🎙 Build from narration"}
                 </button>
               </>
             )}
             <button
               disabled={!!busy || !!revaryJob || !scenes.length}
               onClick={revaryAll}
-              title="Đổi/đa dạng góc máy cho mọi shot (giữ nguyên lời đọc & thời lượng — KHÔNG chạy lại TTS). Xong rồi bấm Auto gen all để vẽ lại ảnh."
+              title="Vary camera angles for every shot (keep narration & duration - does NOT rerun TTS). Then click Auto gen all to redraw images."
               className="rounded-lg border border-teal-700/60 px-3 py-2 text-sm text-teal-300 hover:bg-teal-950/40 disabled:opacity-40"
             >
-              {revaryJob ? `Đổi góc ${revaryJob.done}/${revaryJob.total}…` : "🎬 Đa dạng góc máy"}
+              {revaryJob ? `Changing angles ${revaryJob.done}/${revaryJob.total}…` : "🎬 Vary camera angles"}
             </button>
             <button
               onClick={() => downloadFile(storyboardExportUrl(project.id), "storyboard.zip")}
-              title="Tải toàn bộ ảnh storyboard (.zip, scXXX-sXXX-mô-tả.png)"
+              title="Download all storyboard images (.zip, scXXX-sXXX-description.png)"
               className="rounded-lg border border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-800"
             >
-              ⬇ Export ảnh
+              ⬇ Export images
             </button>
             <button
               disabled={!!busy || !!imgJob || !scenes.length}
               onClick={projectAll}
-              title="Tạo ảnh cho mọi frame chưa có ảnh trong dự án"
+              title="Generate images for every frame still missing one in the project"
               className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
             >
-              {imgJob ? `Đang tạo ${imgJob.done}/${imgJob.total}…` : "✦ Auto gen all"}
+              {imgJob ? `Generating ${imgJob.done}/${imgJob.total}…` : "✦ Auto gen all"}
             </button>
           </div>
         </div>
@@ -630,7 +630,7 @@ export default function StoryboardTab({
         )}
         {!scenes.length && (
           <div className="rounded-xl border border-dashed border-neutral-800 py-12 text-center text-sm text-neutral-500">
-            Chưa có scene — tạo kịch bản ở tab Script trước.
+            No scenes yet - create a script in the Script tab first.
           </div>
         )}
         {scenes.map((sc, scenePos) => {
@@ -647,14 +647,14 @@ export default function StoryboardTab({
                   if (!a.hasNarr) return null;
                   return a.measured ? (
                     <span
-                      title="Scene có audio lời đọc (TTS) thật — thời lượng đo từ giọng đọc"
+                      title="Scene has real narration audio (TTS) - duration measured from the voice"
                       className="rounded bg-emerald-900/50 px-1.5 py-0.5 text-[11px] text-emerald-300"
                     >
                       🎙 {Math.round(a.dur)}s
                     </span>
                   ) : (
                     <span
-                      title="Chưa có audio TTS — thời lượng đang ƯỚC LƯỢNG theo số từ. Bấm 🎙 Lời đọc để tạo audio thật."
+                      title="No TTS audio yet - duration is ESTIMATED from word count. Click Narration to create real audio."
                       className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[11px] text-amber-300"
                     >
                       ⏱ ~{Math.round(a.dur)}s
@@ -664,7 +664,7 @@ export default function StoryboardTab({
                 {sc.narration_path && (
                   <button
                     onClick={() => toggleAudio(sc)}
-                    title="Nghe thử lời đọc của scene"
+                    title="Preview scene narration"
                     className="grid h-6 w-6 place-items-center rounded text-emerald-300 hover:bg-emerald-950/40"
                   >
                     {playing === sc.id ? "⏸" : "▶"}
@@ -674,7 +674,7 @@ export default function StoryboardTab({
                   <button
                     disabled={scenePos === 0 || !!busy}
                     onClick={() => moveScene(scenePos, -1)}
-                    title="Đưa scene lên"
+                    title="Move scene up"
                     className="grid h-6 w-6 place-items-center rounded text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
                   >
                     ▲
@@ -682,7 +682,7 @@ export default function StoryboardTab({
                   <button
                     disabled={scenePos === scenes.length - 1 || !!busy}
                     onClick={() => moveScene(scenePos, 1)}
-                    title="Đưa scene xuống"
+                    title="Move scene down"
                     className="grid h-6 w-6 place-items-center rounded text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
                   >
                     ▼
@@ -692,10 +692,10 @@ export default function StoryboardTab({
                   <button
                     disabled={!!busy}
                     onClick={() => splitScene(sc)}
-                    title="Tách scene dài này thành nhiều scene ~90s (GIỮ địa điểm) — khi cả chương bị gộp 1 scene / shot quá dài. Xoá shot hiện tại, dựng lại sau."
+                    title="Split this long scene into multiple ~90s scenes (KEEP location) when a whole chapter was merged into one scene / very long shot. Deletes current shots; rebuild afterward."
                     className="rounded-md border border-amber-700/60 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
                   >
-                    {busy === "split:" + sc.id ? "Đang tách…" : "✂ Tách scene"}
+                    {busy === "split:" + sc.id ? "Splitting..." : "✂ Split scene"}
                   </button>
                   <button
                     disabled={!!busy}
@@ -708,29 +708,29 @@ export default function StoryboardTab({
                     <button
                       disabled={!!busy || !!beatsJob}
                       onClick={() => buildSceneBeats(sc.id)}
-                      title="Dựng lại CHỈ scene này theo lời đọc (TTS) — dùng khi scene bị bỏ sót / chưa có audio"
+                      title="Rebuild ONLY this scene from narration (TTS) - use when a scene was skipped / has no audio"
                       className="rounded-md border border-violet-700/60 px-2.5 py-1 text-xs text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
                     >
-                      {rebuilding.has(sc.id) ? "Đang dựng…" : "🎙 Lời đọc"}
+                      {rebuilding.has(sc.id) ? "Building..." : "🎙 Narration"}
                     </button>
                   )}
                   {!!project.storytelling && !!shots.length && (
                     <button
                       disabled={!!busy || !!beatsJob || rebuildingAudio.has(sc.id)}
                       onClick={() => rebuildAudio(sc.id)}
-                      title="Tạo LẠI audio cho scene này từ lời đọc hiện có của các shot (GIỮ ảnh đã tạo), rồi căn lại thời gian & caption. Dùng khi đổi tốc độ/khoảng nghỉ/đệm 2 đầu mà không muốn vẽ lại ảnh."
+                      title="Regenerate audio for this scene from existing shot narration (KEEP generated images), then update timing & captions. Use after changing speed/pauses/padding without redrawing images."
                       className="rounded-md border border-sky-700/60 px-2.5 py-1 text-xs text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
                     >
-                      {rebuildingAudio.has(sc.id) ? "Đang tạo audio…" : "🔊 Tạo lại audio"}
+                      {rebuildingAudio.has(sc.id) ? "Generating audio…" : "🔊 Regenerate audio"}
                     </button>
                   )}
                   <button
                     disabled={!!busy || !!revaryJob || !shots.length}
                     onClick={() => revaryScene(sc.id)}
-                    title="Đổi/đa dạng góc máy cho các shot của scene này (giữ lời đọc — không chạy lại TTS). Xong bấm Auto gen để vẽ lại ảnh."
+                    title="Vary camera angles for this scene's shots (keep narration - does not rerun TTS). Then click Auto gen to redraw images."
                     className="rounded-md border border-teal-700/60 px-2.5 py-1 text-xs text-teal-300 hover:bg-teal-950/40 disabled:opacity-40"
                   >
-                    {revarying.has(sc.id) ? "Đổi góc…" : "🎬 Góc máy"}
+                    {revarying.has(sc.id) ? "Changing angles…" : "🎬 Angles"}
                   </button>
                   <button
                     disabled={!!busy || !!imgJob || !shots.length}
@@ -744,7 +744,7 @@ export default function StoryboardTab({
               {rebuilding.has(sc.id) && (
                 <div className="mb-3 flex items-center gap-2 rounded-lg border border-violet-800/60 bg-violet-950/30 px-3 py-2 text-sm text-violet-300">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-violet-400" />
-                  🎙 Đang đọc (TTS) & dựng beat cho scene này… (xem tiến độ ở góc phải)
+                  🎙 Reading (TTS) & building beats for this scene... (see progress at bottom right)
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -759,7 +759,7 @@ export default function StoryboardTab({
                       e.preventDefault();
                       dropShot(sc.id, sh.id);
                     }}
-                    title="Kéo để đổi thứ tự shot"
+                    title="Drag to reorder shot"
                   >
                   {(sh.narrator_text || sh.narration_duration != null) &&
                     (sc.narration_path ? (
@@ -770,8 +770,8 @@ export default function StoryboardTab({
                           toggleShotAudio(sc, sh);
                         }}
                         title={
-                          (sh.narrator_text ? `Lời đọc: "${sh.narrator_text}"\n` : "") +
-                          `Nghe thử shot này (${(sh.narration_duration || 0).toFixed(1)}s)`
+                          (sh.narrator_text ? `Narration: "${sh.narrator_text}"\n` : "") +
+                          `Preview this shot (${(sh.narration_duration || 0).toFixed(1)}s)`
                         }
                         className={`absolute left-1.5 top-1.5 z-10 flex items-center gap-1 rounded px-1 py-0.5 text-[10px] transition-colors ${
                           playing === sh.id
@@ -784,8 +784,8 @@ export default function StoryboardTab({
                     ) : (
                       <span
                         title={
-                          (sh.narrator_text ? `Lời đọc: "${sh.narrator_text}"\n` : "") +
-                          `Ước lượng ${(sh.narration_duration || 0).toFixed(1)}s — chưa có audio thật`
+                          (sh.narrator_text ? `Narration: "${sh.narrator_text}"\n` : "") +
+                          `Estimated ${(sh.narration_duration || 0).toFixed(1)}s — no real audio yet`
                         }
                         className="absolute left-1.5 top-1.5 z-10 rounded bg-amber-600/80 px-1 py-0.5 text-[10px] text-white"
                       >
@@ -799,7 +799,7 @@ export default function StoryboardTab({
                     subtitle={sh.description}
                     selected={sel?.id === sh.id}
                     busy={gening.has(sh.id)}
-                    busyLabel="Đang tạo ảnh…"
+                    busyLabel="Generating images…"
                     onClick={() => setSel(sh)}
                     onPreview={sh.image_path ? () => setLightbox(sh) : undefined}
                     onEdit={
@@ -825,7 +825,7 @@ export default function StoryboardTab({
                             e.stopPropagation();
                             genImage(sh);
                           }}
-                          title="Gen nhanh"
+                          title="Quick gen"
                           className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
                         >
                           ⚡
@@ -835,7 +835,7 @@ export default function StoryboardTab({
                             e.stopPropagation();
                             setCandidate(sh);
                           }}
-                          title="Tạo nhiều mẫu rồi chọn ảnh đẹp nhất"
+                          title="Generate several variants and choose the best image"
                           className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
                         >
                           🎲
@@ -846,7 +846,7 @@ export default function StoryboardTab({
                               e.stopPropagation();
                               setHistory(sh);
                             }}
-                            title="Lịch sử phiên bản — khôi phục bản cũ"
+                            title="Version history - restore an older version"
                             className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
                           >
                             🕘
@@ -861,7 +861,7 @@ export default function StoryboardTab({
                                 `sc${pad3(sc.idx)}-s${pad3(sh.idx)}-${slug(sh.description || sh.title)}.png`
                               );
                             }}
-                            title="Tải ảnh này"
+                            title="Download this image"
                             className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-emerald-600"
                           >
                             ⬇
@@ -873,7 +873,7 @@ export default function StoryboardTab({
                               e.stopPropagation();
                               setAsCover(sh);
                             }}
-                            title="Đặt làm ảnh đại diện dự án"
+                            title="Set as project cover image"
                             className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-amber-600"
                           >
                             ★
@@ -885,7 +885,7 @@ export default function StoryboardTab({
                             await storyboard.deleteShot(sh.id);
                             loadShots(sc.id);
                           }}
-                          title="Xóa"
+                          title="Delete"
                           className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-rose-600"
                         >
                           🗑
@@ -1019,7 +1019,7 @@ function FramePanel({
       </div>
       <div className="flex-1 space-y-4 overflow-auto p-4">
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Tiêu đề</label>
+          <label className="mb-1 block text-xs text-neutral-400">Title</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -1028,7 +1028,7 @@ function FramePanel({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Mô tả (dùng {"{Tên}"} để gắn ref)</label>
+          <label className="mb-1 block text-xs text-neutral-400">Description (use {"{Name}"} to attach a ref)</label>
           <textarea
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
@@ -1056,7 +1056,7 @@ function FramePanel({
                 <span className="ml-auto text-xs text-neutral-600">{e.type}</span>
               </label>
             ))}
-            {!entities.length && <p className="text-xs text-neutral-600">Chưa có asset.</p>}
+            {!entities.length && <p className="text-xs text-neutral-600">No asset.</p>}
           </div>
         </div>
       </div>
@@ -1069,15 +1069,15 @@ function FramePanel({
           disabled={generating}
           className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
-          {generating ? "Đang tạo ảnh…" : "Create image"}
+          {generating ? "Generating images…" : "Create image"}
         </button>
         <button
           onClick={onCover}
           disabled={!shot.image_media_id}
-          title={shot.image_media_id ? "" : "Tạo ảnh cho frame này trước"}
+          title={shot.image_media_id ? "" : "Generate the frame image first"}
           className="w-full rounded-lg border border-amber-700/60 py-2 text-sm text-amber-300 hover:bg-amber-950/40 disabled:opacity-40"
         >
-          ★ Đặt làm ảnh đại diện dự án
+          ★ Set as project cover image
         </button>
       </div>
     </aside>

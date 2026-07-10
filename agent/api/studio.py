@@ -272,8 +272,9 @@ async def options():
     """Lựa chọn cho Settings: models, styles, aspect, tiers, voices, agents."""
     voices, agents = [], []
     try:
-        from agent.api.tts import _proxy
-        voices = await _proxy("GET", "/api/voices/list", timeout=10.0)
+        from agent.api.tts import list_voices
+        res = await list_voices()
+        voices = res.get("voices", [])
     except Exception:
         voices = []
     try:
@@ -1455,18 +1456,17 @@ def _concat_wav_bytes(chunks: list[bytes], dest) -> None:
         for f in frames:
             out.writeframes(f)
 
-
 async def _tts_one(text: str, voice_id: int, speed: float = 1.0) -> bytes:
+    logger.info(f"tts_one: text={text}, voice_id={voice_id}")
+    if voice_id is None:
+        logger.error("voice_id is None in _tts_one!")
+    ...
+
     """ONE TTS call for the whole text → WAV bytes. A single continuous read keeps the
     narration's emotion (no seams from stitching many short clips)."""
     import base64
-    from agent.api.tts import _proxy
-    res = await _proxy("POST", "/api/tts",
-                       json={"text": text, "voice_id": voice_id, "speed": speed},
-                       timeout=600.0)
-    b64 = res.get("audio") if isinstance(res, dict) else None
-    if not b64:
-        raise HTTPException(502, "OmniVoice không trả audio")
+    from agent.api.tts import elevenlabs_synthesize
+    b64 = await elevenlabs_synthesize(text, str(voice_id), speed=speed)
     return base64.b64decode(b64)
 
 
@@ -1475,15 +1475,12 @@ async def _tts_segments(text: str, voice_id: int, speed: float = 1.0) -> list[by
     bytes (re-joined by the caller). Used when a single-shot read fails (e.g. text too long
     for the engine); per-scene narration prefers `_tts_one` to stay emotionally continuous."""
     import base64
-    from agent.api.tts import _proxy
+    from agent.api.tts import elevenlabs_synthesize
     out = []
     for seg in (vntext.split_segments(text) or [text]):
-        res = await _proxy("POST", "/api/tts",
-                           json={"text": seg, "voice_id": voice_id, "speed": speed},
-                           timeout=600.0)
-        b64 = res.get("audio") if isinstance(res, dict) else None
+        b64 = await elevenlabs_synthesize(seg, str(voice_id), speed=speed)
         if not b64:
-            raise HTTPException(502, "OmniVoice không trả audio")
+            raise HTTPException(502, "ElevenLabs không trả audio")
         out.append(base64.b64decode(b64))
     return out
 
