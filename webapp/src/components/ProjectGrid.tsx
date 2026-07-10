@@ -252,6 +252,7 @@ function CreateModal({
     try {
       const project = await api.createProject({ title, aspect_ratio: aspect, style, storytelling,
         script_lang: scriptLang.trim() || "English" });
+      onClose();
       onCreated(project);
     } catch (e: any) {
       setErr(e.message);
