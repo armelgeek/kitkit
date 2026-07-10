@@ -5,7 +5,7 @@
 
 ## Tasks
 
-- [ ] Task 1: WorkflowContext
+- [x] Task 1: WorkflowContext (c03d0ee, 18 tests passing)
 - [ ] Task 2: Sidebar
 - [ ] Task 3: Step1Setup
 - [ ] Task 4: Step2ReviewScreenplay
