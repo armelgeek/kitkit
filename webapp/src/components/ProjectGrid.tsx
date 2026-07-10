@@ -80,16 +80,16 @@ export default function ProjectGrid({ onOpen }: Props) {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-12">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Projects</h1>
+          <h1 className="text-3xl font-semibold">Projects</h1>
           <p className="text-sm text-neutral-400">Turn ideas into videos with AI</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <label
             title="Import a project from an exported .zip file"
-            className="cursor-pointer rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-800"
+            className="cursor-pointer rounded-lg border border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-200 hover:bg-neutral-800 transition-colors duration-150"
           >
             {importing ? "Importing…" : "⬆ Import .zip"}
             <input
@@ -102,13 +102,13 @@ export default function ProjectGrid({ onOpen }: Props) {
           </label>
           <button
             onClick={loadFlow}
-            className="rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-800"
+            className="rounded-lg border border-neutral-600 px-4 py-2.5 text-sm font-medium text-neutral-200 hover:bg-neutral-800 transition-colors duration-150"
           >
           Import from Flow
           </button>
           <button
             onClick={() => setCreating(true)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors duration-150"
           >
             + New project
           </button>
