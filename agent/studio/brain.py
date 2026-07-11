@@ -38,65 +38,6 @@ async def _agent_name() -> str:
     return agent
 
 
-class PromptRunner:
-    """Centralized prompt execution with JSON schema validation & retry."""
-
-    @staticmethod
-    async def run_json_valid(prompt: str, schema: dict = None,
-                             retries: int = 2, timeout: float = 600) -> dict:
-        """
-        Run prompt, extract JSON, validate against schema (if provided), retry on fail.
-
-        Args:
-            prompt: The prompt text
-            schema: JSON schema dict or validation callable
-            retries: Max retry attempts
-            timeout: Agent timeout (seconds)
-
-        Returns: Valid JSON data
-        Raises: HTTPException(502) if all attempts fail
-        """
-        agent, model = await _agent_cfg()
-        last_err = None
-
-        for attempt in range(retries + 1):
-            nudge = "" if attempt == 0 else "\n\nReturn ONLY valid JSON, no prose."
-            res = await run_agent(RunRequest(
-                agent=agent,
-                prompt=prompt + nudge,
-                timeout=timeout,
-                model=model
-            ))
-
-            if not res.get("ok"):
-                last_err = res.get("stderr") or f"exit {res.get('exit_code')}"
-                continue
-
-            try:
-                data = _extract_json(res.get("stdout", ""))
-
-                # Validate schema if provided
-                if schema:
-                    if callable(schema):
-                        valid = schema(data)
-                    else:
-                        # For dict schemas, just check key existence
-                        valid = isinstance(data, dict) if isinstance(schema, dict) else True
-
-                    if not valid:
-                        last_err = "JSON valid but failed schema validation"
-                        logger.warning(f"Schema validation failed (attempt {attempt+1}): {data}")
-                        continue
-
-                return data
-
-            except ValueError as e:
-                last_err = str(e)
-                logger.warning(f"JSON parse failed (attempt {attempt+1}): {e}")
-
-        raise HTTPException(502, f"AI response invalid after {retries+1} attempts: {last_err}")
-
-
 def _extract_json(text: str):
     """Pull the first JSON object/array out of arbitrary model output."""
     if not text:
@@ -240,16 +181,12 @@ _SINGLE_FRAME = (
 
 
 def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
-                   single_frame: bool = False) -> str:
+                   single_frame: bool = False, reference_sheet: bool = False) -> str:
     """Assemble the final image/video prompt for a project.
 
-    Order: [prompt_header] → style (always first of the visual terms) + culture_hint →
-    body → [single-frame guard] → [prompt_footer]. `style` leads so the model anchors on it;
-    the culture hint (e.g. "Vietnamese folk tale, traditional Vietnamese architecture") keeps
-    imagery faithful to the story's origin instead of defaulting to the style's home culture.
-
-    `single_frame=True` (shot frames only) appends a guard so the model renders one coherent
-    photograph instead of copying the entity reference SHEETS (incl. the 2x2 location grid).
+    For reference sheets (character/location/prop): body (sheet rules) comes first, then style.
+    For scenes/shots: style leads, then body. This ensures reference sheets stay sheets even
+    when the project style is "Photorealistic" or other scene-heavy descriptors.
     """
     style = (project.get("style") or "").strip()
     header = (project.get("prompt_header") or "").strip()
@@ -257,7 +194,13 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
     culture = (project.get("culture_hint") or "").strip() if include_culture else ""
     lead = ", ".join(p for p in (style, culture) if p)
     guard = _SINGLE_FRAME if single_frame else ""
-    parts = [header, lead, (body or "").strip(), guard, footer, _image_text_clause(project)]
+
+    if reference_sheet:
+        # Reference sheet: body (with guard) FIRST, then style
+        parts = [(body or "").strip(), lead, header, footer, _image_text_clause(project)]
+    else:
+        # Scenes/shots: style first (anchors the look), then body
+        parts = [header, lead, (body or "").strip(), guard, footer, _image_text_clause(project)]
     return ". ".join(p for p in parts if p)
 
 
@@ -333,41 +276,71 @@ def entity_extract_prompt(script: str) -> str:
 # Returns the BODY only; the caller wraps it with style/culture/header/footer via
 # compose_prompt() so style always leads the prompt.
 _SHEET = {
-    "character": ("full character reference sheet on a plain solid white background, "
-                  "laid out as a single sheet: ONE large detailed upper-body (bust) "
-                  "portrait on the left, a row of turnaround views (front, 3/4, side, back) "
-                  "in a neutral A-pose, and a separate row of facial EXPRESSION studies "
-                  "(neutral, happy, sad, angry, surprised). Same consistent character in "
-                  "every view. No scene, no extra props, no ground shadow, studio reference"),
-    "prop": ("object design sheet, multiple angles (front, 3/4, side, top), single isolated "
-             "object on plain solid white background, no background scene, no shadow, "
-             "studio product reference"),
-    # ONE image = a 2x2 grid of four angles of the same place, in a FIXED quadrant order so
-    # we can overlay correct position labels afterwards (Toàn cảnh / Góc ngược / Trên cao /
-    # Cận cảnh). The model must not draw its own text. Shots use the single_frame guard to
-    # pick one angle instead of copying the grid.
-    "location": ("ONE image laid out as a tidy 2x2 grid of FOUR camera angles of the SAME "
-                 "place, in this EXACT order: TOP-LEFT a wide establishing shot, TOP-RIGHT the "
-                 "reverse angle, BOTTOM-LEFT a high overhead/bird's-eye angle, BOTTOM-RIGHT an "
-                 "eye-level closer detail. Consistent architecture, materials, colour and "
-                 "lighting across all four panels. The place is COMPLETELY EMPTY — no people, "
-                 "no animals (ignore any people mentioned above). Photoreal, cinematic, deep "
-                 "detail. Do NOT draw any text, captions, labels or watermarks yourself — clean "
-                 "panels only"),
+    "character": (
+        "LAYOUT: ONE full-page character reference sheet on plain white background. "
+        "STRUCTURE: left side = ONE large detailed upper-body (shoulders/bust) portrait. "
+        "TOP-RIGHT = a HORIZONTAL ROW of FOUR turnaround views in A-pose: FRONT, 3/4-RIGHT, SIDE-RIGHT, BACK. "
+        "BOTTOM-RIGHT = a HORIZONTAL ROW of FIVE facial expression close-ups of the SAME head: "
+        "NEUTRAL, HAPPY, SAD, ANGRY, SURPRISED. "
+        "CONSISTENCY: IDENTICAL person in every view (same face, hair, clothes, proportions). "
+        "BACKGROUND: solid plain white throughout, no scene, no props, no shadows, studio lighting. "
+        "QUALITY: photorealistic, studio reference, high detail. "
+        "DO NOT include any artistic style, illustration, anime aesthetic, or decorative elements. "
+        "Render ONLY the physical form."
+    ),
+    "prop": (
+        "LAYOUT: ONE object design sheet on plain white background. "
+        "ANGLES: FOUR distinct views (FRONT, 3/4, SIDE, TOP) clearly separated. "
+        "OBJECT: single isolated object, identical in all views, no duplication or rotation artifacts. "
+        "BACKGROUND: solid plain white, no scene, no ground, no shadow, studio lighting. "
+        "QUALITY: photorealistic, studio product reference, high detail. "
+        "DO NOT include scene, background, artistic style, or extra objects."
+    ),
+    "location": (
+        "LAYOUT: ONE image organized as a TIGHT 2x2 GRID of FOUR camera angles of the SAME place. "
+        "ORDER (CRITICAL): TOP-LEFT = wide establishing shot, TOP-RIGHT = reverse/opposite angle, "
+        "BOTTOM-LEFT = high overhead/bird's-eye angle, BOTTOM-RIGHT = eye-level closer detail. "
+        "CONSISTENCY: identical architecture, materials, colors, lighting across all four panels. "
+        "EMPTY: the place is COMPLETELY EMPTY — NO people, NO animals, NO characters (ignore any "
+        "characters mentioned above). Render ONLY the location. "
+        "GRID: each panel is clearly distinct within a 2x2 matrix, clean division between panels. "
+        "BACKGROUND: no text, no labels, no captions, no watermarks, no annotations. Clean panels only. "
+        "QUALITY: photorealistic, cinematic, high detail. Studio reference."
+    ),
 }
 
 # Position labels overlaid on the location grid quadrants (TL, TR, BL, BR), matching the
 # order fixed in the _SHEET["location"] prompt above.
 LOCATION_GRID_LABELS = ["Toàn cảnh", "Góc ngược", "Trên cao", "Cận cảnh"]
 
+LOCATION_GRID_LABELS_BY_LANG = {
+    "Vietnamese": ["Toàn cảnh", "Góc ngược", "Trên cao", "Cận cảnh"],
+    "English": ["Establish", "Reverse", "Overhead", "Detail"],
+    "French": ["Vue générale", "Angle inverse", "Plongée", "Détail"],
+    "Spanish": ["Establecimiento", "Ángulo inverso", "Plano cenital", "Detalle"],
+}
+
+PROP_GRID_LABELS_BY_LANG = {
+    "Vietnamese": ["Trước", "3/4", "Bên", "Trên"],
+    "English": ["Front", "3/4", "Side", "Top"],
+    "French": ["Avant", "3/4", "Côté", "Dessus"],
+    "Spanish": ["Frente", "3/4", "Lado", "Arriba"],
+}
+
 
 def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
     """Build the (style-less) body of an entity's reference-art prompt."""
-    base = (description or name).strip()
     rule = _SHEET.get(entity_type)
+    base = (description or name).strip()
+    guard = (
+        "GENERATE ONLY A REFERENCE/DESIGN SHEET — NOT a scene, environment, or narrative moment. "
+        "This is studio reference art for asset management, not cinematic. "
+        "IGNORE ANY ARTISTIC/ANIME STYLE in the description below — extract ONLY the physical form "
+        "(body shape, clothing, hair color, accessories) and render it as a PHOTOREALISTIC studio reference. "
+    )
     if rule:
-        return f"{name}: {base}. {rule}"
-    return f"{name}: {base}. clean reference image"
+        return f"{guard}{rule} Subject: {name}. {base}"
+    return f"{guard}Clean reference image. Subject: {name}. {base}"
 
 
 # Cinematography spec injected into every shot-creating prompt so each frame's

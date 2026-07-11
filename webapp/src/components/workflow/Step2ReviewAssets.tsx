@@ -1,0 +1,452 @@
+import React, { useState, useEffect } from "react";
+import { useWorkflow } from "../../context/WorkflowContext";
+
+interface Asset {
+  id: string;
+  name: string;
+  description: string;
+  type: "character" | "location" | "prop";
+  reference_image_url?: string;
+  generating?: boolean;
+}
+
+export default function Step2ReviewAssets() {
+  const { state, actions } = useWorkflow();
+  const { characters, locations, props, beats, loading, error, projectId, flowProjectId } = state;
+
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDesc, setEditingDesc] = useState("");
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+  const [newAssetType, setNewAssetType] = useState<"character" | "location" | "prop" | null>(null);
+  const [newAssetName, setNewAssetName] = useState("");
+  const [newAssetDesc, setNewAssetDesc] = useState("");
+
+  const allAssets = characters.length + locations.length + props.length;
+  const assetsWithImages = assets.filter(a => a.reference_image_url).length;
+  const allImagesGenerated = allAssets > 0 && assetsWithImages === allAssets;
+  const canProceed = allImagesGenerated && !loading;
+
+  const addNewAsset = async () => {
+    if (!newAssetType || !newAssetName.trim() || !newAssetDesc.trim()) return;
+
+    try {
+      const endpoint = newAssetType === "character" ? "characters" :
+                      newAssetType === "location" ? "locations" : "props";
+
+      const resp = await fetch(`/api/studio/projects/${projectId}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          name: newAssetName,
+          description: newAssetDesc,
+        }),
+      });
+
+      if (resp.ok) {
+        const newAsset = await resp.json();
+        setAssets([...assets, { ...newAsset, type: newAssetType }]);
+        setNewAssetType(null);
+        setNewAssetName("");
+        setNewAssetDesc("");
+      }
+    } catch (err) {
+      console.error("Failed to add asset:", err);
+    }
+  };
+
+  useEffect(() => {
+    const all: Asset[] = [
+      ...characters.map(c => ({ ...c, type: "character" as const })),
+      ...locations.map(l => ({ ...l, type: "location" as const })),
+      ...props.map(p => ({ ...p, type: "prop" as const })),
+    ];
+    setAssets(all);
+  }, [characters, locations, props]);
+
+  const startEdit = (asset: Asset) => {
+    setEditingId(asset.id);
+    setEditingDesc(asset.description);
+  };
+
+  const saveEdit = (assetId: string) => {
+    const updated = assets.map(a =>
+      a.id === assetId ? { ...a, description: editingDesc } : a
+    );
+    setAssets(updated);
+    setEditingId(null);
+
+    // Save to DB
+    fetch(`/api/studio/${assets.find(a => a.id === assetId)?.type}s/${assetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: editingDesc }),
+    }).catch(err => console.error("Failed to save:", err));
+  };
+
+  const generateAllReferences = async () => {
+    if (!projectId || assets.length === 0) return;
+
+    // Mark all as generating
+    setGeneratingIds(new Set(assets.map(a => a.id)));
+
+    // Connect to WebSocket for real-time updates
+    const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
+
+    ws.onopen = () => {
+      console.log("Connected to asset generation updates");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        // Handle job updates
+        if (msg.type === "job") {
+          const job = msg.job;
+
+          // Check if this is an asset generation job
+          if (job.label?.includes("Generate") && job.label?.includes("assets")) {
+            // Update assets with generated image data
+            if (job.extra?.generated_asset) {
+              const genAsset = job.extra.generated_asset;
+              setAssets(prev => prev.map(a =>
+                a.id === genAsset.id
+                  ? { ...a, reference_image_url: genAsset.url }
+                  : a
+              ));
+              // Mark this asset as done generating
+              setGeneratingIds(prev => {
+                const next = new Set(prev);
+                next.delete(genAsset.id);
+                return next;
+              });
+            }
+
+            // Check if all done
+            if (job.total > 0 && job.done >= job.total) {
+              setGeneratingIds(new Set());
+              ws.close();
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error parsing WebSocket message:", err);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      setGeneratingIds(new Set());
+    };
+
+    try {
+      // Call the backend endpoint to start generation
+      const response = await fetch(`/api/studio/projects/${projectId}/generate-asset-references`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start asset generation");
+      }
+
+      const data = await response.json();
+      console.log("Asset generation started:", data);
+          } else {
+            console.warn(`Failed to generate image for ${asset.name}:`, response.status);
+            results.push({ assetId: asset.id, imageUrl: null, mediaId: null });
+    } catch (err) {
+      console.error("Failed to start asset generation:", err);
+      setGeneratingIds(new Set());
+      ws.close();
+    }
+  };
+
+  const getBeatsForAsset = (assetName: string, assetType: string) => {
+    if (assetType !== "character") return [];
+    return beats
+      .map((beat, idx) => beat.characterNames?.includes(assetName) ? idx : null)
+      .filter((idx): idx is number => idx !== null);
+  };
+
+  const handleProceed = async () => {
+    console.log("Step2ReviewAssets: proceeding to generate beats");
+    await actions.generateBeats();
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-neutral-950 p-8">
+      {error && (
+        <div className="mb-6 rounded-lg bg-red-950 px-4 py-3 text-red-200">
+          {error}
+        </div>
+      )}
+
+      <div className="max-w-5xl mx-auto">
+        <h1 className="mb-2 text-2xl font-bold text-white">Review & Manage Assets</h1>
+        <p className="mb-6 text-neutral-400">
+          Review extracted assets and generate reference images for visual consistency
+        </p>
+
+        {/* Add New Asset Section */}
+        {!newAssetType ? (
+          <div className="mb-8 flex gap-2">
+            <button
+              onClick={() => setNewAssetType("character")}
+              className="rounded-lg bg-indigo-600/20 border border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-600/30 transition"
+            >
+              + Add Character
+            </button>
+            <button
+              onClick={() => setNewAssetType("location")}
+              className="rounded-lg bg-amber-600/20 border border-amber-600 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-600/30 transition"
+            >
+              + Add Location
+            </button>
+            <button
+              onClick={() => setNewAssetType("prop")}
+              className="rounded-lg bg-violet-600/20 border border-violet-600 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-600/30 transition"
+            >
+              + Add Prop
+            </button>
+          </div>
+        ) : (
+          <div className="mb-8 rounded-lg bg-neutral-900 border border-neutral-800 p-4">
+            <h3 className="mb-4 font-semibold text-white">Add New {newAssetType.charAt(0).toUpperCase() + newAssetType.slice(1)}</h3>
+            <div className="space-y-3 mb-4">
+              <input
+                type="text"
+                value={newAssetName}
+                onChange={(e) => setNewAssetName(e.target.value)}
+                placeholder="Name"
+                className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <textarea
+                value={newAssetDesc}
+                onChange={(e) => setNewAssetDesc(e.target.value)}
+                placeholder="Description"
+                className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={addNewAsset}
+                className="flex-1 rounded bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setNewAssetType(null);
+                  setNewAssetName("");
+                  setNewAssetDesc("");
+                }}
+                className="flex-1 rounded bg-neutral-700 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Generate All Button */}
+        {allAssets > 0 && !allImagesGenerated && (
+          <div className="mb-8 flex gap-3">
+            <button
+              onClick={generateAllReferences}
+              disabled={generatingIds.size > 0}
+              className={`flex-1 rounded-lg px-4 py-3 font-medium transition ${
+                generatingIds.size > 0
+                  ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`}
+            >
+              {generatingIds.size > 0 ? "Generating all reference images..." : "🎨 Generate All Reference Images"}
+            </button>
+          </div>
+        )}
+
+        {/* Assets Grid */}
+        <div className="space-y-8">
+          {/* Characters */}
+          {assets.filter(a => a.type === "character").length > 0 && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold text-indigo-400">Characters</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {assets.filter(a => a.type === "character").map(asset => {
+                  const beatIndices = getBeatsForAsset(asset.name, "character");
+                  const isGenerating = generatingIds.has(asset.id);
+
+                  return (
+                    <div key={asset.id} className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
+                      {/* Header */}
+                      <div className="mb-3 flex items-start justify-between">
+                        <div>
+                          <h3 className="font-semibold text-white">{asset.name}</h3>
+                          <span className="text-xs text-neutral-500">Character</span>
+                        </div>
+                        {beatIndices.length > 0 && (
+                          <div className="text-right">
+                            <div className="text-xs text-neutral-400">Appears in</div>
+                            <div className="text-sm font-mono text-indigo-400">
+                              beats {beatIndices.map(i => i + 1).join(", ")}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      {editingId === asset.id ? (
+                        <div className="mb-3">
+                          <textarea
+                            value={editingDesc}
+                            onChange={(e) => setEditingDesc(e.target.value)}
+                            className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                            rows={3}
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => saveEdit(asset.id)}
+                              className="flex-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => startEdit(asset)}
+                          className="mb-3 cursor-pointer rounded bg-neutral-800/50 p-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                        >
+                          {asset.description}
+                        </div>
+                      )}
+
+                      {/* Reference Image */}
+                      {asset.reference_image_url ? (
+                        <img
+                          src={asset.reference_image_url}
+                          alt={asset.name}
+                          className="w-full h-40 object-cover rounded mb-3 border border-neutral-700"
+                        />
+                      ) : (
+                        <div className="w-full h-40 bg-neutral-800 rounded mb-3 border border-neutral-700 flex items-center justify-center">
+                          <span className="text-neutral-500 text-sm">Pending generation</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Locations */}
+          {assets.filter(a => a.type === "location").length > 0 && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold text-amber-400">Locations</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {assets.filter(a => a.type === "location").map(asset => {
+                  const isGenerating = generatingIds.has(asset.id);
+
+                  return (
+                    <div key={asset.id} className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
+                      <h3 className="mb-1 font-semibold text-white">{asset.name}</h3>
+                      <span className="text-xs text-neutral-500">Location</span>
+
+                      {editingId === asset.id ? (
+                        <div className="mt-3">
+                          <textarea
+                            value={editingDesc}
+                            onChange={(e) => setEditingDesc(e.target.value)}
+                            className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-600"
+                            rows={3}
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => saveEdit(asset.id)}
+                              className="flex-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => startEdit(asset)}
+                          className="mt-3 cursor-pointer rounded bg-neutral-800/50 p-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                        >
+                          {asset.description}
+                        </div>
+                      )}
+
+                      {asset.reference_image_url ? (
+                        <img
+                          src={asset.reference_image_url}
+                          alt={asset.name}
+                          className="w-full h-40 object-cover rounded my-3 border border-neutral-700"
+                        />
+                      ) : (
+                        <div className="w-full h-40 bg-neutral-800 rounded my-3 border border-neutral-700 flex items-center justify-center">
+                          <span className="text-neutral-500 text-sm">Pending generation</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Progress Indicator */}
+        {allAssets > 0 && (
+          <div className="mt-8 rounded-lg bg-neutral-900 p-4 border border-neutral-800">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-white">Reference Images Generated</span>
+              <span className={`text-sm font-mono ${allImagesGenerated ? "text-green-400" : "text-neutral-400"}`}>
+                {assetsWithImages} / {allAssets}
+              </span>
+            </div>
+            <div className="w-full bg-neutral-800 rounded h-2">
+              <div
+                className="bg-green-600 h-2 rounded transition-all"
+                style={{ width: `${(assetsWithImages / allAssets) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="mt-8 flex gap-3">
+          <button
+            onClick={handleProceed}
+            disabled={!canProceed}
+            className={`flex-1 rounded-lg px-4 py-3 font-medium transition ${
+              canProceed
+                ? "bg-green-600 text-white hover:bg-green-700"
+                : "bg-neutral-800 text-neutral-500 cursor-not-allowed"
+            }`}
+          >
+            {loading ? "Processing..." : !allImagesGenerated ? `Generate all reference images (${assetsWithImages}/${allAssets})` : "✓ Proceed to Beats"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

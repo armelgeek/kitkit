@@ -14,6 +14,8 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
+from PIL import Image
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -106,6 +108,51 @@ class CreateProjectRequest(BaseModel):
     image_text_lang: str = "Vietnamese"   # ngôn ngữ chữ viết/vẽ trong ảnh
     import_flow_project_id: Optional[str] = None   # gắn vào project Flow có sẵn
     import_thumb_media_key: Optional[str] = None
+
+
+class CreateCharacterRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    image_prompt: Optional[str] = None
+    reference_image_url: Optional[str] = None
+
+
+class UpdateCharacterRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    image_prompt: Optional[str] = None
+    reference_image_url: Optional[str] = None
+    media_id: Optional[str] = None
+
+
+class CreateLocationRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    image_prompt: Optional[str] = None
+    reference_image_url: Optional[str] = None
+
+
+class UpdateLocationRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    image_prompt: Optional[str] = None
+    reference_image_url: Optional[str] = None
+    media_id: Optional[str] = None
+
+
+class CreatePropRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    image_prompt: Optional[str] = None
+    reference_image_url: Optional[str] = None
+
+
+class UpdatePropRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    image_prompt: Optional[str] = None
+    reference_image_url: Optional[str] = None
+    media_id: Optional[str] = None
 
 
 class UpdateProjectRequest(BaseModel):
@@ -452,12 +499,14 @@ async def create_project(body: CreateProjectRequest):
     flow_id = body.import_flow_project_id
     thumb = body.import_thumb_media_key
     if not flow_id:
-        # Tạo project mới trên Flow
+        # Create new project on Flow
         result = await client.create_project(body.title)
+        logger.info(f"create_project result: {result}")
         data = result.get("data", result)
         flow_id = _deep_find(data, "projectId")
         if not flow_id:
-            raise HTTPException(502, "Không tạo được project trên Flow")
+            logger.error(f"projectId not found in: {data}")
+            raise HTTPException(502, "Failed to create project on Flow")
 
     pid = db.new_id()
     ts = db.now()
@@ -495,7 +544,7 @@ async def create_project(body: CreateProjectRequest):
 async def get_project(pid: str):
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
     if not row:
-        raise HTTPException(404, "Project không tồn tại")
+        raise HTTPException(404, "Project not found")
     return row
 
 
@@ -503,7 +552,7 @@ async def get_project(pid: str):
 async def update_project(pid: str, body: UpdateProjectRequest):
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
     if not row:
-        raise HTTPException(404, "Project không tồn tại")
+        raise HTTPException(404, "Project not found")
     data = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if "storytelling" in data:
         data["storytelling"] = 1 if data["storytelling"] else 0
@@ -535,7 +584,7 @@ async def set_project_cover(pid: str, body: SetMediaRequest):
 async def delete_project(pid: str):
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
     if not row:
-        raise HTTPException(404, "Project không tồn tại")
+        raise HTTPException(404, "Project not found")
     await db.delete("project", pid)
     # dọn media local của project
     folder = media_store.MEDIA_DIR / pid
@@ -544,12 +593,152 @@ async def delete_project(pid: str):
     return {"ok": True}
 
 
+# ─── Characters (for visual consistency across scenes) ──────
+
+@router.post("/projects/{pid}/characters")
+async def create_character(pid: str, body: CreateCharacterRequest):
+    await _project_or_404(pid)
+    char_id = db.new_id()
+    ts = db.now()
+    await db.insert("character", {
+        "id": char_id,
+        "project_id": pid,
+        "name": body.name,
+        "description": body.description,
+        "image_prompt": body.image_prompt,
+        "reference_image_url": body.reference_image_url,
+        "created_at": ts,
+        "updated_at": ts,
+    })
+    return await db.query_one("SELECT * FROM character WHERE id=?", (char_id,))
+
+
+@router.get("/projects/{pid}/characters")
+async def list_characters(pid: str):
+    await _project_or_404(pid)
+    return await db.query_all("SELECT * FROM character WHERE project_id=? ORDER BY created_at", (pid,))
+
+
+@router.get("/characters/{cid}")
+async def get_character(cid: str):
+    row = await db.query_one("SELECT * FROM character WHERE id=?", (cid,))
+    if not row:
+        raise HTTPException(404, "Character not found")
+    return row
+
+
+@router.patch("/characters/{cid}")
+async def update_character(cid: str, body: UpdateCharacterRequest):
+    await db.query_one("SELECT * FROM character WHERE id=?", (cid,))
+    data = body.model_dump(exclude_none=True)
+    data["updated_at"] = db.now()
+    await db.update("character", cid, data)
+    return await db.query_one("SELECT * FROM character WHERE id=?", (cid,))
+
+
+@router.delete("/characters/{cid}")
+async def delete_character(cid: str):
+    row = await db.query_one("SELECT * FROM character WHERE id=?", (cid,))
+    if not row:
+        raise HTTPException(404, "Character not found")
+    await db.delete("character", cid)
+    return {"ok": True}
+
+
+# ─── Locations (for scene consistency) ──────────────────────
+
+@router.post("/projects/{pid}/locations")
+async def create_location(pid: str, body: CreateLocationRequest):
+    await _project_or_404(pid)
+    loc_id = db.new_id()
+    ts = db.now()
+    await db.insert("location", {
+        "id": loc_id,
+        "project_id": pid,
+        "name": body.name,
+        "description": body.description,
+        "image_prompt": body.image_prompt,
+        "reference_image_url": body.reference_image_url,
+        "created_at": ts,
+        "updated_at": ts,
+    })
+    return await db.query_one("SELECT * FROM location WHERE id=?", (loc_id,))
+
+
+@router.get("/projects/{pid}/locations")
+async def list_locations(pid: str):
+    await _project_or_404(pid)
+    return await db.query_all("SELECT * FROM location WHERE project_id=? ORDER BY created_at", (pid,))
+
+
+@router.patch("/locations/{lid}")
+async def update_location(lid: str, body: UpdateLocationRequest):
+    await db.query_one("SELECT * FROM location WHERE id=?", (lid,))
+    data = body.model_dump(exclude_none=True)
+    data["updated_at"] = db.now()
+    await db.update("location", lid, data)
+    return await db.query_one("SELECT * FROM location WHERE id=?", (lid,))
+
+
+@router.delete("/locations/{lid}")
+async def delete_location(lid: str):
+    row = await db.query_one("SELECT * FROM location WHERE id=?", (lid,))
+    if not row:
+        raise HTTPException(404, "Location not found")
+    await db.delete("location", lid)
+    return {"ok": True}
+
+
+# ─── Props (for asset consistency) ──────────────────────────
+
+@router.post("/projects/{pid}/props")
+async def create_prop(pid: str, body: CreatePropRequest):
+    await _project_or_404(pid)
+    prop_id = db.new_id()
+    ts = db.now()
+    await db.insert("prop", {
+        "id": prop_id,
+        "project_id": pid,
+        "name": body.name,
+        "description": body.description,
+        "image_prompt": body.image_prompt,
+        "reference_image_url": body.reference_image_url,
+        "created_at": ts,
+        "updated_at": ts,
+    })
+    return await db.query_one("SELECT * FROM prop WHERE id=?", (prop_id,))
+
+
+@router.get("/projects/{pid}/props")
+async def list_props(pid: str):
+    await _project_or_404(pid)
+    return await db.query_all("SELECT * FROM prop WHERE project_id=? ORDER BY created_at", (pid,))
+
+
+@router.patch("/props/{pid}")
+async def update_prop(pid: str, body: UpdatePropRequest):
+    await db.query_one("SELECT * FROM prop WHERE id=?", (pid,))
+    data = body.model_dump(exclude_none=True)
+    data["updated_at"] = db.now()
+    await db.update("prop", pid, data)
+    return await db.query_one("SELECT * FROM prop WHERE id=?", (pid,))
+
+
+@router.delete("/props/{pid}")
+async def delete_prop(pid: str):
+    row = await db.query_one("SELECT * FROM prop WHERE id=?", (pid,))
+    if not row:
+        raise HTTPException(404, "Prop not found")
+    await db.delete("prop", pid)
+    return {"ok": True}
+
+
 # ─── Script + scenes ────────────────────────────────────────
 
 async def _project_or_404(pid: str) -> dict:
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
     if not row:
-        raise HTTPException(404, "Project không tồn tại")
+        raise HTTPException(404, "Project not found")
     return row
 
 
@@ -585,7 +774,7 @@ async def generate_script(pid: str, body: GenerateScriptRequest):
         p["style"], p["shot_duration"] or 8, p.get("script_lang") or "Vietnamese"))
     script = result.get("script", "")
     if not script:
-        raise HTTPException(502, "AI không trả về script")
+        raise HTTPException(502, "AI failed to return script")
     fields = {"idea": body.idea, "target_duration": body.target_duration,
               "script_raw": script, "updated_at": db.now()}
     # culture_hint is auto-detected from the content; don't clobber a user override.
@@ -615,7 +804,7 @@ async def script_chat(pid: str, body: ScriptChatRequest):
         p.get("script_lang") or "Vietnamese"))
     script = result.get("script", "")
     if not script:
-        raise HTTPException(502, "AI không trả về script")
+        raise HTTPException(502, "AI failed to return script")
     await db.update("project", pid, {"script_raw": script, "updated_at": db.now()})
     scenes = await _save_scenes(pid, script)
     return {"script": script, "scenes": scenes}
@@ -796,7 +985,8 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
     body = brain.ref_image_prompt(
         entity["type"], entity["name"],
         entity.get("description") or entity.get("ref_prompt") or "")
-    prompt = brain.compose_prompt(project, body)
+    prompt = brain.compose_prompt(project, body, reference_sheet=True)
+    logger.info(f"ASSET PROMPT [{entity['type']}:{entity['name']}]:\n{prompt[:500]}...")
     aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
               else _to_image_aspect(project["aspect_ratio"]))
     model = await _resolve_image_model(project)
@@ -808,31 +998,65 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
         store_call=lambda info: _store_media_on_entity(
             entity, project, info, f"{entity['type']}_{entity['name']}"),
         label_for_err=f"asset {entity['name']}")
-    # A location's reference image is ONE 2x2 grid of four angles. Overlay the position
-    # labels on the quadrants for management (display only; the underlying media stays clean).
-    if entity["type"] == "location" and row.get("media_id"):
-        try:
-            await _label_location_grid(row, project)
-            row = await _entity_or_404(entity["id"])
-        except Exception as ex:  # noqa: BLE001
-            logger.warning("location grid labelling failed for %s: %s", entity["name"], ex)
+    # Location and prop reference sheets: overlay position labels on quadrants for display.
+    if row.get("media_id"):
+        if entity["type"] == "location":
+            try:
+                await _label_location_grid(row, project)
+                row = await _entity_or_404(entity["id"])
+            except Exception as ex:  # noqa: BLE001
+                logger.warning("location grid labelling failed for %s: %s", entity["name"], ex)
+        elif entity["type"] == "prop":
+            try:
+                await _label_prop_sheet(row, project)
+                row = await _entity_or_404(entity["id"])
+            except Exception as ex:  # noqa: BLE001
+                logger.warning("prop sheet labelling failed for %s: %s", entity["name"], ex)
     return row
 
 
 async def _label_location_grid(entity: dict, project: dict) -> None:
-    """Overlay the four position labels (Toàn cảnh / Góc ngược / Trên cao / Cận cảnh) on the
-    location's 2x2 grid quadrants → a labeled DISPLAY copy set as image_path. The original
-    grid (media_id) stays unlabeled and is what shots reference."""
+    """Overlay the four position labels on the location's 2x2 grid quadrants → a labeled
+    DISPLAY copy set as image_path. The original grid (media_id) stays unlabeled and is
+    what shots reference. Labels are in the project's script language."""
     web = entity.get("image_path")
     if not web:
         return
     src = media_store.MEDIA_DIR / web.replace("/media/", "", 1)
     if not src.exists():
         return
+    # Select labels by project language
+    lang = project.get("script_lang") or "Vietnamese"
+    labels = brain.LOCATION_GRID_LABELS_BY_LANG.get(lang, brain.LOCATION_GRID_LABELS)
+
     out_rel = f"{project['id']}/loc_{entity['id']}_labeled.png"
     out_abs = media_store.MEDIA_DIR / out_rel
     ok = await asyncio.to_thread(
-        assembler.label_quadrants, src, out_abs, brain.LOCATION_GRID_LABELS,
+        assembler.label_quadrants, src, out_abs, labels,
+        assembler._caption_font())
+    if ok:
+        await db.update("entity", entity["id"],
+                        {"image_path": f"/media/{out_rel}", "updated_at": db.now()})
+
+
+async def _label_prop_sheet(entity: dict, project: dict) -> None:
+    """Overlay the four angle labels (Front, 3/4, Side, Top) on the prop sheet's
+    quadrants → a labeled DISPLAY copy set as image_path. Labels are in the project's
+    script language."""
+    web = entity.get("image_path")
+    if not web:
+        return
+    src = media_store.MEDIA_DIR / web.replace("/media/", "", 1)
+    if not src.exists():
+        return
+    # Select labels by project language
+    lang = project.get("script_lang") or "Vietnamese"
+    labels = brain.PROP_GRID_LABELS_BY_LANG.get(lang, brain.PROP_GRID_LABELS_BY_LANG["English"])
+
+    out_rel = f"{project['id']}/prop_{entity['id']}_labeled.png"
+    out_abs = media_store.MEDIA_DIR / out_rel
+    ok = await asyncio.to_thread(
+        assembler.label_quadrants, src, out_abs, labels,
         assembler._caption_font())
     if ok:
         await db.update("entity", entity["id"],
@@ -896,7 +1120,7 @@ async def import_flow_media(pid: str, body: ImportMediaRequest):
     await _project_or_404(pid)
     web = await media_store.ensure_local(body.media_id, pid)
     if not web:
-        raise HTTPException(404, "media_id không hợp lệ hoặc không tồn tại trên Flow")
+        raise HTTPException(404, "Invalid or non-existent media_id on Flow")
     eid = db.new_id()
     ts = db.now()
     await db.insert("entity", {
@@ -1093,7 +1317,7 @@ async def set_entity_image(eid: str, body: SetMediaRequest):
     project = await _project_or_404(entity["project_id"])
     web = await media_store.ensure_local(body.media_id, project["id"])
     if not web:
-        raise HTTPException(404, "media_id không hợp lệ hoặc không tồn tại trên Flow")
+        raise HTTPException(404, "Invalid or non-existent media_id on Flow")
     await db.update("entity", eid, {
         "media_id": body.media_id, "primary_media_id": body.media_id,
         "image_path": web, "updated_at": db.now()})
@@ -1150,14 +1374,14 @@ class UpdateShotRequest(BaseModel):
 async def _scene_or_404(sid: str) -> dict:
     row = await db.query_one("SELECT * FROM scene WHERE id=?", (sid,))
     if not row:
-        raise HTTPException(404, "Scene không tồn tại")
+        raise HTTPException(404, "Scene not found")
     return row
 
 
 async def _shot_or_404(sid: str) -> dict:
     row = await db.query_one("SELECT * FROM shot WHERE id=?", (sid,))
     if not row:
-        raise HTTPException(404, "Shot không tồn tại")
+        raise HTTPException(404, "Shot not found")
     return row
 
 
@@ -1740,11 +1964,11 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
 
     # ONE unified call returns: plan + beats + exit_state
     try:
-        scene_result = await brain.PromptRunner.run_json_valid(
+        scene_result = await brain.run_json_valid(
             brain.unified_scene_beats_prompt(
                 voiceover, scene["heading"], scene.get("action", ""),
                 erows, project["style"], previous_scene_exit=prev_exit),
-            schema=lambda d: (isinstance(d, dict) and "plan" in d and "beats" in d),
+            validate=lambda d: (isinstance(d, dict) and "plan" in d and "beats" in d),
             timeout=600)
 
         plan = scene_result.get("plan")
@@ -2352,7 +2576,7 @@ async def set_shot_image(sid: str, body: SetMediaRequest):
     scene = await _scene_or_404(shot["scene_id"])
     web = await media_store.ensure_local(body.media_id, scene["project_id"])
     if not web:
-        raise HTTPException(404, "media_id không hợp lệ hoặc không tồn tại trên Flow")
+        raise HTTPException(404, "Invalid or non-existent media_id on Flow")
     await db.update("shot", sid, {
         "image_media_id": body.media_id, "image_primary_id": body.media_id,
         "image_path": web, "updated_at": db.now()})
@@ -3294,6 +3518,95 @@ async def sync_project_media(pid: str):
     total = (len(removed["entities"]) + len(removed["shot_images"]) +
              len(removed["shot_videos"]) + removed["extra_views"] + removed["history"])
     return {"flow_media": len(existing), "removed": removed, "total_removed": total}
+
+
+# ─── Generate Asset References (Characters, Locations, Props) ──────────────────────
+
+@router.post("/projects/{pid}/generate-asset-references")
+async def generate_asset_references(pid: str):
+    """Generate and save reference images for all assets (characters, locations, props).
+    Pushes real-time updates via job manager WebSocket."""
+    project = await _project_or_404(pid)
+
+    # Get all assets
+    chars = await db.query_all("SELECT * FROM character WHERE project_id=?", (pid,))
+    locs = await db.query_all("SELECT * FROM location WHERE project_id=?", (pid,))
+    props = await db.query_all("SELECT * FROM prop WHERE project_id=?", (pid,))
+
+    assets = [
+        {**c, "type": "character"} for c in chars
+    ] + [
+        {**l, "type": "location"} for l in locs
+    ] + [
+        {**p, "type": "prop"} for p in props
+    ]
+
+    if not assets:
+        return {"generated": 0, "assets": []}
+
+    # Create a job for real-time progress
+    job_mgr = get_job_manager()
+    job_id = db.new_id()
+    job_mgr.create(job_id, project_id=pid, label=f"Generate {len(assets)} assets",
+                   total=len(assets))
+
+    # Generate images via Flow
+    client = get_flow_client()
+    if not client.connected:
+        job_mgr.cancel(job_id)
+        raise HTTPException(503, "Extension not connected")
+
+    results = []
+    for idx, asset in enumerate(assets):
+        try:
+            # Generate image via Flow
+            body = brain.ref_image_prompt(
+                asset["type"], asset["name"],
+                asset.get("description") or asset.get("ref_prompt") or "")
+            prompt = brain.compose_prompt(project, body, reference_sheet=True)
+            logger.info(f"ASSET_REF PROMPT [{asset['type']}:{asset['name']}]:\n{prompt[:500]}...")
+            aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if asset["type"] in ("character", "prop", "location")
+                      else "IMAGE_ASPECT_RATIO_PORTRAIT")
+            flow_resp = await client.generate_images(
+                prompt=prompt,
+                project_id=project["flow_project_id"],
+                aspect_ratio=aspect
+            )
+
+            if flow_resp.get("error"):
+                logger.error(f"Flow error for {asset['name']}: {flow_resp}")
+                continue
+
+            data = flow_resp.get("data", flow_resp)
+            info = _extract_image_result(data)
+            media_id = info.get("media_id")
+
+            if not media_id:
+                logger.warning(f"No media_id for {asset['name']} — flow_resp: {flow_resp}")
+                continue
+
+            # Download locally via media_store
+            web_path = await media_store.ensure_local(media_id, pid)
+
+            if web_path:
+                # Update asset in DB
+                table = asset['type']
+                await db.update(table, asset["id"], {
+                    "reference_image_url": web_path,
+                    "media_id": media_id,
+                    "updated_at": db.now()
+                })
+                result_item = {"id": asset["id"], "name": asset["name"], "type": asset["type"],
+                              "media_id": media_id, "url": web_path}
+                results.append(result_item)
+                # Push update to WebSocket
+                job_mgr.progress(job_id, idx + 1, {"generated_asset": result_item})
+        except Exception as e:
+            logger.error(f"Error generating reference for {asset['name']}: {e}")
+            job_mgr.progress(job_id, idx + 1, {"error": str(e)})
+
+    job_mgr.done(job_id)
+    return {"generated": len(results), "assets": results}
 
 
 # ─── Jobs: realtime batch progress (§9) ─────────────────────
