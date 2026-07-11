@@ -159,7 +159,7 @@ export default function ProjectGrid() {
               />
             </button>
             <div className="flex flex-col gap-2 p-4">
-              <button onClick={() => onOpen(p)} className="text-left">
+              <button onClick={() => navigate(`/project/${p.id}`)} className="text-left">
                 <div className="truncate font-semibold text-base text-white">{p.title}</div>
               </button>
               <div className="flex items-center justify-between gap-2">

@@ -12,7 +12,7 @@ interface Asset {
 
 export default function Step2ReviewAssets() {
   const { state, actions } = useWorkflow();
-  const { characters, locations, props, beats, loading, error, projectId, flowProjectId } = state;
+  const { characters = [], locations = [], props: propsData = [], beats = [], loading, error, projectId, flowProjectId } = state;
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export default function Step2ReviewAssets() {
   const [newAssetName, setNewAssetName] = useState("");
   const [newAssetDesc, setNewAssetDesc] = useState("");
 
-  const allAssets = characters.length + locations.length + props.length;
+  const allAssets = (characters?.length || 0) + (locations?.length || 0) + (propsData?.length || 0);
   const assetsWithImages = assets.filter(a => a.reference_image_url).length;
   const allImagesGenerated = allAssets > 0 && assetsWithImages === allAssets;
   const canProceed = allImagesGenerated && !loading;
@@ -60,10 +60,10 @@ export default function Step2ReviewAssets() {
     const all: Asset[] = [
       ...characters.map(c => ({ ...c, type: "character" as const })),
       ...locations.map(l => ({ ...l, type: "location" as const })),
-      ...props.map(p => ({ ...p, type: "prop" as const })),
+      ...propsData.map(p => ({ ...p, type: "prop" as const })),
     ];
     setAssets(all);
-  }, [characters, locations, props]);
+  }, [characters, locations, propsData]);
 
   const startEdit = (asset: Asset) => {
     setEditingId(asset.id);
@@ -88,84 +88,95 @@ export default function Step2ReviewAssets() {
   const generateAllReferences = async () => {
     if (!projectId || assets.length === 0) return;
 
-    // Mark all as generating
     setGeneratingIds(new Set(assets.map(a => a.id)));
 
-    // Connect to WebSocket for real-time updates
-    const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
-
-    ws.onopen = () => {
-      console.log("Connected to asset generation updates");
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-
-        // Handle job updates
-        if (msg.type === "job") {
-          const job = msg.job;
-
-          // Check if this is an asset generation job
-          if (job.label?.includes("Generate") && job.label?.includes("assets")) {
-            // Update assets with generated image data
-            if (job.extra?.generated_asset) {
-              const genAsset = job.extra.generated_asset;
-              setAssets(prev => prev.map(a =>
-                a.id === genAsset.id
-                  ? { ...a, reference_image_url: genAsset.url }
-                  : a
-              ));
-              // Mark this asset as done generating
-              setGeneratingIds(prev => {
-                const next = new Set(prev);
-                next.delete(genAsset.id);
-                return next;
-              });
-            }
-
-            // Check if all done
-            if (job.total > 0 && job.done >= job.total) {
-              setGeneratingIds(new Set());
-              ws.close();
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error parsing WebSocket message:", err);
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      setGeneratingIds(new Set());
-    };
-
     try {
-      // Call the backend endpoint to start generation
+      // Start asset generation in background
       const response = await fetch(`/api/studio/projects/${projectId}/generate-asset-references`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
       });
 
       if (!response.ok) {
         throw new Error("Failed to start asset generation");
       }
 
-      const data = await response.json();
-      console.log("Asset generation started:", data);
-          } else {
-            console.warn(`Failed to generate image for ${asset.name}:`, response.status);
-            results.push({ assetId: asset.id, imageUrl: null, mediaId: null });
+      const { job_id } = await response.json();
+      console.log("Asset generation job started:", job_id);
+
+      // Connect to WebSocket for progress updates
+      const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
+      let jobCompleted = false;
+
+      ws.onmessage = async (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "snapshot") {
+            // Initial list of jobs, find ours
+            const job = msg.jobs.find((j: any) => j.id === job_id);
+            if (job?.status === "done") {
+              jobCompleted = true;
+              await refreshAssets();
+            }
+          } else if (msg.type === "job" && msg.job.id === job_id) {
+            // Job update for our generation
+            const job = msg.job;
+
+            // Log progress
+            if (job.done > 0 || job.errors.length > 0) {
+              console.log(`Asset generation progress: ${job.done}/${job.total} done, ${job.errors.length} errors`);
+            }
+
+            // When complete, fetch updated assets
+            if (job.status === "done") {
+              jobCompleted = true;
+              await refreshAssets();
+            }
+          }
+        } catch (err) {
+          console.error("Error parsing WebSocket message:", err);
+        }
+      };
+
+      ws.onerror = () => {
+        console.error("WebSocket connection error");
+        setGeneratingIds(new Set());
+      };
+
+      ws.onclose = () => {
+        if (!jobCompleted) {
+          setGeneratingIds(new Set());
+        }
+      };
     } catch (err) {
       console.error("Failed to start asset generation:", err);
       setGeneratingIds(new Set());
-      ws.close();
+    }
+  };
+
+  const refreshAssets = async () => {
+    if (!projectId) return;
+
+    try {
+      const response = await fetch(`/api/studio/projects/${projectId}`);
+      if (response.ok) {
+        const project = await response.json();
+        const all: Asset[] = [
+          ...project.characters.map(c => ({ ...c, type: "character" as const })),
+          ...project.locations.map(l => ({ ...l, type: "location" as const })),
+          ...project.props.map(p => ({ ...p, type: "prop" as const })),
+        ];
+        setAssets(all);
+        setGeneratingIds(new Set());
+      }
+    } catch (err) {
+      console.error("Failed to refresh assets:", err);
+      setGeneratingIds(new Set());
     }
   };
 
   const getBeatsForAsset = (assetName: string, assetType: string) => {
-    if (assetType !== "character") return [];
+    if (assetType !== "character" || !beats) return [];
     return beats
       .map((beat, idx) => beat.characterNames?.includes(assetName) ? idx : null)
       .filter((idx): idx is number => idx !== null);

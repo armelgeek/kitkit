@@ -9,6 +9,10 @@ const MODEL_OPTIONS = [
 
 const LANGUAGE_OPTIONS = ["English", "French", "Spanish"];
 const DURATION_OPTIONS = [30, 60, 120, 180];
+const ASPECT_RATIO_OPTIONS = [
+  { value: "VIDEO_ASPECT_RATIO_LANDSCAPE", label: "Landscape (16:9)" },
+  { value: "VIDEO_ASPECT_RATIO_PORTRAIT", label: "Portrait (9:16)" },
+];
 
 export default function Step1Setup() {
   const { state, actions } = useWorkflow();
@@ -20,6 +24,7 @@ export default function Step1Setup() {
     duration,
     model,
     language,
+    aspect_ratio,
     customPromptHeader,
     screenplayRaw,
     loading,
@@ -153,6 +158,28 @@ export default function Step1Setup() {
                 {LANGUAGE_OPTIONS.map((lang) => (
                   <option key={lang} value={lang}>
                     {lang}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Aspect Ratio */}
+            <div>
+              <label
+                htmlFor="aspect-ratio"
+                className="block text-sm font-medium text-neutral-300 mb-2"
+              >
+                Video Aspect Ratio
+              </label>
+              <select
+                id="aspect-ratio"
+                value={aspect_ratio}
+                onChange={(e) => actions.setAspectRatio(e.target.value)}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 transition"
+              >
+                {ASPECT_RATIO_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
                   </option>
                 ))}
               </select>

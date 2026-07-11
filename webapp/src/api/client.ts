@@ -702,18 +702,99 @@ Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"..."
   }
 }
 
+// Enrich prompts with {handle} references for Flow API
+function enrichPromptsWithHandles(
+  beats: any[],
+  referenceContext?: any
+): any[] {
+  if (!referenceContext) return beats;
+
+  return beats.map(beat => {
+    let enrichedPrompt = beat.shotPrompts || "";
+    const beatCharacterNames = beat.characterNames || [];
+
+    // Replace character names with {handles}
+    if (referenceContext.characters && beatCharacterNames.length > 0) {
+      referenceContext.characters.forEach((char: any) => {
+        if (beatCharacterNames.includes(char.name)) {
+          // Replace exact matches: "Takeshi" → "{Takeshi}"
+          const regex = new RegExp(`\\b${char.name}\\b`, "g");
+          enrichedPrompt = enrichedPrompt.replace(regex, `{${char.name}}`);
+        }
+      });
+    }
+
+    // Replace location names with {handles}
+    if (referenceContext.locations) {
+      referenceContext.locations.forEach((loc: any) => {
+        const regex = new RegExp(`\\b${loc.name}\\b`, "g");
+        enrichedPrompt = enrichedPrompt.replace(regex, `{${loc.name}}`);
+      });
+    }
+
+    // Replace prop names with {handles}
+    if (referenceContext.props) {
+      referenceContext.props.forEach((prop: any) => {
+        const regex = new RegExp(`\\b${prop.name}\\b`, "g");
+        enrichedPrompt = enrichedPrompt.replace(regex, `{${prop.name}}`);
+      });
+    }
+
+    return {
+      ...beat,
+      shotPrompts: enrichedPrompt,
+    };
+  });
+}
+
 export async function generateImages(
   beats: any[],
   model: string,
   projectId: string | null,
+  referenceContext?: any,
   timeout: number = 60
 ): Promise<{ jobId: string; images: any[] }> {
+  // Enrich beats with {handle} references
+  const beatsWithHandles = enrichPromptsWithHandles(beats, referenceContext);
+
   // Generate images by using AI agent to enhance beat prompts
-  const beatDescriptions = beats
+  const beatDescriptions = beatsWithHandles
     .map((b, idx) => `Beat ${idx + 1}: ${b.description}\nVisual Prompt: ${b.shotPrompts}`)
     .join("\n\n");
 
+  // Build reference information
+  let referenceInfo = "";
+  if (referenceContext) {
+    const { characters = [], locations = [], props = [] } = referenceContext;
+    if (characters.length > 0) {
+      referenceInfo += "\nCHARACTERS (maintain consistent appearance across beats):\n";
+      characters.forEach((c: any) => {
+        referenceInfo += `- ${c.name}: ${c.description}`;
+        if (c.reference_url) referenceInfo += ` [Reference: ${c.reference_url}]`;
+        referenceInfo += "\n";
+      });
+    }
+    if (locations.length > 0) {
+      referenceInfo += "\nLOCATIONS (maintain consistent environments):\n";
+      locations.forEach((l: any) => {
+        referenceInfo += `- ${l.name}: ${l.description}`;
+        if (l.reference_url) referenceInfo += ` [Reference: ${l.reference_url}]`;
+        referenceInfo += "\n";
+      });
+    }
+    if (props.length > 0) {
+      referenceInfo += "\nPROPS (maintain consistent objects):\n";
+      props.forEach((p: any) => {
+        referenceInfo += `- ${p.name}: ${p.description}`;
+        if (p.reference_url) referenceInfo += ` [Reference: ${p.reference_url}]`;
+        referenceInfo += "\n";
+      });
+    }
+  }
+
   const prompt = `You are an image generation expert. Review these beat descriptions and their visual prompts, then create enhanced prompts optimized for generating high-quality, consistent images across the entire sequence.
+
+${referenceInfo}
 
 BEATS:
 ${beatDescriptions}
@@ -721,6 +802,7 @@ ${beatDescriptions}
 For each beat, provide:
 1. An enhanced visual prompt that adds detail about lighting, composition, cinematography
 2. Consistency notes to ensure visual continuity between beats (same characters look consistent, same locations feel coherent)
+3. If referencing characters/locations/props above, include their exact names and reference descriptions to maintain visual consistency
 
 Return ONLY JSON: {
   "images": [
@@ -773,21 +855,54 @@ Return ONLY JSON: {
   // Generate images using Flow API
   const images: any[] = [];
 
-  for (let idx = 0; idx < beats.length; idx++) {
-    const beat = beats[idx];
+  for (let idx = 0; idx < beatsWithHandles.length; idx++) {
+    const beat = beatsWithHandles[idx];
     const enhancedPrompt = enhancedImages[idx]?.enhanced_prompt || beat.shotPrompts || "";
 
     try {
+      // Build character references for this beat
+      const beatCharacterNames = beat.characterNames || [];
+      const characterMediaIds: string[] = [];
+      const beatReferences = [];
+
+      if (referenceContext?.characters && beatCharacterNames.length > 0) {
+        referenceContext.characters.forEach((char: any) => {
+          if (beatCharacterNames.includes(char.name)) {
+            // Use media_id if available (from Flow upload), fallback to reference_url
+            const mediaId = char.media_id || char.reference_url;
+            if (mediaId) {
+              characterMediaIds.push(mediaId);
+              beatReferences.push({
+                handle: char.name,
+                media_id: mediaId,
+              });
+            }
+          }
+        });
+      }
+
       // Call Flow API to generate the image
+      const flowBody: any = {
+        prompt: enhancedPrompt,
+        project_id: projectId,
+        aspect_ratio: "IMAGE_ASPECT_RATIO_LANDSCAPE",
+        user_paygate_tier: "PAYGATE_TIER_ONE",
+      };
+
+      // Add character references if available
+      if (characterMediaIds.length > 0) {
+        flowBody.character_media_ids = characterMediaIds;
+      }
+
+      // Add structured references for prompt handles
+      if (beatReferences.length > 0) {
+        flowBody.references = beatReferences;
+      }
+
       const imageResponse = await fetch(`/api/flow/generate-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: enhancedPrompt,
-          project_id: projectId,
-          aspect_ratio: "IMAGE_ASPECT_RATIO_LANDSCAPE",
-          user_paygate_tier: "PAYGATE_TIER_ONE",
-        }),
+        body: JSON.stringify(flowBody),
       });
 
       let imageUrl = null;

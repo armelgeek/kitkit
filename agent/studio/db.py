@@ -51,6 +51,30 @@ CREATE TABLE IF NOT EXISTS entity (
   created_at REAL, updated_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS character (
+  id TEXT PRIMARY KEY, project_id TEXT,
+  name TEXT, description TEXT,
+  image_prompt TEXT, reference_image_url TEXT,
+  media_id TEXT, primary_media_id TEXT,
+  created_at REAL, updated_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS location (
+  id TEXT PRIMARY KEY, project_id TEXT,
+  name TEXT, description TEXT,
+  image_prompt TEXT, reference_image_url TEXT,
+  media_id TEXT, primary_media_id TEXT,
+  created_at REAL, updated_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS prop (
+  id TEXT PRIMARY KEY, project_id TEXT,
+  name TEXT, description TEXT,
+  image_prompt TEXT, reference_image_url TEXT,
+  media_id TEXT, primary_media_id TEXT,
+  created_at REAL, updated_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS scene (
   id TEXT PRIMARY KEY, project_id TEXT, idx INTEGER,
   heading TEXT, slug TEXT, action TEXT, dialog TEXT,
@@ -95,6 +119,9 @@ CREATE TABLE IF NOT EXISTS media_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_entity_project ON entity(project_id);
+CREATE INDEX IF NOT EXISTS idx_character_project ON character(project_id);
+CREATE INDEX IF NOT EXISTS idx_location_project ON location(project_id);
+CREATE INDEX IF NOT EXISTS idx_prop_project ON prop(project_id);
 CREATE INDEX IF NOT EXISTS idx_scene_project ON scene(project_id);
 CREATE INDEX IF NOT EXISTS idx_mhist_owner ON media_history(owner_id, slot);
 CREATE INDEX IF NOT EXISTS idx_shot_scene ON shot(scene_id);

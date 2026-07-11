@@ -3525,7 +3525,7 @@ async def sync_project_media(pid: str):
 @router.post("/projects/{pid}/generate-asset-references")
 async def generate_asset_references(pid: str):
     """Generate and save reference images for all assets (characters, locations, props).
-    Pushes real-time updates via job manager WebSocket."""
+    Returns immediately with job_id; real-time progress via WebSocket /api/studio/ws."""
     project = await _project_or_404(pid)
 
     # Get all assets
@@ -3542,71 +3542,64 @@ async def generate_asset_references(pid: str):
     ]
 
     if not assets:
-        return {"generated": 0, "assets": []}
+        return {"job_id": None, "total_assets": 0}
 
-    # Create a job for real-time progress
-    job_mgr = get_job_manager()
-    job_id = db.new_id()
-    job_mgr.create(job_id, project_id=pid, label=f"Generate {len(assets)} assets",
-                   total=len(assets))
-
-    # Generate images via Flow
+    # Verify Flow client is connected before starting job
     client = get_flow_client()
     if not client.connected:
-        job_mgr.cancel(job_id)
         raise HTTPException(503, "Extension not connected")
 
-    results = []
-    for idx, asset in enumerate(assets):
-        try:
-            # Generate image via Flow
-            body = brain.ref_image_prompt(
-                asset["type"], asset["name"],
-                asset.get("description") or asset.get("ref_prompt") or "")
-            prompt = brain.compose_prompt(project, body, reference_sheet=True)
-            logger.info(f"ASSET_REF PROMPT [{asset['type']}:{asset['name']}]:\n{prompt[:500]}...")
-            aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if asset["type"] in ("character", "prop", "location")
-                      else "IMAGE_ASPECT_RATIO_PORTRAIT")
-            flow_resp = await client.generate_images(
-                prompt=prompt,
-                project_id=project["flow_project_id"],
-                aspect_ratio=aspect
-            )
+    async def worker(asset):
+        """Process one asset: generate image, download, save to DB."""
+        body = brain.ref_image_prompt(
+            asset["type"], asset["name"],
+            asset.get("description") or asset.get("ref_prompt") or "")
+        prompt = brain.compose_prompt(project, body, reference_sheet=True)
+        logger.info(f"ASSET_REF PROMPT [{asset['type']}:{asset['name']}]:\n{prompt[:500]}...")
 
-            if flow_resp.get("error"):
-                logger.error(f"Flow error for {asset['name']}: {flow_resp}")
-                continue
+        aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if asset["type"] in ("character", "prop", "location")
+                  else "IMAGE_ASPECT_RATIO_PORTRAIT")
+        flow_resp = await client.generate_images(
+            prompt=prompt,
+            project_id=project["flow_project_id"],
+            aspect_ratio=aspect
+        )
 
-            data = flow_resp.get("data", flow_resp)
-            info = _extract_image_result(data)
-            media_id = info.get("media_id")
+        if flow_resp.get("error"):
+            raise Exception(f"Flow error: {flow_resp['error']}")
 
-            if not media_id:
-                logger.warning(f"No media_id for {asset['name']} — flow_resp: {flow_resp}")
-                continue
+        data = flow_resp.get("data", flow_resp)
+        info = _extract_image_result(data)
+        media_id = info.get("media_id")
 
-            # Download locally via media_store
-            web_path = await media_store.ensure_local(media_id, pid)
+        if not media_id:
+            raise Exception(f"No media_id in Flow response")
 
-            if web_path:
-                # Update asset in DB
-                table = asset['type']
-                await db.update(table, asset["id"], {
-                    "reference_image_url": web_path,
-                    "media_id": media_id,
-                    "updated_at": db.now()
-                })
-                result_item = {"id": asset["id"], "name": asset["name"], "type": asset["type"],
-                              "media_id": media_id, "url": web_path}
-                results.append(result_item)
-                # Push update to WebSocket
-                job_mgr.progress(job_id, idx + 1, {"generated_asset": result_item})
-        except Exception as e:
-            logger.error(f"Error generating reference for {asset['name']}: {e}")
-            job_mgr.progress(job_id, idx + 1, {"error": str(e)})
+        # Download locally
+        web_path = await media_store.ensure_local(media_id, pid)
+        if not web_path:
+            raise Exception(f"Failed to download media {media_id}")
 
-    job_mgr.done(job_id)
-    return {"generated": len(results), "assets": results}
+        # Update asset in DB
+        table = asset['type']
+        await db.update(table, asset["id"], {
+            "reference_image_url": web_path,
+            "media_id": media_id,
+            "updated_at": db.now()
+        })
+
+    # Start background job
+    job_mgr = get_job_manager()
+    job = job_mgr.start(
+        project_id=pid,
+        type_="generate_assets",
+        items=assets,
+        worker=worker,
+        label=f"Generate {len(assets)} assets",
+        item_label=lambda a: f"{a['type']}: {a['name']}"
+    )
+
+    return {"job_id": job.id, "total_assets": len(assets)}
 
 
 # ─── Jobs: realtime batch progress (§9) ─────────────────────

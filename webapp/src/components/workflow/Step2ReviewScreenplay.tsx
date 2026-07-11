@@ -1,19 +1,25 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useWorkflow } from "../../context/WorkflowContext";
 
 export default function Step2ReviewScreenplay() {
   const { state, actions } = useWorkflow();
-  const { screenplayRaw, scenes, beats, loading, error } = state;
+  const { screenplayRaw, scenes, beats, loading, error, projectId, flowProjectId } = state;
+  const [isApproving, setIsApproving] = useState(false);
 
   const sceneCount = scenes.length;
-  const isApproveDisabled = !screenplayRaw.trim() || loading;
+  const isApproveDisabled = !screenplayRaw.trim() || loading || isApproving;
+
 
   const handleRedo = () => {
     actions.redoScreenplay();
   };
 
-  const handleApprove = () => {
-    actions.showScenes();
+  const handleApprove = async () => {
+    console.log("handleApprove called, screenplayRaw length:", screenplayRaw.length);
+    setIsApproving(true);
+    await actions.approveScreenplay();
+    setIsApproving(false);
+    console.log("approveScreenplay finished");
   };
 
   return (
@@ -52,7 +58,7 @@ export default function Step2ReviewScreenplay() {
         {/* Loading State */}
         {loading && (
           <div className="mb-8 rounded-lg bg-neutral-900 px-6 py-4 text-neutral-300">
-            Generating storyboard...
+            Extracting assets from screenplay...
           </div>
         )}
 
@@ -73,7 +79,7 @@ export default function Step2ReviewScreenplay() {
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
             }`}
           >
-            {loading ? "Generating storyboard..." : "Looks Good"}
+            {loading ? "Extracting assets..." : "Looks Good"}
           </button>
         </div>
       </div>

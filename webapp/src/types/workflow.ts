@@ -1,4 +1,4 @@
-export type WorkflowStep = 1 | 2 | 2.5 | 3 | 4 | 4.5 | 5;
+export type WorkflowStep = 1 | 2 | 2.6 | 3 | 4 | 4.5 | 5;
 
 export interface Entity {
   id: string;
@@ -21,12 +21,20 @@ export interface GeneratedImage {
 
 export interface Beat {
   id: string;
+  shotId?: string;  // DB shot ID for persistence
   sceneHeading: string;
   description: string;
   entities: Array<{ name: string; type: string; description: string }>;
   shotPrompts: string;
   motionHints: string;
   voiceover: string;
+  characterNames?: string[];
+  continuityNotes?: string;  // Narrative context from previous/next beats
+  beatIndex?: number;  // Position in sequence (1/N)
+  totalBeats?: number;  // Total number of beats
+  tone?: string;  // Emotional tone: tense, mysterious, romantic, etc.
+  characterArcs?: Record<string, string>;  // Character name → emotional journey in this beat
+  transitionPrompt?: string;  // How to transition FROM this beat to next
 }
 
 export interface Scene {
@@ -41,6 +49,7 @@ export interface WorkflowState {
   duration: number; // in seconds
   model: string;
   language: string;
+  aspect_ratio: string;
   customPromptHeader: string;
 
   // Step 2 data
@@ -50,6 +59,29 @@ export interface WorkflowState {
   // Step 3 data
   beats: Beat[];
   editedBeatIds: Set<string>;
+
+  // Step 3.5 data (Characters, Locations, Props for consistency)
+  characters: Array<{
+    id: string;
+    name: string;
+    description: string;
+    image_prompt?: string;
+    reference_image_url?: string;
+  }>;
+  locations: Array<{
+    id: string;
+    name: string;
+    description: string;
+    image_prompt?: string;
+    reference_image_url?: string;
+  }>;
+  props: Array<{
+    id: string;
+    name: string;
+    description: string;
+    image_prompt?: string;
+    reference_image_url?: string;
+  }>;
 
   // Step 4 data (Assets/Entities)
   entities: Entity[];
@@ -63,7 +95,8 @@ export interface WorkflowState {
   generationJobId: string | null;
 
   // Meta
-  flowProjectId: string | null;
+  projectId: string | null;      // studio project ID (db)
+  flowProjectId: string | null;  // Flow API project ID
   currentStep: WorkflowStep;
   loading: boolean;
   error: string | null;
@@ -76,13 +109,19 @@ export interface WorkflowActions {
   setDuration: (duration: number) => void;
   setModel: (model: string) => void;
   setLanguage: (language: string) => void;
+  setAspectRatio: (ratio: string) => void;
   setCustomPromptHeader: (header: string) => void;
   generateScreenplay: () => Promise<void>;
   showScenes: () => void;
   approveScreenplay: () => Promise<void>;
   redoScreenplay: () => void;
+  generateBeats: () => Promise<void>;
+  generateAllAssetReferences: () => Promise<void>;
   updateBeat: (beatId: string, updates: Partial<Beat>) => void;
   redoAllBeats: () => Promise<void>;
+  createCharacters: (characters: Array<any>) => Promise<void>;
+  createLocations: (locations: Array<any>) => Promise<void>;
+  createProps: (props: Array<any>) => Promise<void>;
   extractAndGenerateAssets: () => Promise<void>;
   approveStoryboard: () => Promise<void>;
   proceedToVideo: () => void;

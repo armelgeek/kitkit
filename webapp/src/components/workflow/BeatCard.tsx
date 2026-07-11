@@ -13,11 +13,16 @@ export default function BeatCard({ beat, index, isEdited, onEdit }: BeatCardProp
     <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-6">
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
-        <h3 className="text-lg font-semibold text-white">
-          Beat {index + 1}
-        </h3>
+        <div>
+          <h3 className="text-lg font-semibold text-white">
+            Beat {beat.beatIndex || index + 1}{beat.totalBeats ? `/${beat.totalBeats}` : ""}
+          </h3>
+          {beat.tone && (
+            <p className="text-sm text-amber-400 mt-1">Tone: {beat.tone}</p>
+          )}
+        </div>
         {isEdited && (
-          <span className="text-yellow-500 text-sm font-medium">✎ Manually edited</span>
+          <span className="text-yellow-500 text-sm font-medium">✎ Edited</span>
         )}
       </div>
 
@@ -29,10 +34,24 @@ export default function BeatCard({ beat, index, isEdited, onEdit }: BeatCardProp
         </div>
       )}
 
+      {/* Character Arcs */}
+      {beat.characterArcs && Object.keys(beat.characterArcs).length > 0 && (
+        <div className="mb-6 p-3 bg-indigo-950/30 rounded-lg border border-indigo-700/30">
+          <p className="text-sm font-medium text-indigo-400 mb-2">Character States:</p>
+          <div className="space-y-1">
+            {Object.entries(beat.characterArcs).map(([char, arc]) => (
+              <p key={char} className="text-sm text-indigo-300">
+                <span className="font-semibold">{char}:</span> {arc}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Description */}
       {beat.description && (
         <div className="mb-6">
-          <p className="text-sm font-medium text-neutral-400 mb-2">Visual Description:</p>
+          <p className="text-sm font-medium text-neutral-400 mb-2">Scene:</p>
           <p className="text-neutral-300">{beat.description}</p>
         </div>
       )}
@@ -54,11 +73,19 @@ export default function BeatCard({ beat, index, isEdited, onEdit }: BeatCardProp
         </div>
       )}
 
+      {/* Transition Note */}
+      {beat.transitionPrompt && (
+        <div className="mb-6 p-3 bg-amber-950/30 rounded-lg border border-amber-700/30">
+          <p className="text-sm font-medium text-amber-400">→ Next transition:</p>
+          <p className="text-sm text-amber-300">{beat.transitionPrompt}</p>
+        </div>
+      )}
+
       {/* Shot Prompts Section */}
       {beat.shotPrompts && (
         <div className="mb-6">
-          <p className="mb-2 text-sm font-medium text-neutral-400">Shot Prompts:</p>
-          <p className="text-neutral-300">{beat.shotPrompts}</p>
+          <p className="mb-2 text-sm font-medium text-neutral-400">Visual Prompt:</p>
+          <p className="text-sm text-neutral-300 max-h-32 overflow-y-auto">{beat.shotPrompts}</p>
         </div>
       )}
 
