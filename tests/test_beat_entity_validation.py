@@ -44,7 +44,7 @@ def setup_test_project():
     entities = []
 
     for i, entity_def in enumerate(test_entities):
-        entity_id = f"{entity_def['type'][:3]}_{i}"
+        entity_id = str(uuid.uuid4())  # Use UUID for globally unique IDs
         slug = normalize_to_slug(entity_def["name"])
 
         conn.execute("""
