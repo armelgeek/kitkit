@@ -103,9 +103,43 @@ export default function Step2ReviewAssets() {
       const { job_id } = await response.json();
       console.log("Asset generation job started:", job_id);
 
-      // Connect to WebSocket for progress updates
+      // Connect to WebSocket for job status updates
       const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
       let jobCompleted = false;
+      let pollingInterval: NodeJS.Timeout | null = null;
+
+      // Polling function to check asset images in real-time
+      const pollAssets = async () => {
+        try {
+          const [charsRes, locsRes, propsRes] = await Promise.all([
+            fetch(`/api/studio/projects/${projectId}/characters`),
+            fetch(`/api/studio/projects/${projectId}/locations`),
+            fetch(`/api/studio/projects/${projectId}/props`),
+          ]);
+
+          if (charsRes.ok && locsRes.ok && propsRes.ok) {
+            const chars = await charsRes.json();
+            const locs = await locsRes.json();
+            const propsData = await propsRes.json();
+
+            const all: Asset[] = [
+              ...(chars || []).map(c => ({ ...c, type: "character" as const })),
+              ...(locs || []).map(l => ({ ...l, type: "location" as const })),
+              ...(propsData || []).map(p => ({ ...p, type: "prop" as const })),
+            ];
+
+            setAssets(all);
+
+            // Update generating IDs based on which still don't have images
+            const stillGenerating = new Set(
+              all.filter(a => !a.reference_image_url).map(a => a.id)
+            );
+            setGeneratingIds(stillGenerating);
+          }
+        } catch (err) {
+          console.error("Failed to poll assets:", err);
+        }
+      };
 
       ws.onmessage = async (event) => {
         try {
@@ -116,6 +150,7 @@ export default function Step2ReviewAssets() {
             const job = msg.jobs.find((j: any) => j.id === job_id);
             if (job?.status === "done") {
               jobCompleted = true;
+              if (pollingInterval) clearInterval(pollingInterval);
               await refreshAssets();
             }
           } else if (msg.type === "job" && msg.job.id === job_id) {
@@ -127,9 +162,16 @@ export default function Step2ReviewAssets() {
               console.log(`Asset generation progress: ${job.done}/${job.total} done, ${job.errors.length} errors`);
             }
 
-            // When complete, fetch updated assets
+            // Start polling assets during generation
+            if (!pollingInterval && job.status === "running") {
+              pollingInterval = setInterval(pollAssets, 2000); // Poll every 2 seconds
+              pollAssets(); // Poll immediately
+            }
+
+            // When complete, stop polling and fetch final state
             if (job.status === "done") {
               jobCompleted = true;
+              if (pollingInterval) clearInterval(pollingInterval);
               await refreshAssets();
             }
           }
@@ -140,10 +182,12 @@ export default function Step2ReviewAssets() {
 
       ws.onerror = () => {
         console.error("WebSocket connection error");
+        if (pollingInterval) clearInterval(pollingInterval);
         setGeneratingIds(new Set());
       };
 
       ws.onclose = () => {
+        if (pollingInterval) clearInterval(pollingInterval);
         if (!jobCompleted) {
           setGeneratingIds(new Set());
         }
