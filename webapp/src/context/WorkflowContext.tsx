@@ -318,26 +318,26 @@ export function WorkflowProvider({ children, initialProject }: WorkflowProviderP
     stateRef.current = state;
   }, [state]);
 
-  // Auto-trigger approveScreenplay when projectId is set
+  // Auto-trigger approveScreenplay when projectId is set (ponytail: skip if beats exist = already done)
   React.useEffect(() => {
-    if (state.projectId && state.screenplayRaw && !state.loading && state.currentStep === 2) {
+    if (state.projectId && state.screenplayRaw && !state.loading && state.currentStep === 2 && state.beats.length === 0) {
       console.log("Provider: Auto-triggering approveScreenplay, projectId:", state.projectId);
       // Schedule for next tick so state is fully synced
       setTimeout(() => {
         actions.approveScreenplay();
       }, 0);
     }
-  }, [state.projectId, state.screenplayRaw]);
+  }, [state.projectId, state.screenplayRaw, state.beats.length]);
 
-  // Auto-trigger asset reference generation when assets are extracted
+  // Auto-trigger asset reference generation (ponytail: skip if entities exist = already done)
   React.useEffect(() => {
-    if (state.currentStep === 2.6 && (state.characters.length > 0 || state.locations.length > 0 || state.props.length > 0) && !state.loading) {
+    if (state.currentStep === 2.6 && (state.characters.length > 0 || state.locations.length > 0 || state.props.length > 0) && !state.loading && state.entities.length === 0) {
       console.log("Provider: Auto-triggering generateAllAssetReferences");
       setTimeout(() => {
         actions.generateAllAssetReferences();
       }, 0);
     }
-  }, [state.currentStep, state.characters.length, state.locations.length, state.props.length]);
+  }, [state.currentStep, state.characters.length, state.locations.length, state.props.length, state.entities.length]);
 
   const actions: WorkflowActions = {
     setIdea: (idea: string) => {
