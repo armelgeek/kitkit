@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useWorkflow } from "../../context/WorkflowContext";
+import { AssetHistoryModal } from "../AssetHistoryModal";
+import { RegenerateForm } from "../RegenerateForm";
+import { VersionEntry } from "../../types/versioning";
 
 interface Asset {
   id: string;
@@ -21,6 +24,12 @@ export default function Step2ReviewAssets() {
   const [newAssetType, setNewAssetType] = useState<"character" | "location" | "prop" | null>(null);
   const [newAssetName, setNewAssetName] = useState("");
   const [newAssetDesc, setNewAssetDesc] = useState("");
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [historyVersions, setHistoryVersions] = useState<VersionEntry[]>([]);
+  const [activeHistoryVersion, setActiveHistoryVersion] = useState<number>(0);
+  const [regenerateFormOpen, setRegenerateFormOpen] = useState(false);
+  const [selectedEntity, setSelectedEntity] = useState<Asset | null>(null);
 
   const allAssets = (characters?.length || 0) + (locations?.length || 0) + (propsData?.length || 0);
   const assetsWithImages = assets.filter(a => a.reference_image_url).length;
@@ -245,6 +254,109 @@ export default function Step2ReviewAssets() {
       .filter((idx): idx is number => idx !== null);
   };
 
+  const openHistoryModal = async (assetId: string) => {
+    setSelectedEntityId(assetId);
+    setHistoryModalOpen(true);
+    // ponytail: placeholder for history data; real data from Task 7 API
+    setHistoryVersions([]);
+    setActiveHistoryVersion(0);
+  };
+
+  const closeHistoryModal = () => {
+    setHistoryModalOpen(false);
+    setSelectedEntityId(null);
+    setHistoryVersions([]);
+    setActiveHistoryVersion(0);
+  };
+
+  const handleSetActiveVersion = async (versionNum: number) => {
+    if (!selectedEntityId) return;
+    // ponytail: placeholder for version switching; actual API call in Task 7
+    console.log(`Setting asset ${selectedEntityId} to version ${versionNum}`);
+  };
+
+  const handleOpenRegenerate = (entity: Asset) => {
+    setSelectedEntity(entity);
+    setRegenerateFormOpen(true);
+  };
+
+  const closeRegenerateForm = () => {
+    setRegenerateFormOpen(false);
+    setSelectedEntity(null);
+  };
+
+  const handleRegenerating = (jobId: string, versionNum: number | null) => {
+    // Mark this asset as generating
+    setGeneratingIds(new Set([...generatingIds, selectedEntity?.id || ""]));
+
+    try {
+      // Connect to WebSocket to watch job progress
+      const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
+      let jobCompleted = false;
+      let pollingInterval: NodeJS.Timeout | null = null;
+
+      // Wait for WebSocket connection
+      ws.onopen = () => {
+        console.log("Connected to WebSocket for regeneration updates");
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "snapshot") {
+            // Initial list of jobs, find ours
+            const job = msg.jobs.find((j: any) => j.id === jobId);
+            if (job?.status === "done") {
+              jobCompleted = true;
+              if (pollingInterval) clearInterval(pollingInterval);
+              await refreshAssets();
+            }
+          } else if (msg.type === "job" && msg.job.id === jobId) {
+            // Job update for our regeneration
+            const job = msg.job;
+
+            // Log progress
+            if (job.done > 0 || job.errors.length > 0) {
+              console.log(`Asset regeneration progress: ${job.done}/${job.total} done, ${job.errors.length} errors`);
+            }
+
+            // Start polling assets during regeneration
+            if (!pollingInterval && job.status === "running") {
+              pollingInterval = setInterval(refreshAssets, 2000);
+              refreshAssets();
+            }
+
+            // When complete, stop polling and fetch final state
+            if (job.status === "done") {
+              jobCompleted = true;
+              if (pollingInterval) clearInterval(pollingInterval);
+              await refreshAssets();
+            }
+          }
+        } catch (err) {
+          console.error("Error parsing WebSocket message:", err);
+        }
+      };
+
+      ws.onerror = () => {
+        console.error("WebSocket connection error");
+        if (pollingInterval) clearInterval(pollingInterval);
+        setGeneratingIds(new Set());
+      };
+
+      ws.onclose = () => {
+        if (pollingInterval) clearInterval(pollingInterval);
+        if (!jobCompleted) {
+          setGeneratingIds(new Set());
+        }
+      };
+    } catch (err) {
+      console.error("Failed to watch regeneration:", err);
+      setGeneratingIds(new Set());
+    }
+  };
+
   const handleProceed = async () => {
     console.log("Step2ReviewAssets: proceeding to generate beats");
     await actions.generateBeats();
@@ -407,11 +519,27 @@ export default function Step2ReviewAssets() {
 
                       {/* Reference Image */}
                       {asset.reference_image_url ? (
-                        <img
-                          src={asset.reference_image_url}
-                          alt={asset.name}
-                          className="w-full h-40 object-cover rounded mb-3 border border-neutral-700"
-                        />
+                        <div>
+                          <img
+                            src={asset.reference_image_url}
+                            alt={asset.name}
+                            className="w-full h-40 object-cover rounded mb-3 border border-neutral-700"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openHistoryModal(asset.id)}
+                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                            >
+                              📜 History
+                            </button>
+                            <button
+                              onClick={() => handleOpenRegenerate(asset)}
+                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                            >
+                              🔄 Regenerate
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <div className="w-full h-40 bg-neutral-800 rounded mb-3 border border-neutral-700 flex items-center justify-center">
                           <span className="text-neutral-500 text-sm">Pending generation</span>
@@ -470,11 +598,27 @@ export default function Step2ReviewAssets() {
                       )}
 
                       {asset.reference_image_url ? (
-                        <img
-                          src={asset.reference_image_url}
-                          alt={asset.name}
-                          className="w-full h-40 object-cover rounded my-3 border border-neutral-700"
-                        />
+                        <div>
+                          <img
+                            src={asset.reference_image_url}
+                            alt={asset.name}
+                            className="w-full h-40 object-cover rounded my-3 border border-neutral-700"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openHistoryModal(asset.id)}
+                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                            >
+                              📜 History
+                            </button>
+                            <button
+                              onClick={() => handleOpenRegenerate(asset)}
+                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                            >
+                              🔄 Regenerate
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <div className="w-full h-40 bg-neutral-800 rounded my-3 border border-neutral-700 flex items-center justify-center">
                           <span className="text-neutral-500 text-sm">Pending generation</span>
@@ -521,6 +665,27 @@ export default function Step2ReviewAssets() {
           </button>
         </div>
       </div>
+
+      {/* Asset History Modal */}
+      {historyModalOpen && selectedEntityId && (
+        <AssetHistoryModal
+          entityId={selectedEntityId}
+          versions={historyVersions}
+          activeVersion={activeHistoryVersion}
+          onClose={closeHistoryModal}
+          onSetActive={handleSetActiveVersion}
+        />
+      )}
+
+      {/* Regenerate Form Modal */}
+      {regenerateFormOpen && selectedEntity && (
+        <RegenerateForm
+          entity={selectedEntity}
+          onClose={closeRegenerateForm}
+          onRegenerating={handleRegenerating}
+          projectId={projectId}
+        />
+      )}
     </div>
   );
 }
