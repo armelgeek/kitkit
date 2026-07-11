@@ -3600,6 +3600,24 @@ async def generate_asset_references(pid: str):
             "updated_at": db.now()
         })
 
+        # Initialize version_history if not already set
+        current_asset = await db.query_one(f"SELECT version_history FROM {table} WHERE id=?", (asset["id"],))
+        if current_asset and (not current_asset.get("version_history") or current_asset.get("version_history") == "[]"):
+            v1_entry = {
+                "version": 1,
+                "media_id": media_id,
+                "reference_image_url": web_path,
+                "prompt": prompt,
+                "instructions": None,
+                "generated_at": datetime.utcnow().replace(tzinfo=None).isoformat() + "Z",
+                "status": "success"
+            }
+            await db.update(table, asset["id"], {
+                "version_history": json.dumps([v1_entry]),
+                "active_version_num": 1,
+                "updated_at": db.now()
+            })
+
     # Start background job
     job_mgr = get_job_manager()
     job = job_mgr.start(
@@ -3701,6 +3719,16 @@ async def regenerate_asset_reference(
                 })
             raise
 
+    # Predict the next version number (deterministic based on current history)
+    history = parse_version_history(entity.get("version_history") or "[]")
+    if not history:
+        predicted_version_num = 1
+    elif len(history) < 10:
+        predicted_version_num = max(v["version"] for v in history) + 1
+    else:
+        # At limit: oldest will be removed and re-numbered, so new version will be 10
+        predicted_version_num = 10
+
     # Launch generation job
     job_mgr = get_job_manager()
     job = job_mgr.start(
@@ -3711,7 +3739,7 @@ async def regenerate_asset_reference(
         label=f"Regenerate {entity.get('name', entity_id)}"
     )
 
-    return {"job_id": job.id, "version_num": None}
+    return {"job_id": job.id, "version_num": predicted_version_num}
 
 
 @router.get("/projects/{project_id}/entities/{entity_id}/history", response_model=AssetHistoryResponse)
