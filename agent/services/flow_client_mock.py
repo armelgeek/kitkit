@@ -51,6 +51,44 @@ class MockFlowClient:
         """No-op for mock."""
         pass
 
+    async def handle_message(self, data: dict):
+        """No-op for mock (no extension messages)."""
+        pass
+
+    async def create_project(self, project_title: str, tool_name: str = "PINHOLE") -> dict:
+        """Mock project creation."""
+        return {
+            "status": 200,
+            "data": {
+                "result": {
+                    "data": {
+                        "json": {
+                            "result": {"projectId": str(uuid.uuid4())},
+                            "status": 200,
+                        }
+                    }
+                }
+            },
+        }
+
+    async def change_project_cover(self, project_id: str, media_name_id: str) -> dict:
+        """Mock project cover update."""
+        return {"ok": True}
+
+    async def change_display_name(self, media_name_id: str, project_id: str, display_name: str) -> dict:
+        """Mock rename."""
+        return {"ok": True}
+
+    async def get_project(self, project_id: str) -> dict:
+        """Mock get project."""
+        return {
+            "status": 200,
+            "data": {
+                "projectId": project_id,
+                "projectTitle": "Mock Project",
+            },
+        }
+
     async def generate_images(
         self,
         prompt: str,
