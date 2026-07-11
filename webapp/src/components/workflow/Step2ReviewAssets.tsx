@@ -91,7 +91,21 @@ export default function Step2ReviewAssets() {
     setGeneratingIds(new Set(assets.map(a => a.id)));
 
     try {
-      // Start asset generation in background
+      // Connect to WebSocket FIRST (before starting generation)
+      const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
+      let jobCompleted = false;
+      let pollingInterval: NodeJS.Timeout | null = null;
+      let jobId: string | null = null;
+
+      // Wait for WebSocket connection before starting generation
+      await new Promise<void>((resolve) => {
+        ws.onopen = () => {
+          console.log("Connected to WebSocket for real-time updates");
+          resolve();
+        };
+      });
+
+      // NOW start asset generation after WebSocket is ready
       const response = await fetch(`/api/studio/projects/${projectId}/generate-asset-references`, {
         method: "POST",
       });
@@ -101,12 +115,8 @@ export default function Step2ReviewAssets() {
       }
 
       const { job_id } = await response.json();
+      jobId = job_id;
       console.log("Asset generation job started:", job_id);
-
-      // Connect to WebSocket for job status updates
-      const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
-      let jobCompleted = false;
-      let pollingInterval: NodeJS.Timeout | null = null;
 
       // Polling function to check asset images in real-time
       const pollAssets = async () => {
@@ -147,13 +157,13 @@ export default function Step2ReviewAssets() {
 
           if (msg.type === "snapshot") {
             // Initial list of jobs, find ours
-            const job = msg.jobs.find((j: any) => j.id === job_id);
+            const job = msg.jobs.find((j: any) => j.id === jobId);
             if (job?.status === "done") {
               jobCompleted = true;
               if (pollingInterval) clearInterval(pollingInterval);
               await refreshAssets();
             }
-          } else if (msg.type === "job" && msg.job.id === job_id) {
+          } else if (msg.type === "job" && jobId && msg.job.id === jobId) {
             // Job update for our generation
             const job = msg.job;
 
