@@ -1603,8 +1603,13 @@ def _resolve_shot_refs(text: str, ref_names, by_name: dict, scene_loc_id: Option
 async def autofill_storyboard(sid: str, body: AutofillRequest):
     scene = await _scene_or_404(sid)
     project = await _project_or_404(scene["project_id"])
-    erows = await db.query_all(
-        "SELECT id, name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    erows = await db.query_all("""
+        SELECT id, name, 'character' as type, description FROM character WHERE project_id=?
+        UNION ALL
+        SELECT id, name, 'location' as type, description FROM location WHERE project_id=?
+        UNION ALL
+        SELECT id, name, 'prop' as type, description FROM prop WHERE project_id=?
+    """, (scene["project_id"], scene["project_id"], scene["project_id"]))
     by_name = _index_by_name(erows)
     # The scene's location is fixed by its heading — every shot uses ONLY this place.
     scene_loc = _match_location_entity(scene["heading"], [r for r in erows if r["type"] == "location"])
@@ -1916,8 +1921,13 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     windows. If TTS is off/unreachable, beat durations fall back to a word-count estimate."""
     scene = await _scene_or_404(sid)
     project = await _project_or_404(scene["project_id"])
-    erows = await db.query_all(
-        "SELECT id, name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    erows = await db.query_all("""
+        SELECT id, name, 'character' as type, description FROM character WHERE project_id=?
+        UNION ALL
+        SELECT id, name, 'location' as type, description FROM location WHERE project_id=?
+        UNION ALL
+        SELECT id, name, 'prop' as type, description FROM prop WHERE project_id=?
+    """, (scene["project_id"], scene["project_id"], scene["project_id"]))
     by_name = _index_by_name(erows)
     # The scene's location is fixed. Prefer a location_entity_id already stored on the scene
     # (e.g. inherited by a split sub-scene, or set by a previous build) so the place is STABLE
@@ -2188,8 +2198,13 @@ async def _revary_scene(sid: str) -> int:
     shots = await db.query_all("SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))
     if not shots:
         return 0
-    erows = await db.query_all(
-        "SELECT id, name, type, description FROM entity WHERE project_id=?", (scene["project_id"],))
+    erows = await db.query_all("""
+        SELECT id, name, 'character' as type, description FROM character WHERE project_id=?
+        UNION ALL
+        SELECT id, name, 'location' as type, description FROM location WHERE project_id=?
+        UNION ALL
+        SELECT id, name, 'prop' as type, description FROM prop WHERE project_id=?
+    """, (scene["project_id"], scene["project_id"], scene["project_id"]))
     by_name = _index_by_name(erows)
     scene_loc = _match_location_entity(scene["heading"], [r for r in erows if r["type"] == "location"])
     scene_loc_id = scene_loc["id"] if scene_loc else None
