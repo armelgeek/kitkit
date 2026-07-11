@@ -17,6 +17,7 @@ export const AssetHistoryModal: React.FC<AssetHistoryModalProps> = ({
   onSetActive,
 }) => {
   const [loading, setLoading] = React.useState(false);
+  const safeVersions = versions || [];
 
   const handleSetActive = async (versionNum: number) => {
     setLoading(true);
@@ -41,10 +42,10 @@ export const AssetHistoryModal: React.FC<AssetHistoryModalProps> = ({
         </div>
 
         <div className="space-y-4">
-          {versions.length === 0 ? (
+          {safeVersions.length === 0 ? (
             <p className="text-gray-500">No versions yet</p>
           ) : (
-            versions.map((version) => (
+            safeVersions.map((version) => (
               <div
                 key={version.version}
                 className={`p-4 border rounded-lg ${

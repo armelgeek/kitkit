@@ -13,6 +13,10 @@ export const RegenerateForm: React.FC<RegenerateFormProps> = ({
   onRegenerating,
   projectId,
 }) => {
+  if (!entity) {
+    return null;
+  }
+
   const [prompt, setPrompt] = React.useState(entity.description || "");
   const [instructions, setInstructions] = React.useState("");
   const [loading, setLoading] = React.useState(false);
