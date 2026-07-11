@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from agent.studio import brain, validation
 from agent.studio.db import normalize_to_slug, _get_conn
 
@@ -338,9 +340,137 @@ def test_validate_beat_entities():
     print("✓ Validation test passed")
 
 
-# Run inline test
+async def simulate_beat_generation(voiceover, entities, style, language):
+    """
+    Simulate beat generation for testing.
+    In production, this calls brain.unified_scene_beats_prompt() + Claude API.
+
+    Returns 3 mock beats with entity references.
+    """
+    characters = [e for e in entities if e["type"] == "character"]
+    locations = [e for e in entities if e["type"] == "location"]
+
+    if not characters or not locations:
+        raise ValueError("Need at least 1 character and 1 location")
+
+    beats = []
+    for i in range(3):  # Generate 3 beats per story
+        char = random.choice(characters)["slug"]
+        loc = random.choice(locations)["slug"]
+
+        description = f"Scene {i+1}: At {{{loc}}}, {{{char}}} appears. Wide establishing shot."
+
+        beats.append({
+            "text": f"Beat {i+1}",
+            "description": description,
+            "visual_prompt": f"Style: {style}",
+            "motion_prompt": "camera pan"
+        })
+
+    return beats
+
+
+async def generate_and_validate_story(config, project_id, entities):
+    """
+    Generate a story for one configuration and validate beats.
+
+    Args:
+      config: {"style": str, "language": str, "duration": int}
+      project_id: str
+      entities: list[dict]
+
+    Returns:
+      {"config": dict, "beats_generated": int, "valid_beats": int, ...}
+    """
+    style = config.get("style")
+    language = config.get("language")
+    duration = config.get("duration")
+
+    try:
+        # Generate voiceover
+        voiceover = generate_voiceover(language, duration, entities)
+
+        # Simulate beat generation
+        beats = await simulate_beat_generation(voiceover, entities, style, language)
+
+        # Validate beats
+        validation = validate_beat_entities(beats, entities)
+
+        # Mock Flow API for each beat
+        for beat in beats:
+            beat["image_media_id"] = mock_flow_generate_image(beat)
+
+        return {
+            "config": config,
+            "beats_generated": len(beats),
+            "valid_beats": validation["valid_beats"],
+            "invalid_beats": validation["invalid_beats"],
+            "hallucinations": validation["hallucinations"],
+            "error": None if validation["valid"] else "Some beats invalid"
+        }
+
+    except Exception as e:
+        return {
+            "config": config,
+            "beats_generated": 0,
+            "valid_beats": 0,
+            "invalid_beats": 0,
+            "hallucinations": [],
+            "error": str(e)
+        }
+
+
+@pytest.mark.asyncio
+async def test_generate_and_validate_story():
+    """Verify story generation and validation works end-to-end."""
+    setup = setup_test_project()
+    project_id = setup["project_id"]
+    entities = setup["entities"]
+
+    config = {
+        "style": "anime",
+        "language": "French",
+        "duration": 30
+    }
+
+    result = await generate_and_validate_story(config, project_id, entities)
+
+    assert result["config"] == config, "Config should match input"
+    assert result["beats_generated"] > 0, "Should generate beats"
+    assert result["beats_generated"] >= result["valid_beats"], "valid_beats <= total"
+    assert result["error"] is None or isinstance(result["error"], str), "Error should be None or string"
+    assert result["beats_generated"] == 3, f"Should generate exactly 3 beats, got {result['beats_generated']}"
+
+    print("✓ Main loop test passed")
+
+
+@pytest.mark.asyncio
+async def test_story_generation_multiple_configs():
+    """Test story generation with various configurations."""
+    setup = setup_test_project()
+    project_id = setup["project_id"]
+    entities = setup["entities"]
+
+    configs = [
+        {"style": "anime", "language": "French", "duration": 30},
+        {"style": "photorealistic", "language": "English", "duration": 45},
+        {"style": "painterly", "language": "French", "duration": 20},
+    ]
+
+    for config in configs:
+        result = await generate_and_validate_story(config, project_id, entities)
+        assert result["error"] is None, f"Config {config} should not error: {result['error']}"
+        assert result["beats_generated"] == 3, f"Config {config} should generate 3 beats"
+        assert result["valid_beats"] == 3, f"Config {config} should have 3 valid beats (all slugs exist)"
+
+    print("✓ Multiple config test passed")
+
+
+# Run inline tests
 if __name__ == "__main__":
     test_setup_creates_entities()
     test_mock_flow_generates_fake_ids()
     test_generate_voiceover()
     test_validate_beat_entities()
+    asyncio.run(test_generate_and_validate_story())
+    asyncio.run(test_story_generation_multiple_configs())
