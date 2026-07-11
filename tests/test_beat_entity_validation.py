@@ -196,7 +196,151 @@ def test_mock_flow_generates_fake_ids():
     print("✓ Mock Flow test passed")
 
 
+def test_generate_voiceover():
+    """Verify voiceover generator creates text in correct language."""
+    setup = setup_test_project()
+    entities = setup["entities"]
+
+    # Test French
+    fr_vo = generate_voiceover("French", 30, entities)
+    assert len(fr_vo) > 0, "Voiceover should not be empty"
+    assert len(fr_vo.split()) >= 50, f"Voiceover should have ~75 words for 30s, got {len(fr_vo.split())}"
+    # Verify entities are mentioned
+    entity_names = [e["name"] for e in entities]
+    has_entity = any(name in fr_vo for name in entity_names)
+    assert has_entity, "Voiceover should mention at least one entity name"
+
+    # Test English
+    en_vo = generate_voiceover("English", 30, entities)
+    assert len(en_vo) > 0, "English voiceover should not be empty"
+    assert "the" in en_vo.lower() or "a" in en_vo.lower(), "English should have articles"
+
+    # Test duration scaling
+    short_vo = generate_voiceover("English", 10, entities)
+    long_vo = generate_voiceover("English", 60, entities)
+    assert len(long_vo.split()) > len(short_vo.split()), "Longer duration should produce more words"
+
+    print("✓ Voiceover generator test passed")
+
+
+def extract_braced_names(text):
+    """Extract entity names wrapped in {braces} from text."""
+    import re
+    return {m.strip() for m in re.findall(r'\{([^{}]+)\}', text or "") if m.strip()}
+
+
+def validate_beat_entities(beats, entities):
+    """
+    Validate that all entity references in beats exist in the entity database.
+
+    Returns:
+      - valid: True if ALL beats are valid
+      - valid_beats: count of valid beats
+      - invalid_beats: count of invalid beats
+      - hallucinations: list of {slug, beat_desc} for entities not in DB
+      - errors: list of error messages
+    """
+    # Build lookup table: slug -> entity
+    entity_slugs = {e["slug"]: e for e in entities}
+
+    validation_result = {
+        "valid": True,
+        "valid_beats": 0,
+        "invalid_beats": 0,
+        "hallucinations": [],
+        "errors": []
+    }
+
+    for beat in beats:
+        beat_desc = beat.get("description", "")
+        braced_names = extract_braced_names(beat_desc)
+
+        beat_is_valid = True
+        for name in braced_names:
+            if name not in entity_slugs:
+                # Hallucination found: entity slug not in database
+                validation_result["hallucinations"].append({
+                    "slug": name,
+                    "beat_desc": beat_desc[:80]  # First 80 chars
+                })
+                beat_is_valid = False
+                validation_result["valid"] = False
+
+        if beat_is_valid:
+            validation_result["valid_beats"] += 1
+        else:
+            validation_result["invalid_beats"] += 1
+
+    return validation_result
+
+
+def test_validate_beat_entities():
+    """Verify validation detects hallucinations."""
+    setup = setup_test_project()
+    entities = setup["entities"]
+
+    # Valid beats (all entity slugs exist)
+    valid_beats = [
+        {
+            "description": "At {ancient_temple}, wide shot of {helene_kheler}",
+        },
+        {
+            "description": "Close-up of {helene_kheler} holding {crystal_orb}",
+        },
+    ]
+
+    result = validate_beat_entities(valid_beats, entities)
+    assert result["valid"] is True, f"Valid beats should pass: {result}"
+    assert result["valid_beats"] == 2, f"Should have 2 valid beats, got {result['valid_beats']}"
+    assert result["invalid_beats"] == 0, f"Should have 0 invalid beats, got {result['invalid_beats']}"
+    assert len(result["hallucinations"]) == 0, f"Should have 0 hallucinations, got {result['hallucinations']}"
+
+    # Invalid beats (reference entities that don't exist)
+    invalid_beats = [
+        {
+            "description": "At {mystical_forest}, {helene_kheler} finds {magical_wand}",
+        },
+    ]
+
+    result = validate_beat_entities(invalid_beats, entities)
+    assert result["valid"] is False, "Invalid beats should fail"
+    assert result["invalid_beats"] == 1, f"Should have 1 invalid beat, got {result['invalid_beats']}"
+    assert len(result["hallucinations"]) == 2, f"Should detect 2 hallucinations, got {len(result['hallucinations'])}: {result['hallucinations']}"
+
+    halluc_slugs = {h["slug"] for h in result["hallucinations"]}
+    assert "mystical_forest" in halluc_slugs, f"Should detect mystical_forest hallucination, got {halluc_slugs}"
+    assert "magical_wand" in halluc_slugs, f"Should detect magical_wand hallucination, got {halluc_slugs}"
+
+    # Mixed: some valid, some invalid
+    mixed_beats = [
+        {"description": "At {ancient_temple}, {prince_aldwin} stands tall"},  # valid
+        {"description": "Unknown entity {ghost_wizard} appears"},  # invalid
+        {"description": "In {royal_palace}, {merchant_luc} negotiates"},  # valid
+    ]
+
+    result = validate_beat_entities(mixed_beats, entities)
+    assert result["valid"] is False, "Mixed beats with hallucinations should fail overall"
+    assert result["valid_beats"] == 2, f"Should have 2 valid beats in mixed, got {result['valid_beats']}"
+    assert result["invalid_beats"] == 1, f"Should have 1 invalid beat in mixed, got {result['invalid_beats']}"
+    assert len(result["hallucinations"]) == 1, f"Should detect 1 hallucination in mixed, got {len(result['hallucinations'])}"
+
+    # Edge case: beat with no braced entities
+    no_entities_beats = [
+        {"description": "A mysterious scene unfolds"},
+    ]
+
+    result = validate_beat_entities(no_entities_beats, entities)
+    assert result["valid"] is True, "Beat with no entity references should be valid"
+    assert result["valid_beats"] == 1, "Should count beat with no refs as valid"
+    assert result["invalid_beats"] == 0, "Should have no invalid beats"
+    assert len(result["hallucinations"]) == 0, "Should have no hallucinations"
+
+    print("✓ Validation test passed")
+
+
 # Run inline test
 if __name__ == "__main__":
     test_setup_creates_entities()
     test_mock_flow_generates_fake_ids()
+    test_generate_voiceover()
+    test_validate_beat_entities()
