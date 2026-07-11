@@ -6,15 +6,12 @@ entities in the database. Detects hallucinations and type mismatches.
 """
 import asyncio
 import hashlib
-import json
 import random
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
-from agent.studio import brain, validation
 from agent.studio.db import normalize_to_slug, _get_conn
 
 
