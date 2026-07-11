@@ -260,22 +260,36 @@ function getInitialState(project?: Project): WorkflowState {
     duration: project.target_duration ? Math.round(project.target_duration / 1000) : 120, // convert ms to seconds
     model: project.video_model || project.image_model || "claude-3-5-sonnet-20241022",
     language: project.script_lang || "English",
-    customPromptHeader: "",
+    aspect_ratio: project.aspect_ratio || "VIDEO_ASPECT_RATIO_LANDSCAPE",
+    customPromptHeader: project.prompt_header || "",
 
     // Step 2 data (from project)
     screenplayRaw: screenplay,
     scenes: scenes,
 
-    // Step 3 data (empty, will be generated or loaded separately)
+    // Step 3 data
     beats: [],
     editedBeatIds: new Set(),
 
-    // Step 4 data
+    // Step 3.5 data (Characters, Locations, Props)
+    characters: [],
+    locations: [],
+    props: [],
+
+    // Step 4 data (Assets)
+    entities: [],
+
+    // Step 4.5 data (Generated Images)
+    generatedImages: [],
+
+    // Step 5 data (Video)
     videoStatus: "pending",
     videoUrl: null,
     generationJobId: null,
 
     // Meta
+    projectId: project.id || null,
+    flowProjectId: project.flow_project_id || null,
     currentStep: screenplay ? 2 : 1, // If screenplay exists, start at Step 2
     loading: false,
     error: null,
