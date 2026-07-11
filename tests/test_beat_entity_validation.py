@@ -621,6 +621,13 @@ async def main():
         return False
 
 
+@pytest.mark.asyncio
+async def test_main_e2e():
+    """Test full end-to-end run with all configurations."""
+    success = await main()
+    assert success is True, "Main test suite should pass with ≥85% valid beats"
+
+
 # Run inline tests
 if __name__ == "__main__":
     # Seed for reproducibility
@@ -640,3 +647,94 @@ if __name__ == "__main__":
     # Run full test suite
     success = asyncio.run(main())
     exit(0 if success else 1)
+
+
+def report_results(all_results):
+    """Format and return validation report as multi-line string."""
+    total_beats = sum(r["beats_generated"] for r in all_results)
+    valid_beats = sum(r["valid_beats"] for r in all_results)
+    invalid_beats = sum(r["invalid_beats"] for r in all_results)
+
+    valid_pct = (100 * valid_beats / total_beats) if total_beats > 0 else 0
+
+    report = f"""{'='*60}
+Beat Entity Validation Report
+{'='*60}
+Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+SUMMARY
+-------
+Total stories:    {len(all_results)}
+Total beats:      {total_beats}
+Valid beats:      {valid_beats}/{total_beats} ({valid_pct:.1f}%)
+Invalid beats:    {invalid_beats}
+
+BY CONFIGURATION
+----------------
+{"Style":<12} | {"Language":<8} | {"Duration":<4} | Result
+{"-"*50}
+"""
+
+    for result in all_results:
+        style = result["config"]["style"]
+        lang = result["config"]["language"]
+        dur = result["config"]["duration"]
+        valid = result["valid_beats"]
+        total = result["beats_generated"]
+        status = "✓" if result["error"] is None else "✗"
+
+        if total > 0:
+            report += f"{style:<12} | {lang:<8} | {dur:>3}s | {valid}/{total} {status}\n"
+        else:
+            report += f"{style:<12} | {lang:<8} | {dur:>3}s | ERROR {status}\n"
+
+    # Collect all hallucinations
+    all_hallucinations = []
+    for result in all_results:
+        all_hallucinations.extend(result.get("hallucinations", []))
+
+    if all_hallucinations:
+        report += f"\nHALLUCINATIONS ({len(all_hallucinations)}):\n"
+        report += "-" * 50 + "\n"
+        for h in all_hallucinations[:15]:  # Show first 15
+            report += f"  - {h['slug']:<20} in: {h['beat_desc']}\n"
+        if len(all_hallucinations) > 15:
+            report += f"  ... and {len(all_hallucinations) - 15} more\n"
+
+    report += f"\n{'='*60}\n"
+
+    return report
+
+
+def test_report_results():
+    """Verify report formatting."""
+    mock_results = [
+        {
+            "config": {"style": "anime", "language": "French", "duration": 30},
+            "beats_generated": 3,
+            "valid_beats": 3,
+            "invalid_beats": 0,
+            "hallucinations": [],
+            "error": None
+        },
+        {
+            "config": {"style": "realistic", "language": "English", "duration": 60},
+            "beats_generated": 3,
+            "valid_beats": 2,
+            "invalid_beats": 1,
+            "hallucinations": [{"slug": "unknown_entity", "beat_desc": "Some beat..."}],
+            "error": None
+        }
+    ]
+
+    report = report_results(mock_results)
+
+    assert "Beat Entity Validation Report" in report, "Report should have title"
+    assert "6" in report, "Report should show 6 total beats"
+    assert "5/6" in report or "83.3%" in report, "Report should show valid % (5/6 = 83.3%)"
+    assert "unknown_entity" in report, "Report should list hallucinations"
+    assert "anime" in report and "realistic" in report, "Report should list configs"
+
+    print("✓ Reporting test passed")
+    print("\nSample Report:\n")
+    print(report)
