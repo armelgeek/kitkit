@@ -183,6 +183,60 @@ def _migrate(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _migrate_add_versioning(conn: sqlite3.Connection) -> None:
+    """Add versioning support to character, location, prop tables.
+
+    Idempotent: checks column existence before adding. Backfills existing assets
+    with v1 entries to preserve generation history.
+    """
+    # ponytail: idempotent column checks via PRAGMA, one backfill loop per table
+    from datetime import datetime, timezone
+
+    tables = ["character", "location", "prop"]
+
+    for table in tables:
+        # Check existing columns
+        pragma_sql = "PRAGMA table_info(" + table + ")"
+        existing_cols = {row[1] for row in conn.execute(pragma_sql).fetchall()}
+
+        # Add version_history column if missing
+        if "version_history" not in existing_cols:
+            alter_sql = "ALTER TABLE " + table + " ADD COLUMN version_history TEXT DEFAULT '[]'"
+            conn.execute(alter_sql)
+
+        # Add active_version_num column if missing
+        if "active_version_num" not in existing_cols:
+            alter_sql = "ALTER TABLE " + table + " ADD COLUMN active_version_num INTEGER DEFAULT 1"
+            conn.execute(alter_sql)
+
+        # Backfill existing assets with v1 entries (if not already backfilled)
+        select_sql = "SELECT id, media_id, reference_image_url FROM " + table
+        assets = conn.execute(select_sql).fetchall()
+        for asset in assets:
+            asset_id, media_id, reference_image_url = asset
+            # Get current version_history to check if already backfilled
+            check_sql = "SELECT version_history FROM " + table + " WHERE id=?"
+            row = conn.execute(check_sql, (asset_id,)).fetchone()
+            if row:
+                history = row[0]
+                # Only backfill if version_history is empty or null
+                if not history or history == "[]":
+                    v1_entry = {
+                        "version": 1,
+                        "media_id": media_id,
+                        "reference_image_url": reference_image_url,
+                        "prompt": "(original - no prompt stored)",
+                        "instructions": None,
+                        "generated_at": f"{datetime.now(timezone.utc).isoformat()}Z",
+                        "status": "success"
+                    }
+                    history_json = json.dumps([v1_entry])
+                    update_sql = "UPDATE " + table + " SET version_history=?, active_version_num=1 WHERE id=?"
+                    conn.execute(update_sql, (history_json, asset_id))
+
+    conn.commit()
+
+
 def _get_conn() -> sqlite3.Connection:
     global _conn
     if _conn is None:
@@ -192,6 +246,7 @@ def _get_conn() -> sqlite3.Connection:
         _conn.executescript(_SCHEMA)
         _conn.commit()
         _migrate(_conn)
+        _migrate_add_versioning(_conn)
     return _conn
 
 
