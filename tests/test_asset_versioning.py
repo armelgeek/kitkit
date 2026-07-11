@@ -87,7 +87,10 @@ def test_backfill_creates_v1_entries(temp_db):
     assert v1["prompt"] == "(original - no prompt stored)"
     assert v1["instructions"] is None
     assert v1["status"] == "success"
+    # Verify ISO 8601 format with Z marker (no timezone offset)
     assert v1["generated_at"].endswith("Z")
+    assert "+" not in v1["generated_at"], "Timestamp should not include timezone offset before Z"
+    assert v1["generated_at"].count("T") == 1, "ISO 8601 format requires exactly one T separator"
 
 
 def test_backfill_handles_null_media_id(temp_db):
@@ -188,3 +191,132 @@ def test_all_entity_tables_versioned(temp_db):
         assert active_version_num == 1
         assert len(version_history) == 1
         assert version_history[0]["version"] == 1
+
+
+# ─── Pydantic Model Tests (Task 2) ─────────────────────────────
+
+
+def test_version_entry_model():
+    """Test VersionEntry validates and serializes correctly."""
+    from agent.models import VersionEntry
+
+    # Test with all fields
+    entry = VersionEntry(
+        version=1,
+        media_id="550e8400-e29b-41d4-a716-446655440000",
+        reference_image_url="https://example.com/image.jpg",
+        prompt="A beautiful landscape",
+        instructions="Add more detail to the sky",
+        generated_at="2026-01-15T10:30:00Z",
+        status="success"
+    )
+
+    assert entry.version == 1
+    assert entry.media_id == "550e8400-e29b-41d4-a716-446655440000"
+    assert entry.reference_image_url == "https://example.com/image.jpg"
+    assert entry.prompt == "A beautiful landscape"
+    assert entry.instructions == "Add more detail to the sky"
+    assert entry.generated_at == "2026-01-15T10:30:00Z"
+    assert entry.status == "success"
+
+    # Test serialization
+    serialized = entry.model_dump()
+    assert serialized["version"] == 1
+    assert serialized["status"] == "success"
+
+    # Test without instructions (optional field)
+    entry_without_instructions = VersionEntry(
+        version=2,
+        media_id="550e8400-e29b-41d4-a716-446655440001",
+        reference_image_url="https://example.com/image2.jpg",
+        prompt="Another prompt",
+        generated_at="2026-01-15T11:00:00Z",
+        status="pending"
+    )
+
+    assert entry_without_instructions.instructions is None
+    assert entry_without_instructions.status == "pending"
+
+
+def test_asset_history_response_model():
+    """Test AssetHistoryResponse with nested VersionEntry list."""
+    from agent.models import AssetHistoryResponse, VersionEntry
+
+    # Create version entries
+    versions = [
+        VersionEntry(
+            version=1,
+            media_id="550e8400-e29b-41d4-a716-446655440000",
+            reference_image_url="https://example.com/image1.jpg",
+            prompt="First version",
+            generated_at="2026-01-15T10:00:00Z",
+            status="success"
+        ),
+        VersionEntry(
+            version=2,
+            media_id="550e8400-e29b-41d4-a716-446655440001",
+            reference_image_url="https://example.com/image2.jpg",
+            prompt="Second version",
+            instructions="Improved colors",
+            generated_at="2026-01-15T11:00:00Z",
+            status="success"
+        )
+    ]
+
+    # Create history response
+    history = AssetHistoryResponse(
+        entity_id="char-001",
+        active_version=2,
+        versions=versions
+    )
+
+    assert history.entity_id == "char-001"
+    assert history.active_version == 2
+    assert len(history.versions) == 2
+    assert history.versions[0].version == 1
+    assert history.versions[1].version == 2
+
+    # Test serialization
+    serialized = history.model_dump()
+    assert serialized["entity_id"] == "char-001"
+    assert serialized["active_version"] == 2
+    assert len(serialized["versions"]) == 2
+    assert serialized["versions"][0]["prompt"] == "First version"
+    assert serialized["versions"][1]["prompt"] == "Second version"
+
+
+def test_regenerate_request_model():
+    """Test RegenerateRequest optional fields work correctly."""
+    from agent.models import RegenerateRequest
+
+    # Test with both fields
+    request_both = RegenerateRequest(
+        prompt="New prompt for regeneration",
+        instructions="Make it more detailed"
+    )
+
+    assert request_both.prompt == "New prompt for regeneration"
+    assert request_both.instructions == "Make it more detailed"
+
+    # Test with only prompt
+    request_prompt_only = RegenerateRequest(prompt="Just a new prompt")
+
+    assert request_prompt_only.prompt == "Just a new prompt"
+    assert request_prompt_only.instructions is None
+
+    # Test with only instructions
+    request_instructions_only = RegenerateRequest(instructions="Just instructions")
+
+    assert request_instructions_only.prompt is None
+    assert request_instructions_only.instructions == "Just instructions"
+
+    # Test with neither (both optional)
+    request_empty = RegenerateRequest()
+
+    assert request_empty.prompt is None
+    assert request_empty.instructions is None
+
+    # Test serialization
+    serialized = request_both.model_dump()
+    assert serialized["prompt"] == "New prompt for regeneration"
+    assert serialized["instructions"] == "Make it more detailed"

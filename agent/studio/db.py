@@ -227,7 +227,7 @@ def _migrate_add_versioning(conn: sqlite3.Connection) -> None:
                         "reference_image_url": reference_image_url,
                         "prompt": "(original - no prompt stored)",
                         "instructions": None,
-                        "generated_at": f"{datetime.now(timezone.utc).isoformat()}Z",
+                        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
                         "status": "success"
                     }
                     history_json = json.dumps([v1_entry])
