@@ -104,8 +104,8 @@ class CreateProjectRequest(BaseModel):
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"
     style: str = "Realistic"
     storytelling: bool = False
-    script_lang: str = "Vietnamese"       # ngôn ngữ kịch bản / lời thoại / lời đọc
-    image_text_lang: str = "Vietnamese"   # ngôn ngữ chữ viết/vẽ trong ảnh
+    script_lang: str = "English"
+    image_text_lang: str = "English"
     import_flow_project_id: Optional[str] = None   # gắn vào project Flow có sẵn
     import_thumb_media_key: Optional[str] = None
 
@@ -344,7 +344,7 @@ async def options():
 
 @router.get("/fonts")
 async def list_fonts():
-    """Các font có trên máy để chọn cho caption (vẽ chữ lên video)."""
+    """List fonts available on system for captions."""
     fonts = await asyncio.to_thread(assembler.list_fonts)
     return {"fonts": fonts, "current": (await db.kv_get_all()).get("caption_font") or ""}
 
@@ -521,8 +521,8 @@ async def create_project(body: CreateProjectRequest):
                          or "VIDEO_ASPECT_RATIO_LANDSCAPE"),
         "paygate_tier": await _current_tier(),   # từ /api/flow/credits, không do user chọn
         "storytelling": 1 if body.storytelling else 0,
-        "script_lang": (body.script_lang or "Vietnamese").strip() or "Vietnamese",
-        "image_text_lang": (body.image_text_lang or "Vietnamese").strip() or "Vietnamese",
+        "script_lang": (body.script_lang or "English").strip() or "English",
+        "image_text_lang": (body.image_text_lang or "English").strip() or "English",
         "thumb_media_key": thumb,
         "status": "draft", "created_at": ts, "updated_at": ts,
     }
@@ -771,7 +771,7 @@ async def generate_script(pid: str, body: GenerateScriptRequest):
     p = await _project_or_404(pid)
     result = await brain.run_json(brain.script_from_idea_prompt(
         body.idea, body.target_duration, bool(p["storytelling"]),
-        p["style"], p["shot_duration"] or 8, p.get("script_lang") or "Vietnamese"))
+        p["style"], p["shot_duration"] or 8, p.get("script_lang") or "English"))
     script = result.get("script", "")
     if not script:
         raise HTTPException(502, "AI failed to return script")
@@ -801,7 +801,7 @@ async def script_chat(pid: str, body: ScriptChatRequest):
     p = await _project_or_404(pid)
     result = await brain.run_json(brain.edit_script_prompt(
         p["script_raw"] or "", body.instruction, p["style"],
-        p.get("script_lang") or "Vietnamese"))
+        p.get("script_lang") or "English"))
     script = result.get("script", "")
     if not script:
         raise HTTPException(502, "AI failed to return script")
@@ -1026,7 +1026,7 @@ async def _label_location_grid(entity: dict, project: dict) -> None:
     if not src.exists():
         return
     # Select labels by project language
-    lang = project.get("script_lang") or "Vietnamese"
+    lang = project.get("script_lang") or "English"
     labels = brain.LOCATION_GRID_LABELS_BY_LANG.get(lang, brain.LOCATION_GRID_LABELS)
 
     out_rel = f"{project['id']}/loc_{entity['id']}_labeled.png"
@@ -1050,7 +1050,7 @@ async def _label_prop_sheet(entity: dict, project: dict) -> None:
     if not src.exists():
         return
     # Select labels by project language
-    lang = project.get("script_lang") or "Vietnamese"
+    lang = project.get("script_lang") or "English"
     labels = brain.PROP_GRID_LABELS_BY_LANG.get(lang, brain.PROP_GRID_LABELS_BY_LANG["English"])
 
     out_rel = f"{project['id']}/prop_{entity['id']}_labeled.png"
@@ -1140,7 +1140,7 @@ async def extract_entities(pid: str, replace: bool = False):
         raise HTTPException(400, "Chưa có kịch bản để trích entity")
     items = await brain.run_json(brain.entity_extract_prompt(p["script_raw"]))
     if not isinstance(items, list):
-        raise HTTPException(502, "AI không trả về danh sách entity")
+        raise HTTPException(502, "AI failed to return entity list")
     if replace:
         for r in await db.query_all(
                 "SELECT id, image_path FROM entity WHERE project_id=?", (pid,)):
@@ -1605,7 +1605,7 @@ async def autofill_storyboard(sid: str, body: AutofillRequest):
         scene["heading"], scene.get("action") or "", erows, project["style"], body.n_frames,
         location=(scene_loc["name"] if scene_loc else None)))
     if not isinstance(frames, list):
-        raise HTTPException(502, "AI không trả về danh sách frame")
+        raise HTTPException(502, "AI failed to return frame list")
     if not scene_loc_id:                      # heading matched no entity → use the AI's pick
         scene_loc_id = _first_location_id(frames, by_name)
     await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
@@ -1943,13 +1943,13 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
             voiceover = (parts[pos] if pos < len(parts) else "").strip()
         if not voiceover:
             raise HTTPException(
-                400, "Scene này không còn nội dung gốc để đọc — số scene đang nhiều hơn "
-                "số câu trong nội dung nguồn. Giảm bớt scene hoặc bổ sung nội dung gốc.")
+                400, "This scene has no source content to narrate — there are more scenes than "
+                "sentences in the source material. Reduce scenes or add more source content.")
     else:
         # no original input stored → fall back to the scene's own script text, verbatim
         voiceover = (scene.get("action") or "").strip()
         if not voiceover:
-            raise HTTPException(400, "Chưa có nội dung gốc (idea) để đọc cho scene này.")
+            raise HTTPException(400, "No source content (idea) available to narrate for this scene.")
 
     # 2) segment the verbatim narration into visual beats (UNIFIED AI call: plan + segment in 1)
     #    The SPOKEN text per beat is re-derived verbatim from the narration so the audio always
@@ -2121,7 +2121,7 @@ async def rebuild_scene_audio(sid: str):
     # and re-tiled captions are clean.
     say = [vntext.strip_decoration(s.get("narrator_text") or "").strip() for s in shots]
     if not any(say):
-        raise HTTPException(400, "Các shot chưa có lời đọc (narrator_text) để tạo audio")
+        raise HTTPException(400, "Shots lack narrator_text to generate audio")
 
     voice_id = project.get("voice_id") or 0
     speed = float(project.get("tts_speed") or 1.0)
@@ -2140,7 +2140,7 @@ async def rebuild_scene_audio(sid: str):
         raise HTTPException(502, f"Không tạo được audio ({e.detail}). Kiểm tra OmniVoice URL "
                                  f"trong ⚙ Settings rồi thử lại — audio cũ được giữ nguyên.")
     if len(reads) != len(shots):                      # one read per beat → must line up 1:1
-        raise HTTPException(500, "Số đoạn audio không khớp số shot")
+        raise HTTPException(500, "Audio segment count does not match shot count")
 
     # Re-time: leading pad shifts every shot's start; both pads count toward scene length.
     n = len(shots)
@@ -2201,7 +2201,7 @@ async def _revary_scene(sid: str) -> int:
             logger.warning("revary scene %s attempt %d failed: %s", sid, attempt, ex)
         await asyncio.sleep(1.0 + attempt)
     if not out:
-        raise HTTPException(502, "AI không trả về danh sách góc máy (đã thử lại nhiều lần)")
+        raise HTTPException(502, "AI failed to return camera angles (retried multiple times)")
     if not scene_loc_id:                       # heading matched no entity → keep AI's pick
         scene_loc_id = _first_location_id(out, by_name)
     mapped: dict[int, dict] = {}
@@ -3001,7 +3001,7 @@ class SaveTemplateRequest(BaseModel):
 
 @router.get("/graph-templates")
 async def list_graph_templates():
-    """Các preset (template) sơ đồ node đã lưu — tái dùng nhanh giữa các shot/asset."""
+    """List saved node graph templates (presets) for quick reuse across shots/assets."""
     return {"templates": await db.kv_get("graph_templates", []) or []}
 
 
@@ -3073,7 +3073,7 @@ async def _flow_workflow_name_for_media(flow_project_id: str, media_id: str) -> 
     try:
         raw = await get_flow_client().get_project(flow_project_id)
     except Exception as e:  # noqa: BLE001
-        logger.warning("rename: đọc project Flow lỗi: %s", e)
+        logger.warning("rename: failed to read Flow project: %s", e)
         return None
     data = raw.get("data", raw) if isinstance(raw, dict) else {}
     for w in (_deep_find(data, "workflows") or []):
@@ -3257,7 +3257,7 @@ async def shot_narration(sid: str, body: NarrationRequest):
     if not text:
         out = await brain.run_json(brain.narrator_prompt(
             shot.get("description") or shot.get("title") or "",
-            body.language or project.get("script_lang") or "Vietnamese"))
+            body.language or project.get("script_lang") or "English"))
         text = out.get("narrator_text", "")
     if not text:
         raise HTTPException(502, "Không sinh được narrator text")
@@ -3354,7 +3354,7 @@ async def export_project(pid: str):
     """Sinh metadata SEO (AI) + SRT từ narration + thumbnail (AI → Flow image)."""
     p = await _project_or_404(pid)
     meta = await brain.run_json(brain.seo_prompt(
-        p["title"], p.get("script_raw") or "", p.get("script_lang") or "Vietnamese"))
+        p["title"], p.get("script_raw") or "", p.get("script_lang") or "English"))
     # SRT từ narration các shot (theo thứ tự)
     shots = await db.query_all(
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
@@ -3606,24 +3606,24 @@ async def generate_asset_references(pid: str):
 
 @router.get("/jobs")
 async def list_jobs(project_id: Optional[str] = None):
-    """Các job đang/ vừa chạy (trong bộ nhớ). Dùng để dựng lại trạng thái khi mở tab."""
+    """List active and recently completed jobs (in-memory). Used to restore UI state on page load."""
     return {"jobs": get_job_manager().active(project_id)}
 
 
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str):
-    """Dừng một batch đang chạy (sau item hiện tại)."""
+    """Cancel a running batch job (after current item completes)."""
     ok = get_job_manager().cancel(job_id)
     if not ok:
-        raise HTTPException(404, "Job không tồn tại hoặc đã kết thúc")
+        raise HTTPException(404, "Job does not exist or has already completed")
     return {"ok": True}
 
 
 @router.websocket("/ws")
 async def jobs_ws(ws: WebSocket):
-    """Kênh realtime: server đẩy {type:'job', job:{…}} mỗi khi job thay đổi.
+    """Real-time channel: server broadcasts {type:'job', job:{…}} whenever a job changes.
 
-    Khi vừa kết nối, gửi snapshot toàn bộ job hiện có để client dựng lại banner.
+    On connect, sends snapshot of all active jobs so client can restore UI state.
     """
     await ws.accept()
     mgr = get_job_manager()
@@ -3631,7 +3631,7 @@ async def jobs_ws(ws: WebSocket):
     try:
         await ws.send_json({"type": "snapshot", "jobs": mgr.active()})
         while True:
-            # Không cần dữ liệu từ client; giữ kết nối mở (và phát hiện ngắt).
+            # No data expected from client; keep connection open (detects disconnect).
             await ws.receive_text()
     except WebSocketDisconnect:
         pass

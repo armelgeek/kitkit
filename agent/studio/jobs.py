@@ -165,7 +165,7 @@ class JobManager:
                 break
             batch_id = str(uuid.uuid4())
             labels = [item_label(it) if item_label else str(k) for k, it in enumerate(group)]
-            job.current = (f"Lô {gi + 1}/{len(groups)} · {len(group)} ảnh: "
+            job.current = (f"Batch {gi + 1}/{len(groups)} · {len(group)} images: "
                            + ", ".join(labels)[:80])
             await self._broadcast(job)
 
@@ -191,7 +191,7 @@ class JobManager:
 
             # Run the group concurrently, but abort PROMPTLY on cancel: cancel the still-running
             # frames (which interrupts their long retry/backoff sleeps) instead of waiting the
-            # whole group out — otherwise "Dừng" appears to do nothing mid-batch.
+            # whole group out — otherwise cancel appears to do nothing mid-batch.
             tasks = [asyncio.create_task(_one(k, it, lbl))
                      for k, (it, lbl) in enumerate(zip(group, labels))]
             while tasks:
@@ -206,7 +206,7 @@ class JobManager:
             if gi < len(groups) - 1 and not job.cancel.is_set():
                 await self._cooldown(job, throttle)   # 10s cooldown between batches
         if finalize is not None and job.status != "cancelled":
-            job.current = "Hoàn tất…"
+            job.current = "Finalizing…"
             await self._broadcast(job)
             try:
                 await finalize()
@@ -216,8 +216,8 @@ class JobManager:
         if job.status != "cancelled":
             job.status = "error" if job.errors and not job.done else "done"
         job.current = ""
-        job.message = f"{job.done}/{job.total} xong" + (
-            f", {len(job.errors)} lỗi" if job.errors else "")
+        job.message = f"{job.done}/{job.total} done" + (
+            f", {len(job.errors)} errors" if job.errors else "")
         await self._broadcast(job)
         await self._persist(job)
         asyncio.create_task(self._reap(job.id))
@@ -249,7 +249,7 @@ class JobManager:
                 except asyncio.TimeoutError:
                     pass
         if finalize is not None and job.status != "cancelled":
-            job.current = "Hoàn tất…"
+            job.current = "Finalizing…"
             await self._broadcast(job)
             try:
                 await finalize()
@@ -259,8 +259,8 @@ class JobManager:
         if job.status != "cancelled":
             job.status = "error" if job.errors and not job.done else "done"
         job.current = ""
-        job.message = f"{job.done}/{job.total} xong" + (
-            f", {len(job.errors)} lỗi" if job.errors else "")
+        job.message = f"{job.done}/{job.total} done" + (
+            f", {len(job.errors)} errors" if job.errors else "")
         await self._broadcast(job)
         await self._persist(job)
         asyncio.create_task(self._reap(job.id))

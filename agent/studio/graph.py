@@ -245,10 +245,10 @@ async def _save_and_upload(img, pid: str, flow_pid: str) -> tuple[str, str]:
         base64.b64encode(raw).decode(), mime_type="image/png",
         project_id=flow_pid, file_name="node.png")
     if res.get("error"):
-        raise GraphError(f"Upload ảnh đã xử lý lên Flow lỗi: {res['error']}")
+        raise GraphError(f"Failed to upload processed image to Flow: {res['error']}")
     mid = res.get("_mediaId") or _generated_media_id(res.get("data", res))
     if not mid:
-        raise GraphError("Flow không trả media_id cho ảnh đã xử lý")
+        raise GraphError("Flow did not return media_id for processed image")
     rel = f"{pid}/{mid}.png"
     dest = media_store.MEDIA_DIR / rel
     dest.parent.mkdir(parents=True, exist_ok=True)

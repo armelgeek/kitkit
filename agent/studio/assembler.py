@@ -46,7 +46,7 @@ async def probe_duration(path: Path) -> float:
             "-of", "default=noprint_wrappers=1:nokey=1", str(path),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     except (FileNotFoundError, NotImplementedError, OSError) as e:
-        logger.warning("ffprobe không chạy được (%s) — dùng thời lượng mặc định", e)
+        logger.warning("ffprobe unavailable (%s) — using default duration", e)
         return 0.0
     out, _ = await proc.communicate()
     try:
@@ -329,7 +329,7 @@ async def _scene_clip(parts: list[dict], scene: dict, out: Path, w: int, h: int,
         await _image_clip(src, None, sub, w, h, durs[k], ken_burns)
         tmp.append(sub)
     if not tmp:
-        raise RuntimeError("scene không có ảnh hợp lệ")
+        raise RuntimeError("scene has no valid images")
     lst = out.with_name(f"{out.stem}_list.txt")
     lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in tmp), encoding="utf-8")
     silent = out.with_name(f"{out.stem}_silent.mp4")
@@ -393,7 +393,7 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
         clip_paths.append(out)
 
     if not clip_paths:
-        raise RuntimeError("Chưa có shot nào có ảnh để ghép")
+        raise RuntimeError("No shots with images to assemble")
 
     list_file = out_dir / "concat_images.txt"
     list_file.write_text(
@@ -423,7 +423,7 @@ async def assemble(project_id: str) -> dict:
         "WHERE sc.project_id=? AND sh.video_path IS NOT NULL ORDER BY sc.idx, sh.idx",
         (project_id,))
     if not shots:
-        raise RuntimeError("Chưa có shot nào có video để ghép")
+        raise RuntimeError("No shots with video to assemble")
 
     out_dir = STUDIO_MEDIA_DIR / project_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -440,7 +440,7 @@ async def assemble(project_id: str) -> dict:
         norm_paths.append(out)
 
     if not norm_paths:
-        raise RuntimeError("Không có clip hợp lệ để ghép")
+        raise RuntimeError("No valid clips to assemble")
 
     list_file = out_dir / "concat.txt"
     list_file.write_text(

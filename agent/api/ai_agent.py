@@ -182,7 +182,7 @@ async def _run_via_pty(body: "RunRequest", argv: list[str],
 
 @router.get("/agents")
 async def list_agents():
-    """Liệt kê agent đã cấu hình + binary có sẵn trên máy hay không."""
+    """List configured agents and check if binaries are available on system."""
     agents = []
     for key, cfg in AI_AGENTS.items():
         agent_info = {

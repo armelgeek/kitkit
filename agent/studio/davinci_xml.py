@@ -288,7 +288,7 @@ async def build(project_id: str) -> dict:
                 tnum += 1
 
     if not items:
-        raise RuntimeError("Chưa có shot nào có ảnh hoặc video để export")
+        raise RuntimeError("No shots with images or video to export")
 
     # narration audio track
     audio_items = []
