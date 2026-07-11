@@ -296,3 +296,49 @@ def test_unified_scene_beats_prompt_uses_slugs():
 
     # Verify the comment mentions slugs
     assert "use EXACTLY these slugs" in prompt, "Comment should say 'use EXACTLY these slugs'"
+
+
+# ─── Validation tests ────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_validation_rejects_unknown_slug():
+    """Verify that validation rejects beats with unknown entity references."""
+    from agent.studio import validation
+    from fastapi import HTTPException
+
+    # Create entities with valid names
+    entities = [
+        {
+            "id": "c1",
+            "name": "Helene",
+            "slug": "helene",
+            "type": "character"
+        }
+    ]
+
+    # Beat with known entity reference (should PASS)
+    beats_good = [
+        {
+            "text": "Test",
+            "description": "At {Helene}, wide shot",
+            "visual_prompt": "Test",
+            "ref_entity_names": ["Helene"]
+        }
+    ]
+
+    result, issues = await validation.auto_fix_beats(beats_good, entities, max_retries=0)
+    assert issues["valid"] is True, "Should pass validation with known entity"
+
+    # Beat with unknown entity reference (should FAIL)
+    beats_bad = [
+        {
+            "text": "Test",
+            "description": "At {Unknown}, wide shot",
+            "visual_prompt": "Test",
+            "ref_entity_names": ["Unknown"]
+        }
+    ]
+
+    with pytest.raises(HTTPException) as exc_info:
+        await validation.auto_fix_beats(beats_bad, entities, max_retries=0)
+    assert exc_info.value.status_code == 502, "Should raise HTTPException with 502 status"
