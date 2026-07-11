@@ -14,3 +14,9 @@
 - [ ] Task 7: API Client Helpers
 - [ ] Task 8: Existing Generation Flow Integration
 - [ ] Task 9: Testing & Validation
+
+## Completed Tasks
+
+- [x] Task 1: Database Migration (commits 26ec2e6, 9ee907c | review: APPROVED)
+- [x] Task 2: Pydantic Models (commit 4a97262 | review: pending)
+- [x] Task 3: Versioning Helpers (commit 4bba0cf | review: pending)
