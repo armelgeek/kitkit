@@ -15,6 +15,11 @@ interface Asset {
 
 export default function Step2ReviewAssets() {
   const { state, actions } = useWorkflow();
+
+  if (!state) {
+    return <div className="p-4">Loading...</div>;
+  }
+
   const { characters = [], locations = [], props: propsData = [], beats = [], loading, error, projectId, flowProjectId } = state;
 
   const [assets, setAssets] = useState<Asset[]>([]);
