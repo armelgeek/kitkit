@@ -11,6 +11,7 @@ import os
 import random
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -23,9 +24,15 @@ from pydantic import BaseModel
 from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
 )
+from agent.models import RegenerateRequest, AssetHistoryResponse, VersionEntry
 from agent.services.flow_client import get_flow_client
 from agent.studio import db, media_store, brain, assembler, davinci_xml, vntext, graph as graph_mod
 from agent.studio.jobs import get_job_manager
+from agent.studio.versioning import (
+    parse_version_history,
+    add_version_to_history,
+    get_active_version
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/studio", tags=["studio"])
@@ -3605,6 +3612,167 @@ async def generate_asset_references(pid: str):
     )
 
     return {"job_id": job.id, "total_assets": len(assets)}
+
+
+# ─── Asset Versioning (regenerate, history, set-active-version) ───────────
+
+@router.post("/projects/{project_id}/entities/{entity_id}/regenerate")
+async def regenerate_asset_reference(
+    project_id: str,
+    entity_id: str,
+    body: RegenerateRequest,
+):
+    """Regenerate an asset reference with modified prompt/instructions."""
+    # Verify project and entity exist
+    project = await _project_or_404(project_id)
+    entity = await db.query_one(
+        "SELECT * FROM entity WHERE id=? AND project_id=?",
+        (entity_id, project_id)
+    )
+    if not entity:
+        raise HTTPException(404, "Entity not found")
+
+    # Determine prompt to use
+    if body.prompt:
+        prompt_to_use = body.prompt
+    else:
+        history = parse_version_history(entity.get("version_history") or "[]")
+        active_version = get_active_version(history, entity.get("active_version_num") or 1)
+        prompt_to_use = active_version["prompt"] if active_version else entity.get("description")
+
+    # Define worker function
+    async def _regenerate_worker():
+        """Worker function: generate asset and append to version history."""
+        entity_row = await db.query_one("SELECT * FROM entity WHERE id=?", (entity_id,))
+        if not entity_row:
+            raise Exception("Entity was deleted during regeneration")
+
+        try:
+            # Generate reference image (reuse existing flow logic)
+            result = await _generate_entity_image(entity_row, project)
+
+            media_id = result.get("media_id")
+            reference_image_url = result.get("image_path")
+
+            # Create version entry
+            new_version = {
+                "media_id": media_id,
+                "reference_image_url": reference_image_url,
+                "prompt": prompt_to_use,
+                "instructions": body.instructions,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "status": "success"
+            }
+
+            # Add to history (with limit enforcement)
+            updated_history, new_version_num = add_version_to_history(
+                entity_row.get("version_history") or "[]",
+                new_version,
+                max_versions=10
+            )
+
+            # Update entity
+            await db.update("entity", entity_id, {
+                "version_history": updated_history,
+                "active_version_num": new_version_num,
+                "updated_at": db.now()
+            })
+
+        except Exception as e:
+            # Add error entry to history
+            failed_version = {
+                "media_id": None,
+                "reference_image_url": None,
+                "prompt": prompt_to_use,
+                "instructions": body.instructions,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "status": f"error: {str(e)}"
+            }
+            entity_row = await db.query_one("SELECT * FROM entity WHERE id=?", (entity_id,))
+            if entity_row:
+                updated_history, _ = add_version_to_history(
+                    entity_row.get("version_history") or "[]",
+                    failed_version,
+                    max_versions=10
+                )
+                await db.update("entity", entity_id, {
+                    "version_history": updated_history,
+                    "updated_at": db.now()
+                })
+            raise
+
+    # Launch generation job
+    job_mgr = get_job_manager()
+    job = job_mgr.start(
+        project_id=project_id,
+        type_="regenerate_asset",
+        items=[entity],
+        worker=lambda _: _regenerate_worker(),
+        label=f"Regenerate {entity.get('name', entity_id)}"
+    )
+
+    return {"job_id": job.id, "version_num": None}
+
+
+@router.get("/projects/{project_id}/entities/{entity_id}/history", response_model=AssetHistoryResponse)
+async def get_asset_history(
+    project_id: str,
+    entity_id: str,
+):
+    """Retrieve full version history for an asset with all metadata."""
+    # Verify project and entity exist
+    await _project_or_404(project_id)
+    entity = await db.query_one(
+        "SELECT * FROM entity WHERE id=? AND project_id=?",
+        (entity_id, project_id)
+    )
+    if not entity:
+        raise HTTPException(404, "Entity not found")
+
+    history = parse_version_history(entity.get("version_history") or "[]")
+    active_version = entity.get("active_version_num") or 1
+
+    versions = [VersionEntry(**v) for v in history]
+
+    return AssetHistoryResponse(
+        entity_id=entity_id,
+        active_version=active_version,
+        versions=versions
+    )
+
+
+class SetActiveVersionRequest(BaseModel):
+    version_num: int
+
+
+@router.patch("/projects/{project_id}/entities/{entity_id}/set-active-version")
+async def set_active_version(
+    project_id: str,
+    entity_id: str,
+    body: SetActiveVersionRequest,
+):
+    """Switch to a different version as the active one."""
+    # Verify project and entity exist
+    await _project_or_404(project_id)
+    entity = await db.query_one(
+        "SELECT * FROM entity WHERE id=? AND project_id=?",
+        (entity_id, project_id)
+    )
+    if not entity:
+        raise HTTPException(404, "Entity not found")
+
+    # Verify version exists
+    history = parse_version_history(entity.get("version_history") or "[]")
+    if not get_active_version(history, body.version_num):
+        raise HTTPException(400, f"Version {body.version_num} not found")
+
+    # Update active version
+    await db.update("entity", entity_id, {
+        "active_version_num": body.version_num,
+        "updated_at": db.now()
+    })
+
+    return {"entity_id": entity_id, "active_version": body.version_num}
 
 
 # ─── Jobs: realtime batch progress (§9) ─────────────────────

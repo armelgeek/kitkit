@@ -320,3 +320,261 @@ def test_regenerate_request_model():
     serialized = request_both.model_dump()
     assert serialized["prompt"] == "New prompt for regeneration"
     assert serialized["instructions"] == "Make it more detailed"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Tests for versioning helper functions (agent/studio/versioning.py — Task 3)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+from agent.studio.versioning import (
+    parse_version_history,
+    get_active_version,
+    add_version_to_history,
+    get_current_reference_data,
+)
+
+
+class TestParseVersionHistory:
+    """Test parse_version_history function."""
+
+    def test_parse_empty_history(self):
+        """Test that empty/invalid JSON returns empty list."""
+        assert parse_version_history("") == []
+        assert parse_version_history("[]") == []
+        assert parse_version_history(None) == []
+
+    def test_parse_valid_history(self):
+        """Test parsing valid JSON version history."""
+        history_json = json.dumps([
+            {
+                "version": 1,
+                "media_id": "media-1",
+                "reference_image_url": "https://example.com/img1.jpg",
+                "prompt": "A test character",
+                "instructions": None,
+                "status": "success",
+                "generated_at": "2026-07-11T10:00:00Z"
+            }
+        ])
+        result = parse_version_history(history_json)
+        assert len(result) == 1
+        assert result[0]["version"] == 1
+        assert result[0]["media_id"] == "media-1"
+
+    def test_parse_invalid_json(self):
+        """Test that invalid JSON returns empty list."""
+        assert parse_version_history("{invalid json}") == []
+        assert parse_version_history("not json") == []
+
+
+class TestGetActiveVersion:
+    """Test get_active_version function."""
+
+    def test_get_active_version_found(self):
+        """Test retrieving version from history."""
+        history = [
+            {"version": 1, "media_id": "media-1"},
+            {"version": 2, "media_id": "media-2"},
+            {"version": 3, "media_id": "media-3"},
+        ]
+        result = get_active_version(history, 2)
+        assert result is not None
+        assert result["version"] == 2
+        assert result["media_id"] == "media-2"
+
+    def test_get_active_version_not_found(self):
+        """Test that missing version returns None."""
+        history = [
+            {"version": 1, "media_id": "media-1"},
+            {"version": 2, "media_id": "media-2"},
+        ]
+        result = get_active_version(history, 5)
+        assert result is None
+
+    def test_get_active_version_empty_history(self):
+        """Test behavior with empty history."""
+        result = get_active_version([], 1)
+        assert result is None
+
+
+class TestAddVersionToHistory:
+    """Test add_version_to_history function."""
+
+    def test_add_version_to_empty_history(self):
+        """Test that first version gets number 1."""
+        new_version = {
+            "media_id": "media-1",
+            "reference_image_url": "https://example.com/img1.jpg",
+            "prompt": "A character",
+            "instructions": None,
+            "status": "success"
+        }
+        result_json, version_num = add_version_to_history("[]", new_version)
+        result = json.loads(result_json)
+
+        assert version_num == 1
+        assert len(result) == 1
+        assert result[0]["version"] == 1
+        assert result[0]["media_id"] == "media-1"
+
+    def test_add_version_increments(self):
+        """Test that new versions increment sequentially."""
+        history_json = json.dumps([
+            {"version": 1, "media_id": "media-1"},
+            {"version": 2, "media_id": "media-2"},
+        ])
+        new_version = {"media_id": "media-3"}
+        result_json, version_num = add_version_to_history(history_json, new_version)
+        result = json.loads(result_json)
+
+        assert version_num == 3
+        assert len(result) == 3
+        assert result[2]["version"] == 3
+        assert result[2]["media_id"] == "media-3"
+
+    def test_add_version_enforces_limit(self):
+        """Test that versions > max_versions trigger removal and re-numbering."""
+        # Create history with max_versions - 1 entries
+        history = [{"version": i, "media_id": f"media-{i}"} for i in range(1, 11)]
+        history_json = json.dumps(history)
+
+        # Add one more with max_versions=10
+        new_version = {"media_id": "media-11"}
+        result_json, version_num = add_version_to_history(
+            history_json, new_version, max_versions=10
+        )
+        result = json.loads(result_json)
+
+        # Should still have 10 entries (removed oldest, added new, re-numbered)
+        assert len(result) == 10
+        # Version numbers should be 1-10 after re-numbering
+        for i, v in enumerate(result, start=1):
+            assert v["version"] == i
+        # Oldest (media-1) should be gone, media-2 should now be v1
+        assert result[0]["media_id"] == "media-2"
+        # Newest should be media-11
+        assert result[9]["media_id"] == "media-11"
+        assert version_num == 10
+
+    def test_add_version_with_custom_max(self):
+        """Test version limit enforcement with custom max_versions."""
+        history = [{"version": i, "media_id": f"media-{i}"} for i in range(1, 6)]
+        history_json = json.dumps(history)
+
+        new_version = {"media_id": "media-6"}
+        result_json, version_num = add_version_to_history(
+            history_json, new_version, max_versions=5
+        )
+        result = json.loads(result_json)
+
+        # Should have exactly 5 entries
+        assert len(result) == 5
+        # media-1 should be gone, media-2 should now be v1
+        assert result[0]["media_id"] == "media-2"
+        assert result[4]["media_id"] == "media-6"
+
+
+class TestGetCurrentReferenceData:
+    """Test get_current_reference_data function."""
+
+    def test_get_current_reference_data_with_history(self):
+        """Test extracting active version data from entity with version history."""
+        history = [
+            {
+                "version": 1,
+                "media_id": "media-1",
+                "reference_image_url": "https://example.com/img1.jpg",
+                "prompt": "Original character",
+                "instructions": None
+            },
+            {
+                "version": 2,
+                "media_id": "media-2",
+                "reference_image_url": "https://example.com/img2.jpg",
+                "prompt": "Updated character",
+                "instructions": "More detailed"
+            },
+        ]
+        entity = {
+            "version_history": json.dumps(history),
+            "active_version_num": 2,
+            "media_id": "old-media",  # Should be ignored
+            "reference_image_url": "old-url",
+            "description": "old description"
+        }
+
+        result = get_current_reference_data(entity)
+
+        assert result["media_id"] == "media-2"
+        assert result["reference_image_url"] == "https://example.com/img2.jpg"
+        assert result["prompt"] == "Updated character"
+        assert result["instructions"] == "More detailed"
+
+    def test_get_current_reference_data_fallback(self):
+        """Test fallback to entity fields when no version history."""
+        entity = {
+            "version_history": "[]",
+            "active_version_num": 1,
+            "media_id": "fallback-media",
+            "reference_image_url": "https://fallback.com/img.jpg",
+            "description": "Fallback description"
+        }
+
+        result = get_current_reference_data(entity)
+
+        assert result["media_id"] == "fallback-media"
+        assert result["reference_image_url"] == "https://fallback.com/img.jpg"
+        assert result["prompt"] == "Fallback description"
+        assert result["instructions"] is None
+
+    def test_get_current_reference_data_missing_version(self):
+        """Test behavior when active version number doesn't exist in history."""
+        history = [
+            {
+                "version": 1,
+                "media_id": "media-1",
+                "reference_image_url": "https://example.com/img1.jpg",
+                "prompt": "Character",
+                "instructions": None
+            },
+        ]
+        entity = {
+            "version_history": json.dumps(history),
+            "active_version_num": 999,  # Version doesn't exist
+            "media_id": "fallback-media",
+            "reference_image_url": "https://fallback.com/img.jpg",
+            "description": "Fallback"
+        }
+
+        result = get_current_reference_data(entity)
+
+        # Should fall back to entity fields
+        assert result["media_id"] == "fallback-media"
+        assert result["reference_image_url"] == "https://fallback.com/img.jpg"
+        assert result["prompt"] == "Fallback"
+
+    def test_get_current_reference_data_default_active_version(self):
+        """Test that active_version_num defaults to 1 if not specified."""
+        history = [
+            {
+                "version": 1,
+                "media_id": "media-1",
+                "reference_image_url": "https://example.com/img1.jpg",
+                "prompt": "Character",
+                "instructions": None
+            },
+        ]
+        entity = {
+            "version_history": json.dumps(history),
+            # active_version_num not specified, should default to 1
+            "media_id": "old-media",
+            "reference_image_url": "old-url",
+            "description": "old description"
+        }
+
+        result = get_current_reference_data(entity)
+
+        assert result["media_id"] == "media-1"
+        assert result["reference_image_url"] == "https://example.com/img1.jpg"
+        assert result["prompt"] == "Character"
