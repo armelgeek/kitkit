@@ -692,7 +692,7 @@ def unified_scene_beats_prompt(voiceover: str, scene_heading: str, scene_action:
     - Injects previous scene state for continuity
     """
     roster = "\n".join([
-        f"- {{{e['name']}}} ({e['type']}): {e.get('description', '')}"
+        f"- {{{e['slug']}}} ({e['type']}): {e.get('description', '')}"
         for e in entities
     ]) or "(none)"
 
@@ -718,7 +718,8 @@ You are a film director. Read this scene, then:
 2) Segment into visual BEATS (~8s each), ensuring:
    - Shot sizes ALTERNATE: wide → medium → close, never wide → wide
    - Each frame wraps entity names in {{{{braces}}}}: {{{{{{"Entity"}}}}}}
-   - No hallucinations: all wrapped names must exist in AVAILABLE ENTITIES
+   - STRICT: All entity names in ref_entity_names and {{wrapped}} must EXACTLY match the names in AVAILABLE ENTITIES
+   - FORBIDDEN: Do NOT invent new characters, locations, or props. Do NOT rename entities.
    - Lighting stays consistent (or intentionally changes)
 
 CINEMATOGRAPHY REQUIREMENTS:
@@ -733,7 +734,7 @@ CONTEXT:
 VOICEOVER (this is what will be read/narrated):
 {voiceover}
 
-AVAILABLE ENTITIES:
+AVAILABLE ENTITIES (use EXACTLY these slugs — no variations, no inventions):
 {roster}
 
 Return ONLY valid JSON:

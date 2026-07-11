@@ -236,3 +236,63 @@ def test_backfill_slugs_collision_handling(test_db):
     slugs = {char1[0], char3[0]}
     assert "helene_kheler" in slugs
     assert "helene_kheler_1" in slugs
+
+
+# ─── Beat prompt slug tests ──────────────────────────────────────
+
+def test_unified_scene_beats_prompt_uses_slugs():
+    """Verify that unified_scene_beats_prompt uses entity slugs, not full names."""
+    from agent.studio.brain import unified_scene_beats_prompt
+
+    # Sample entities with both name and slug
+    entities = [
+        {
+            "slug": "helene_kheler",
+            "name": "Helene Kheler",
+            "type": "character",
+            "description": "A main character"
+        },
+        {
+            "slug": "tams_room",
+            "name": "Tấm's Room",
+            "type": "location",
+            "description": "A traditional room"
+        },
+        {
+            "slug": "wooden_bowl",
+            "name": "Wooden Bowl",
+            "type": "prop",
+            "description": "An ancient artifact"
+        }
+    ]
+
+    voiceover = "The character enters the room and finds the bowl."
+    scene_heading = "INT. TAMS_ROOM - DAY"
+    scene_action = "Helene discovers an ancient wooden bowl."
+    style = "Photorealistic, cinematic"
+
+    prompt = unified_scene_beats_prompt(
+        voiceover=voiceover,
+        scene_heading=scene_heading,
+        scene_action=scene_action,
+        entities=entities,
+        style=style,
+        previous_scene_exit=None
+    )
+
+    # Verify PROMPT CONTAINS SLUGS (wrapped in braces)
+    assert "{helene_kheler}" in prompt, "Prompt should contain slug {helene_kheler}"
+    assert "{tams_room}" in prompt, "Prompt should contain slug {tams_room}"
+    assert "{wooden_bowl}" in prompt, "Prompt should contain slug {wooden_bowl}"
+
+    # Verify PROMPT DOES NOT CONTAIN FULL NAMES (wrapped in braces)
+    assert "{Helene Kheler}" not in prompt, "Prompt should NOT contain full name {Helene Kheler}"
+    assert "{Tấm's Room}" not in prompt, "Prompt should NOT contain full name {Tấm's Room}"
+    assert "{Wooden Bowl}" not in prompt, "Prompt should NOT contain full name {Wooden Bowl}"
+
+    # Verify constraint keywords are present
+    assert "STRICT:" in prompt, "Prompt should contain STRICT constraint"
+    assert "FORBIDDEN:" in prompt, "Prompt should contain FORBIDDEN constraint"
+
+    # Verify the comment mentions slugs
+    assert "use EXACTLY these slugs" in prompt, "Comment should say 'use EXACTLY these slugs'"
