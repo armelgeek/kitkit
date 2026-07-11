@@ -692,7 +692,7 @@ def unified_scene_beats_prompt(voiceover: str, scene_heading: str, scene_action:
     - Injects previous scene state for continuity
     """
     roster = "\n".join([
-        f"- {{{e['slug']}}} ({e['type']}): {e.get('description', '')}"
+        f"- {{{e.get('slug', e['name'])}}} ({e['type']}): {e.get('description', '')}"
         for e in entities
     ]) or "(none)"
 
