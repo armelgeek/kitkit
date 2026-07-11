@@ -236,7 +236,13 @@ async def auto_fix_beats(beats: list[dict], entities: list[dict],
     """
     from fastapi import HTTPException
 
-    entities_by_name = {e["name"]: e for e in entities}
+    # ponytail: beats reference entities by slug now; keep name as fallback key
+    # for any caller still using {Full Name} braces (legacy/pre-slug beats).
+    entities_by_name = {}
+    for e in entities:
+        if e.get("slug"):
+            entities_by_name[e["slug"]] = e
+        entities_by_name[e["name"]] = e
     issues = await validate_beats_comprehensive(beats, entities_by_name)
 
     if not issues["valid"]:
