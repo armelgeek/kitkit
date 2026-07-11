@@ -158,13 +158,22 @@ export default function Step2ReviewAssets() {
     if (!projectId) return;
 
     try {
-      const response = await fetch(`/api/studio/projects/${projectId}`);
-      if (response.ok) {
-        const project = await response.json();
+      // Fetch assets from separate endpoints (not from project)
+      const [charsRes, locsRes, propsRes] = await Promise.all([
+        fetch(`/api/studio/projects/${projectId}/characters`),
+        fetch(`/api/studio/projects/${projectId}/locations`),
+        fetch(`/api/studio/projects/${projectId}/props`),
+      ]);
+
+      if (charsRes.ok && locsRes.ok && propsRes.ok) {
+        const chars = await charsRes.json();
+        const locs = await locsRes.json();
+        const propsData = await propsRes.json();
+
         const all: Asset[] = [
-          ...project.characters.map(c => ({ ...c, type: "character" as const })),
-          ...project.locations.map(l => ({ ...l, type: "location" as const })),
-          ...project.props.map(p => ({ ...p, type: "prop" as const })),
+          ...(chars || []).map(c => ({ ...c, type: "character" as const })),
+          ...(locs || []).map(l => ({ ...l, type: "location" as const })),
+          ...(propsData || []).map(p => ({ ...p, type: "prop" as const })),
         ];
         setAssets(all);
         setGeneratingIds(new Set());
