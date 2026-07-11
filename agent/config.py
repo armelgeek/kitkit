@@ -22,10 +22,11 @@ WS_PORT = int(os.environ.get("WS_PORT", "9222"))
 
 # ─── Google Flow API ────────────────────────────────────────
 GOOGLE_FLOW_API = "https://aisandbox-pa.googleapis.com"
-# Optional — auth tới aisandbox-pa do extension lo bằng Bearer token (ya29.*).
-# Để rỗng thì _build_url bỏ hẳn ?key= (đã verify project + ảnh vẫn chạy bình thường).
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 RECAPTCHA_SITE_KEY = os.environ.get("RECAPTCHA_SITE_KEY", "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV")
+
+# Use mock Flow API for testing (no extension/API calls needed)
+USE_MOCK_FLOW = os.environ.get("USE_MOCK_FLOW", "").lower() in ("1", "true", "yes")
 
 # polling timeout for video/upscale status (used by flow_client)
 VIDEO_POLL_TIMEOUT = int(os.environ.get("VIDEO_POLL_TIMEOUT", "420"))

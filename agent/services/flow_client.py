@@ -819,5 +819,11 @@ _client: Optional[FlowClient] = None
 def get_flow_client() -> FlowClient:
     global _client
     if _client is None:
-        _client = FlowClient()
+        from agent.config import USE_MOCK_FLOW
+        if USE_MOCK_FLOW:
+            from agent.services.flow_client_mock import MockFlowClient
+            _client = MockFlowClient()
+            logger.info("Using MOCK Flow API (USE_MOCK_FLOW=true)")
+        else:
+            _client = FlowClient()
     return _client

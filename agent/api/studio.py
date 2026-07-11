@@ -3575,10 +3575,15 @@ async def generate_asset_references(pid: str):
         if not media_id:
             raise Exception(f"No media_id in Flow response")
 
-        # Download locally
-        web_path = await media_store.ensure_local(media_id, pid)
+        # Download locally (or create mock image if in mock mode)
+        from agent.config import USE_MOCK_FLOW
+        if USE_MOCK_FLOW:
+            web_path = await media_store.save_mock_image(media_id, pid)
+        else:
+            web_path = await media_store.ensure_local(media_id, pid)
+
         if not web_path:
-            raise Exception(f"Failed to download media {media_id}")
+            raise Exception(f"Failed to download/create media {media_id}")
 
         # Update asset in DB
         table = asset['type']

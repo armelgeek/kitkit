@@ -12,8 +12,9 @@ import random
 from pathlib import Path
 
 import httpx
+from PIL import Image, ImageDraw
 
-from agent.config import BASE_DIR
+from agent.config import BASE_DIR, USE_MOCK_FLOW
 from agent.services.flow_client import get_flow_client
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,46 @@ async def save_from_url(media_id: str, project_id: str, ext: str, url: str) -> s
     if await _download(url, dest):
         return f"/media/{rel.as_posix()}"
     return None
+
+
+async def save_mock_image(media_id: str, project_id: str, ext: str = "png") -> str | None:
+    """Generate and save a test image locally (for mock Flow mode).
+
+    Creates a simple gradient image so mock-mode tests don't require Flow API.
+    """
+    rel = Path(project_id) / f"{media_id}.{ext}"
+    dest = MEDIA_DIR / rel
+
+    if dest.exists() and dest.stat().st_size > 0:
+        return f"/media/{rel.as_posix()}"
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Create a simple test image
+        img = Image.new("RGB", (800, 600), color=(240, 245, 250))
+        draw = ImageDraw.Draw(img)
+
+        # Draw grid pattern
+        for i in range(0, 800, 50):
+            draw.line([(i, 0), (i, 600)], fill=(220, 225, 230), width=1)
+        for i in range(0, 600, 50):
+            draw.line([(0, i), (800, i)], fill=(220, 225, 230), width=1)
+
+        # Draw center box
+        draw.rectangle([(100, 75), (700, 525)], outline=(70, 130, 180), width=2)
+
+        # Add text
+        draw.text((300, 280), "Mock Image", fill=(0, 0, 0))
+        draw.text((250, 310), f"ID: {media_id[:8]}", fill=(100, 100, 100))
+
+        # Save
+        img.save(dest, format="PNG")
+        logger.debug(f"Created mock image: {dest}")
+        return f"/media/{rel.as_posix()}"
+    except Exception as e:
+        logger.error(f"Failed to create mock image: {e}")
+        return None
 
 
 _URL_KEYS = ("fifeUrl", "servingBaseUri", "servingUri", "servingUrl",
