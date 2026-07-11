@@ -31,7 +31,8 @@ from agent.studio.jobs import get_job_manager
 from agent.studio.versioning import (
     parse_version_history,
     add_version_to_history,
-    get_active_version
+    get_active_version,
+    get_iso_timestamp,
 )
 
 logger = logging.getLogger(__name__)
@@ -3634,6 +3635,49 @@ async def generate_asset_references(pid: str):
 
 # ─── Asset Versioning (regenerate, history, set-active-version) ───────────
 
+# Asset data lives in the character/location/prop tables (not `entity`).
+# The endpoint path says `entities/{entity_id}` but the id is a
+# character/location/prop id, so we resolve the owning table first.
+_ASSET_TABLES = ("character", "location", "prop")
+
+
+async def _find_asset_table(entity_id: str, project_id: str):
+    """Return (table_name, asset_row) for the asset, or (None, None) if absent."""
+    for table in _ASSET_TABLES:
+        row = await db.query_one(
+            f"SELECT * FROM {table} WHERE id=? AND project_id=?",
+            (entity_id, project_id),
+        )
+        if row:
+            return table, row
+    return None, None
+
+
+async def _generate_asset_image(asset_type: str, name: str, description: str, project: dict) -> tuple:
+    """Generate a reference image via Flow. Returns (media_id, web_path)."""
+    client = _require_extension()
+    body = brain.ref_image_prompt(asset_type, name, description or "")
+    prompt = brain.compose_prompt(project, body, reference_sheet=True)
+    aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if asset_type in _ASSET_TABLES
+              else "IMAGE_ASPECT_RATIO_PORTRAIT")
+    flow_resp = await client.generate_images(
+        prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect)
+    if flow_resp.get("error"):
+        raise Exception(f"Flow error: {flow_resp['error']}")
+    info = _extract_image_result(flow_resp.get("data", flow_resp))
+    media_id = info.get("media_id")
+    if not media_id:
+        raise Exception("No media_id in Flow response")
+    from agent.config import USE_MOCK_FLOW
+    if USE_MOCK_FLOW:
+        web_path = await media_store.save_mock_image(media_id, project["id"])
+    else:
+        web_path = await media_store.ensure_local(media_id, project["id"])
+    if not web_path:
+        raise Exception(f"Failed to download/create media {media_id}")
+    return media_id, web_path
+
+
 @router.post("/projects/{project_id}/entities/{entity_id}/regenerate")
 async def regenerate_asset_reference(
     project_id: str,
@@ -3641,12 +3685,8 @@ async def regenerate_asset_reference(
     body: RegenerateRequest,
 ):
     """Regenerate an asset reference with modified prompt/instructions."""
-    # Verify project and entity exist
     project = await _project_or_404(project_id)
-    entity = await db.query_one(
-        "SELECT * FROM entity WHERE id=? AND project_id=?",
-        (entity_id, project_id)
-    )
+    table, entity = await _find_asset_table(entity_id, project_id)
     if not entity:
         raise HTTPException(404, "Entity not found")
 
@@ -3658,62 +3698,49 @@ async def regenerate_asset_reference(
         active_version = get_active_version(history, entity.get("active_version_num") or 1)
         prompt_to_use = active_version["prompt"] if active_version else entity.get("description")
 
-    # Define worker function
     async def _regenerate_worker():
         """Worker function: generate asset and append to version history."""
-        entity_row = await db.query_one("SELECT * FROM entity WHERE id=?", (entity_id,))
+        entity_row = await db.query_one(f"SELECT * FROM {table} WHERE id=?", (entity_id,))
         if not entity_row:
             raise Exception("Entity was deleted during regeneration")
 
         try:
-            # Generate reference image (reuse existing flow logic)
-            result = await _generate_entity_image(entity_row, project)
+            media_id, reference_image_url = await _generate_asset_image(
+                table, entity_row["name"], prompt_to_use, project)
 
-            media_id = result.get("media_id")
-            reference_image_url = result.get("image_path")
-
-            # Create version entry
             new_version = {
                 "media_id": media_id,
                 "reference_image_url": reference_image_url,
                 "prompt": prompt_to_use,
                 "instructions": body.instructions,
-                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "generated_at": get_iso_timestamp(),
                 "status": "success"
             }
-
-            # Add to history (with limit enforcement)
             updated_history, new_version_num = add_version_to_history(
-                entity_row.get("version_history") or "[]",
-                new_version,
-                max_versions=10
-            )
+                entity_row.get("version_history") or "[]", new_version, max_versions=10)
 
-            # Update entity
-            await db.update("entity", entity_id, {
+            await db.update(table, entity_id, {
                 "version_history": updated_history,
                 "active_version_num": new_version_num,
+                "media_id": media_id,
+                "reference_image_url": reference_image_url,
                 "updated_at": db.now()
             })
 
         except Exception as e:
-            # Add error entry to history
             failed_version = {
                 "media_id": None,
                 "reference_image_url": None,
                 "prompt": prompt_to_use,
                 "instructions": body.instructions,
-                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "generated_at": get_iso_timestamp(),
                 "status": f"error: {str(e)}"
             }
-            entity_row = await db.query_one("SELECT * FROM entity WHERE id=?", (entity_id,))
+            entity_row = await db.query_one(f"SELECT * FROM {table} WHERE id=?", (entity_id,))
             if entity_row:
                 updated_history, _ = add_version_to_history(
-                    entity_row.get("version_history") or "[]",
-                    failed_version,
-                    max_versions=10
-                )
-                await db.update("entity", entity_id, {
+                    entity_row.get("version_history") or "[]", failed_version, max_versions=10)
+                await db.update(table, entity_id, {
                     "version_history": updated_history,
                     "updated_at": db.now()
                 })
@@ -3729,7 +3756,6 @@ async def regenerate_asset_reference(
         # At limit: oldest will be removed and re-numbered, so new version will be 10
         predicted_version_num = 10
 
-    # Launch generation job
     job_mgr = get_job_manager()
     job = job_mgr.start(
         project_id=project_id,
@@ -3748,12 +3774,8 @@ async def get_asset_history(
     entity_id: str,
 ):
     """Retrieve full version history for an asset with all metadata."""
-    # Verify project and entity exist
     await _project_or_404(project_id)
-    entity = await db.query_one(
-        "SELECT * FROM entity WHERE id=? AND project_id=?",
-        (entity_id, project_id)
-    )
+    _, entity = await _find_asset_table(entity_id, project_id)
     if not entity:
         raise HTTPException(404, "Entity not found")
 
@@ -3780,23 +3802,22 @@ async def set_active_version(
     body: SetActiveVersionRequest,
 ):
     """Switch to a different version as the active one."""
-    # Verify project and entity exist
     await _project_or_404(project_id)
-    entity = await db.query_one(
-        "SELECT * FROM entity WHERE id=? AND project_id=?",
-        (entity_id, project_id)
-    )
+    table, entity = await _find_asset_table(entity_id, project_id)
     if not entity:
         raise HTTPException(404, "Entity not found")
 
     # Verify version exists
     history = parse_version_history(entity.get("version_history") or "[]")
-    if not get_active_version(history, body.version_num):
+    active = get_active_version(history, body.version_num)
+    if not active:
         raise HTTPException(400, f"Version {body.version_num} not found")
 
-    # Update active version
-    await db.update("entity", entity_id, {
+    # Point active fields at the selected version so downstream reads stay consistent
+    await db.update(table, entity_id, {
         "active_version_num": body.version_num,
+        "media_id": active.get("media_id"),
+        "reference_image_url": active.get("reference_image_url"),
         "updated_at": db.now()
     })
 

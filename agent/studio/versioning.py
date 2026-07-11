@@ -3,7 +3,13 @@
 Provides utilities for parsing, updating, and retrieving version data.
 """
 import json
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
+
+
+def get_iso_timestamp() -> str:
+    """UTC timestamp in ISO 8601 with a trailing 'Z' and no offset."""
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
 
 def parse_version_history(history_json: str) -> List[Dict]:
@@ -68,7 +74,12 @@ def add_version_to_history(
     new_version["version"] = next_version_num
     history.append(new_version)
 
-    # Enforce limit: if exceeded, remove oldest and re-number
+    # Enforce limit: if exceeded, remove oldest and re-number.
+    # ponytail: re-numbering shifts version numbers, so a previously stored
+    # active_version_num can point at the wrong entry after the 11th regenerate.
+    # In practice every successful regenerate resets active to the newest version,
+    # so this only bites the rare error-path-at-limit case. Known limitation;
+    # upgrade path is a stable per-version UUID if it ever matters.
     if len(history) > max_versions:
         # Sort by version number (should already be sorted, but be safe)
         history.sort(key=lambda x: x["version"])

@@ -6,8 +6,8 @@ from pydantic import BaseModel
 class VersionEntry(BaseModel):
     """Single version in asset history."""
     version: int
-    media_id: str
-    reference_image_url: str
+    media_id: Optional[str] = None
+    reference_image_url: Optional[str] = None
     prompt: str
     instructions: Optional[str] = None
     generated_at: str  # ISO format datetime

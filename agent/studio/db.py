@@ -190,7 +190,7 @@ def _migrate_add_versioning(conn: sqlite3.Connection) -> None:
     with v1 entries to preserve generation history.
     """
     # ponytail: idempotent column checks via PRAGMA, one backfill loop per table
-    from datetime import datetime, timezone
+    from agent.studio.versioning import get_iso_timestamp
 
     tables = ["character", "location", "prop"]
 
@@ -227,7 +227,7 @@ def _migrate_add_versioning(conn: sqlite3.Connection) -> None:
                         "reference_image_url": reference_image_url,
                         "prompt": "(original - no prompt stored)",
                         "instructions": None,
-                        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
+                        "generated_at": get_iso_timestamp(),
                         "status": "success"
                     }
                     history_json = json.dumps([v1_entry])
