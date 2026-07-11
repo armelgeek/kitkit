@@ -9,10 +9,39 @@ import os
 import sqlite3
 import threading
 import time
+import unicodedata
 import uuid
 from pathlib import Path
 
 from agent.config import BASE_DIR
+
+
+def normalize_to_slug(name: str) -> str:
+    """Convert entity name to immutable slug (lowercase, underscores, no accents).
+
+    Examples:
+        "Helene Kheler" → "helene_kheler"
+        "Atelier d'Art" → "atelier_d_art"
+        "Tấm" → "tam"
+    """
+    # Remove accents using Unicode normalization
+    nfc = unicodedata.normalize('NFKD', name)
+    no_accents = ''.join(c for c in nfc if not unicodedata.combining(c))
+
+    # Lowercase and replace spaces/dashes/apostrophes with underscores
+    slug = no_accents.lower()
+    for char in ("'", "-", " "):
+        slug = slug.replace(char, "_")
+
+    # Consolidate multiple underscores
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+
+    # Strip leading/trailing underscores
+    slug = slug.strip("_")
+
+    return slug
+
 
 DB_PATH = Path(os.environ.get("STUDIO_DB", BASE_DIR / "agent" / "studio.db"))
 
