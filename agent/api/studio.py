@@ -1922,11 +1922,11 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
     scene = await _scene_or_404(sid)
     project = await _project_or_404(scene["project_id"])
     erows = await db.query_all("""
-        SELECT id, name, 'character' as type, description FROM character WHERE project_id=?
+        SELECT id, name, slug, 'character' as type, description FROM character WHERE project_id=?
         UNION ALL
-        SELECT id, name, 'location' as type, description FROM location WHERE project_id=?
+        SELECT id, name, slug, 'location' as type, description FROM location WHERE project_id=?
         UNION ALL
-        SELECT id, name, 'prop' as type, description FROM prop WHERE project_id=?
+        SELECT id, name, slug, 'prop' as type, description FROM prop WHERE project_id=?
     """, (scene["project_id"], scene["project_id"], scene["project_id"]))
     by_name = _index_by_name(erows)
     # The scene's location is fixed. Prefer a location_entity_id already stored on the scene
