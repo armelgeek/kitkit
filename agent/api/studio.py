@@ -28,6 +28,7 @@ from agent.models import RegenerateRequest, AssetHistoryResponse, VersionEntry
 from agent.services.flow_client import get_flow_client
 from agent.studio import db, media_store, brain, assembler, davinci_xml, vntext, graph as graph_mod
 from agent.studio.jobs import get_job_manager
+from agent.api.tts import elevenlabs_synthesize
 from agent.studio.versioning import (
     parse_version_history,
     add_version_to_history,
@@ -3856,7 +3857,162 @@ async def cancel_job(job_id: str):
     return {"ok": True}
 
 
-@router.websocket("/ws")
+# ─── Beats ────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/beats")
+async def save_project_beats(project_id: str, beats_data: dict):
+    """Save all beats for a project."""
+    from agent.studio import db
+    beats = beats_data.get("beats", [])
+    await db.save_beats(project_id, beats)
+    return {"ok": True, "count": len(beats)}
+
+
+@router.get("/projects/{project_id}/beats")
+async def get_project_beats(project_id: str):
+    """Get all beats for a project."""
+    from agent.studio import db
+    beats = await db.load_beats(project_id)
+    return {"beats": beats}
+
+
+@router.post("/projects/{pid}/generate-storyboard-images")
+async def generate_storyboard_images(pid: str):
+    """Generate images for all beats one by one. Returns immediately with job_id; real-time progress via WebSocket."""
+    project = await _project_or_404(pid)
+
+    # Get beats from DB
+    from agent.studio import db
+    beats = await db.load_beats(pid)
+
+    if not beats:
+        return {"job_id": None, "total_beats": 0}
+
+    # Verify Flow client is connected
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+
+    # Worker: generate one image per beat
+    mgr = get_job_manager()
+
+    async def worker(beat):
+        prompt = beat.get("shotPrompts", "")
+        if not prompt:
+            prompt = beat.get("description", "")
+
+        import os
+        import uuid
+
+        # ponytail: mock Flow for dev; remove when Flow quota available
+        if os.environ.get("USE_MOCK_FLOW") == "1":
+            from pathlib import Path
+
+            media_id = str(uuid.uuid4())
+            # Create fake image (1x1 transparent PNG)
+            png_bytes = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+            _REPO_ROOT = Path(__file__).parent.parent.parent
+            media_dir = Path(os.environ.get("STUDIO_MEDIA_DIR", _REPO_ROOT / "media")) / pid
+            media_dir.mkdir(parents=True, exist_ok=True)
+            image_path = media_dir / f"{media_id}.png"
+            image_path.write_bytes(png_bytes)
+
+            flow_resp = {
+                "data": {
+                    "media_id": media_id,
+                    "web": f"/media/{pid}/{media_id}.png"
+                }
+            }
+        else:
+            flow_resp = await client.generate_images(
+                prompt=prompt,
+                project_id=project["flow_project_id"],
+                aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"
+            )
+
+        if flow_resp.get("error"):
+            raise Exception(f"Flow error: {flow_resp['error']}")
+
+        # Store image URL in beat
+        data = flow_resp.get("data", flow_resp)
+        media_id = data.get("media_id") or data.get("candidate", {}).get("media_id")
+        web_url = data.get("web") or data.get("candidate", {}).get("web")
+
+        if media_id and web_url:
+            beat["media_id"] = media_id
+            beat["image_url"] = web_url
+            # Save beat to DB immediately
+            await db.save_beats(pid, beats)
+            # Broadcast image update immediately via WebSocket
+            await mgr._broadcast_custom({"type": "beat", "beat": beat})
+
+    # Finalize: save beats with generated images
+    async def finalize():
+        await db.save_beats(pid, beats)
+
+    # Start batch job with JobManager
+    mgr = get_job_manager()
+    job = mgr.start(
+        project_id=pid,
+        type_="images",
+        items=beats,
+        worker=worker,
+        label=f"Generate {len(beats)} storyboard images",
+        item_label=lambda b: f"Beat {beats.index(b) + 1}",
+        finalize=finalize,
+    )
+
+    return {"job_id": job.id, "total_beats": len(beats)}
+
+
+@router.post("/projects/{pid}/generate-beat-narration")
+async def generate_beat_narration(pid: str):
+    """Generate voice-over narration for all beats using ElevenLabs."""
+    project = await _project_or_404(pid)
+    beats = await db.load_beats(pid)
+
+    if not beats:
+        return {"job_id": None, "total_beats": 0}
+
+    # Worker: generate narration for one beat
+    mgr = get_job_manager()
+
+    async def worker(beat):
+        # Use beat description for narration
+        text = beat.get("description", "")
+        if not text:
+            return
+
+        try:
+            audio_b64 = await elevenlabs_synthesize(text, "21m00Tcm4TlvDq8ikWAM", speed=1.0)
+            beat["narration_audio"] = audio_b64
+            # Save beat immediately
+            await db.save_beats(pid, beats)
+            # Broadcast update via WebSocket
+            await mgr._broadcast_custom({"type": "beat", "beat": beat})
+        except Exception as e:
+            logger.error(f"Narration generation failed for beat: {e}")
+            raise
+
+    # Finalize: save beats with narration
+    async def finalize():
+        await db.save_beats(pid, beats)
+
+    # Start batch job
+    job = mgr.start(
+        project_id=pid,
+        type_="narration",
+        items=beats,
+        worker=worker,
+        label=f"Generate {len(beats)} beat narrations",
+        item_label=lambda b: f"Beat {beats.index(b) + 1}",
+        finalize=finalize,
+    )
+
+    return {"job_id": job.id, "total_beats": len(beats)}
+
+
+@router.websocket("/jobs/ws")
 async def jobs_ws(ws: WebSocket):
     """Real-time channel: server broadcasts {type:'job', job:{…}} whenever a job changes.
 

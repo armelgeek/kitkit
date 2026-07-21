@@ -136,6 +136,12 @@ CREATE TABLE IF NOT EXISTS asset (
   path TEXT, meta_json TEXT, created_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS beat (
+  id TEXT PRIMARY KEY, project_id TEXT, idx INTEGER,
+  data TEXT,  -- JSON serialized beat object
+  created_at REAL, updated_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 
 -- Lịch sử media (§13#8): mỗi lần một ảnh/video được gán cho shot/entity → 1 dòng,
@@ -148,6 +154,7 @@ CREATE TABLE IF NOT EXISTS media_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_entity_project ON entity(project_id);
+CREATE INDEX IF NOT EXISTS idx_beat_project ON beat(project_id);
 CREATE INDEX IF NOT EXISTS idx_character_project ON character(project_id);
 CREATE INDEX IF NOT EXISTS idx_location_project ON location(project_id);
 CREATE INDEX IF NOT EXISTS idx_prop_project ON prop(project_id);
@@ -371,3 +378,28 @@ async def kv_set(key: str, value) -> None:
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         (key, json.dumps(value)),
     )
+
+
+# ─── Beats ────────────────────────────────────────────────
+
+async def save_beats(project_id: str, beats: list[dict]) -> None:
+    """Save all beats for a project (replaces existing)."""
+    await execute("DELETE FROM beat WHERE project_id=?", (project_id,))
+    for idx, beat in enumerate(beats):
+        await insert("beat", {
+            "id": new_id(),
+            "project_id": project_id,
+            "idx": idx,
+            "data": json.dumps(beat),
+            "created_at": now(),
+            "updated_at": now(),
+        })
+
+
+async def load_beats(project_id: str) -> list[dict]:
+    """Load all beats for a project, ordered by index."""
+    rows = await query_all(
+        "SELECT data FROM beat WHERE project_id=? ORDER BY idx ASC",
+        (project_id,)
+    )
+    return [json.loads(r["data"]) for r in rows]

@@ -5,7 +5,8 @@ import Step2ReviewScreenplay from "./Step2ReviewScreenplay";
 import Step2ReviewAssets from "./Step2ReviewAssets";
 import Step3ReviewStoryboard from "./Step3ReviewStoryboard";
 import Step4ReviewAssets from "./Step4ReviewAssets";
-import Step4ReviewGeneratedImages from "./Step4ReviewGeneratedImages";
+import Step4ReviewImages from "./Step4ReviewImages";
+import Step4_6GenerateNarration from "./Step4_6GenerateNarration";
 import Step5Done from "./Step5Done";
 
 export default function MainContent() {
@@ -22,9 +23,9 @@ export default function MainContent() {
     case 3:
       return <Step3ReviewStoryboard />;
     case 4:
-      return <Step4ReviewAssets />;
-    case 4.5:
-      return <Step4ReviewGeneratedImages />;
+      return <Step4ReviewImages />;
+    case 4.6:
+      return <Step4_6GenerateNarration />;
     case 5:
       return <Step5Done />;
     default:

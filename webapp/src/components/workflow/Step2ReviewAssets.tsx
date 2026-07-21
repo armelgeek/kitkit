@@ -20,13 +20,24 @@ export default function Step2ReviewAssets() {
     return <div className="p-4">Loading...</div>;
   }
 
-  const { characters = [], locations = [], props: propsData = [], beats = [], loading, error, projectId, flowProjectId } = state;
+  const {
+    characters = [],
+    locations = [],
+    props: propsData = [],
+    beats = [],
+    loading,
+    error,
+    projectId,
+    flowProjectId,
+  } = state;
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDesc, setEditingDesc] = useState("");
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
-  const [newAssetType, setNewAssetType] = useState<"character" | "location" | "prop" | null>(null);
+  const [newAssetType, setNewAssetType] = useState<
+    "character" | "location" | "prop" | null
+  >(null);
   const [newAssetName, setNewAssetName] = useState("");
   const [newAssetDesc, setNewAssetDesc] = useState("");
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -36,45 +47,101 @@ export default function Step2ReviewAssets() {
   const [regenerateFormOpen, setRegenerateFormOpen] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<Asset | null>(null);
 
-  const allAssets = (characters?.length || 0) + (locations?.length || 0) + (propsData?.length || 0);
-  const assetsWithImages = assets.filter(a => a.reference_image_url).length;
+  const allAssets =
+    (characters?.length || 0) +
+    (locations?.length || 0) +
+    (propsData?.length || 0);
+  const assetsWithImages = assets.filter((a) => a.reference_image_url).length;
   const allImagesGenerated = allAssets > 0 && assetsWithImages === allAssets;
   const canProceed = allImagesGenerated && !loading;
+
+  const refreshAssets = async () => {
+    if (!projectId) return;
+
+    try {
+      const [charsRes, locsRes, propsRes] = await Promise.all([
+        fetch(`/api/studio/projects/${projectId}/characters`),
+        fetch(`/api/studio/projects/${projectId}/locations`),
+        fetch(`/api/studio/projects/${projectId}/props`),
+      ]);
+
+      if (charsRes.ok && locsRes.ok && propsRes.ok) {
+        const charsResp = await charsRes.json();
+        const locsResp = await locsRes.json();
+        const propsResp = await propsRes.json();
+
+        const all: Asset[] = [
+          ...(charsResp.characters || []).map((c) => ({
+            ...c,
+            type: "character" as const,
+          })),
+          ...(locsResp.locations || []).map((l) => ({
+            ...l,
+            type: "location" as const,
+          })),
+          ...(propsResp.props || []).map((p) => ({
+            ...p,
+            type: "prop" as const,
+          })),
+        ];
+        setAssets(all);
+        setGeneratingIds(new Set());
+      }
+    } catch (err) {
+      console.error("Failed to refresh assets:", err);
+      setGeneratingIds(new Set());
+    }
+  };
 
   const addNewAsset = async () => {
     if (!newAssetType || !newAssetName.trim() || !newAssetDesc.trim()) return;
 
     try {
-      const endpoint = newAssetType === "character" ? "characters" :
-                      newAssetType === "location" ? "locations" : "props";
-
-      const resp = await fetch(`/api/studio/projects/${projectId}/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project_id: projectId,
-          name: newAssetName,
-          description: newAssetDesc,
-        }),
-      });
+      const endpoint =
+        newAssetType === "character"
+          ? "characters"
+          : newAssetType === "location"
+            ? "locations"
+            : "props";
+      console.log("kkkkk", `/api/studio/projects/${projectId}/${endpoint}`);
+      const resp = await fetch(
+        `/api/studio/projects/${projectId}/${endpoint}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            name: newAssetName,
+            description: newAssetDesc,
+          }),
+        },
+      );
 
       if (resp.ok) {
-        const newAsset = await resp.json();
-        setAssets([...assets, { ...newAsset, type: newAssetType }]);
         setNewAssetType(null);
         setNewAssetName("");
         setNewAssetDesc("");
+        // Reload all assets to show the new one from DB
+        await refreshAssets();
       }
     } catch (err) {
       console.error("Failed to add asset:", err);
     }
   };
 
+  // Load assets on mount if not already in context
+  useEffect(() => {
+    if (projectId && characters.length === 0 && locations.length === 0 && propsData.length === 0) {
+      refreshAssets();
+    }
+  }, [projectId]);
+
+  // Sync context data to local state whenever context changes
   useEffect(() => {
     const all: Asset[] = [
-      ...characters.map(c => ({ ...c, type: "character" as const })),
-      ...locations.map(l => ({ ...l, type: "location" as const })),
-      ...propsData.map(p => ({ ...p, type: "prop" as const })),
+      ...characters.map((c) => ({ ...c, type: "character" as const })),
+      ...locations.map((l) => ({ ...l, type: "location" as const })),
+      ...propsData.map((p) => ({ ...p, type: "prop" as const })),
     ];
     setAssets(all);
   }, [characters, locations, propsData]);
@@ -84,29 +151,34 @@ export default function Step2ReviewAssets() {
     setEditingDesc(asset.description);
   };
 
-  const saveEdit = (assetId: string) => {
-    const updated = assets.map(a =>
-      a.id === assetId ? { ...a, description: editingDesc } : a
-    );
-    setAssets(updated);
+  const saveEdit = async (assetId: string) => {
     setEditingId(null);
 
     // Save to DB
-    fetch(`/api/studio/${assets.find(a => a.id === assetId)?.type}s/${assetId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: editingDesc }),
-    }).catch(err => console.error("Failed to save:", err));
+    try {
+      await fetch(
+        `/api/studio/${assets.find((a) => a.id === assetId)?.type}s/${assetId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: editingDesc }),
+        },
+      );
+      // Reload all assets to sync with DB
+      await refreshAssets();
+    } catch (err) {
+      console.error("Failed to save:", err);
+    }
   };
 
   const generateAllReferences = async () => {
     if (!projectId || assets.length === 0) return;
 
-    setGeneratingIds(new Set(assets.map(a => a.id)));
+    setGeneratingIds(new Set(assets.map((a) => a.id)));
 
     try {
       // Connect to WebSocket FIRST (before starting generation)
-      const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
+      const ws = new WebSocket(`ws://${window.location.host}/api/studio/jobs/ws`);
       let jobCompleted = false;
       let pollingInterval: NodeJS.Timeout | null = null;
       let jobId: string | null = null;
@@ -120,9 +192,12 @@ export default function Step2ReviewAssets() {
       });
 
       // NOW start asset generation after WebSocket is ready
-      const response = await fetch(`/api/studio/projects/${projectId}/generate-asset-references`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `/api/studio/projects/${projectId}/generate-asset-references`,
+        {
+          method: "POST",
+        },
+      );
 
       if (!response.ok) {
         throw new Error("Failed to start asset generation");
@@ -142,21 +217,30 @@ export default function Step2ReviewAssets() {
           ]);
 
           if (charsRes.ok && locsRes.ok && propsRes.ok) {
-            const chars = await charsRes.json();
-            const locs = await locsRes.json();
-            const propsData = await propsRes.json();
+            const charsResp = await charsRes.json();
+            const locsResp = await locsRes.json();
+            const propsResp = await propsRes.json();
 
             const all: Asset[] = [
-              ...(chars || []).map(c => ({ ...c, type: "character" as const })),
-              ...(locs || []).map(l => ({ ...l, type: "location" as const })),
-              ...(propsData || []).map(p => ({ ...p, type: "prop" as const })),
+              ...(charsResp.characters || []).map((c) => ({
+                ...c,
+                type: "character" as const,
+              })),
+              ...(locsResp.locations || []).map((l) => ({
+                ...l,
+                type: "location" as const,
+              })),
+              ...(propsResp.props || []).map((p) => ({
+                ...p,
+                type: "prop" as const,
+              })),
             ];
 
             setAssets(all);
 
             // Update generating IDs based on which still don't have images
             const stillGenerating = new Set(
-              all.filter(a => !a.reference_image_url).map(a => a.id)
+              all.filter((a) => !a.reference_image_url).map((a) => a.id),
             );
             setGeneratingIds(stillGenerating);
           }
@@ -183,7 +267,9 @@ export default function Step2ReviewAssets() {
 
             // Log progress
             if (job.done > 0 || job.errors.length > 0) {
-              console.log(`Asset generation progress: ${job.done}/${job.total} done, ${job.errors.length} errors`);
+              console.log(
+                `Asset generation progress: ${job.done}/${job.total} done, ${job.errors.length} errors`,
+              );
             }
 
             // Start polling assets during generation
@@ -222,40 +308,12 @@ export default function Step2ReviewAssets() {
     }
   };
 
-  const refreshAssets = async () => {
-    if (!projectId) return;
-
-    try {
-      // Fetch assets from separate endpoints (not from project)
-      const [charsRes, locsRes, propsRes] = await Promise.all([
-        fetch(`/api/studio/projects/${projectId}/characters`),
-        fetch(`/api/studio/projects/${projectId}/locations`),
-        fetch(`/api/studio/projects/${projectId}/props`),
-      ]);
-
-      if (charsRes.ok && locsRes.ok && propsRes.ok) {
-        const chars = await charsRes.json();
-        const locs = await locsRes.json();
-        const propsData = await propsRes.json();
-
-        const all: Asset[] = [
-          ...(chars || []).map(c => ({ ...c, type: "character" as const })),
-          ...(locs || []).map(l => ({ ...l, type: "location" as const })),
-          ...(propsData || []).map(p => ({ ...p, type: "prop" as const })),
-        ];
-        setAssets(all);
-        setGeneratingIds(new Set());
-      }
-    } catch (err) {
-      console.error("Failed to refresh assets:", err);
-      setGeneratingIds(new Set());
-    }
-  };
-
   const getBeatsForAsset = (assetName: string, assetType: string) => {
     if (assetType !== "character" || !beats) return [];
     return beats
-      .map((beat, idx) => beat.characterNames?.includes(assetName) ? idx : null)
+      .map((beat, idx) =>
+        beat.characterNames?.includes(assetName) ? idx : null,
+      )
       .filter((idx): idx is number => idx !== null);
   };
 
@@ -296,7 +354,7 @@ export default function Step2ReviewAssets() {
 
     try {
       // Connect to WebSocket to watch job progress
-      const ws = new WebSocket(`ws://${window.location.host}/api/studio/ws`);
+      const ws = new WebSocket(`ws://${window.location.host}/api/studio/jobs/ws`);
       let jobCompleted = false;
       let pollingInterval: NodeJS.Timeout | null = null;
 
@@ -323,7 +381,9 @@ export default function Step2ReviewAssets() {
 
             // Log progress
             if (job.done > 0 || job.errors.length > 0) {
-              console.log(`Asset regeneration progress: ${job.done}/${job.total} done, ${job.errors.length} errors`);
+              console.log(
+                `Asset regeneration progress: ${job.done}/${job.total} done, ${job.errors.length} errors`,
+              );
             }
 
             // Start polling assets during regeneration
@@ -376,9 +436,12 @@ export default function Step2ReviewAssets() {
       )}
 
       <div className="max-w-5xl mx-auto">
-        <h1 className="mb-2 text-2xl font-bold text-white">Review & Manage Assets</h1>
+        <h1 className="mb-2 text-2xl font-bold text-white">
+          Review & Manage Assets
+        </h1>
         <p className="mb-6 text-neutral-400">
-          Review extracted assets and generate reference images for visual consistency
+          Review extracted assets and generate reference images for visual
+          consistency
         </p>
 
         {/* Add New Asset Section */}
@@ -405,7 +468,10 @@ export default function Step2ReviewAssets() {
           </div>
         ) : (
           <div className="mb-8 rounded-lg bg-neutral-900 border border-neutral-800 p-4">
-            <h3 className="mb-4 font-semibold text-white">Add New {newAssetType.charAt(0).toUpperCase() + newAssetType.slice(1)}</h3>
+            <h3 className="mb-4 font-semibold text-white">
+              Add New{" "}
+              {newAssetType.charAt(0).toUpperCase() + newAssetType.slice(1)}
+            </h3>
             <div className="space-y-3 mb-4">
               <input
                 type="text"
@@ -455,7 +521,9 @@ export default function Step2ReviewAssets() {
                   : "bg-indigo-600 text-white hover:bg-indigo-700"
               }`}
             >
-              {generatingIds.size > 0 ? "Generating all reference images..." : "🎨 Generate All Reference Images"}
+              {generatingIds.size > 0
+                ? "Generating all reference images..."
+                : "🎨 Generate All Reference Images"}
             </button>
           </div>
         )}
@@ -463,175 +531,206 @@ export default function Step2ReviewAssets() {
         {/* Assets Grid */}
         <div className="space-y-8">
           {/* Characters */}
-          {assets.filter(a => a.type === "character").length > 0 && (
+          {assets.filter((a) => a.type === "character").length > 0 && (
             <section>
-              <h2 className="mb-4 text-lg font-semibold text-indigo-400">Characters</h2>
+              <h2 className="mb-4 text-lg font-semibold text-indigo-400">
+                Characters
+              </h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {assets.filter(a => a.type === "character").map(asset => {
-                  const beatIndices = getBeatsForAsset(asset.name, "character");
-                  const isGenerating = generatingIds.has(asset.id);
+                {assets
+                  .filter((a) => a.type === "character")
+                  .map((asset) => {
+                    const beatIndices = getBeatsForAsset(
+                      asset.name,
+                      "character",
+                    );
+                    const isGenerating = generatingIds.has(asset.id);
 
-                  return (
-                    <div key={asset.id} className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
-                      {/* Header */}
-                      <div className="mb-3 flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold text-white">{asset.name}</h3>
-                          <span className="text-xs text-neutral-500">Character</span>
-                        </div>
-                        {beatIndices.length > 0 && (
-                          <div className="text-right">
-                            <div className="text-xs text-neutral-400">Appears in</div>
-                            <div className="text-sm font-mono text-indigo-400">
-                              beats {beatIndices.map(i => i + 1).join(", ")}
+                    return (
+                      <div
+                        key={asset.id}
+                        className="rounded-lg bg-neutral-900 border border-neutral-800 p-5"
+                      >
+                        {/* Header */}
+                        <div className="mb-3 flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-white">
+                              {asset.name}
+                            </h3>
+                            <span className="text-xs text-neutral-500">
+                              Character
+                            </span>
+                          </div>
+                          {beatIndices.length > 0 && (
+                            <div className="text-right">
+                              <div className="text-xs text-neutral-400">
+                                Appears in
+                              </div>
+                              <div className="text-sm font-mono text-indigo-400">
+                                beats {beatIndices.map((i) => i + 1).join(", ")}
+                              </div>
                             </div>
+                          )}
+                        </div>
+
+                        {/* Description */}
+                        {editingId === asset.id ? (
+                          <div className="mb-3">
+                            <textarea
+                              value={editingDesc}
+                              onChange={(e) => setEditingDesc(e.target.value)}
+                              className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                              rows={3}
+                            />
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                onClick={() => saveEdit(asset.id)}
+                                className="flex-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => startEdit(asset)}
+                            className="mb-3 cursor-pointer rounded bg-neutral-800/50 p-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                          >
+                            {asset.description}
+                          </div>
+                        )}
+
+                        {/* Reference Image */}
+                        {asset.reference_image_url ? (
+                          <div>
+                            <img
+                              src={asset.reference_image_url}
+                              alt={asset.name}
+                              className="w-full h-40 object-cover rounded mb-3 border border-neutral-700"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openHistoryModal(asset.id)}
+                                className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                              >
+                                📜 History
+                              </button>
+                              <button
+                                onClick={() => handleOpenRegenerate(asset)}
+                                className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                              >
+                                🔄 Regenerate
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-40 bg-neutral-800 rounded mb-3 border border-neutral-700 flex items-center justify-center">
+                            <span className="text-neutral-500 text-sm">
+                              Pending generation
+                            </span>
                           </div>
                         )}
                       </div>
-
-                      {/* Description */}
-                      {editingId === asset.id ? (
-                        <div className="mb-3">
-                          <textarea
-                            value={editingDesc}
-                            onChange={(e) => setEditingDesc(e.target.value)}
-                            className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                            rows={3}
-                          />
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              onClick={() => saveEdit(asset.id)}
-                              className="flex-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-600"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => startEdit(asset)}
-                          className="mb-3 cursor-pointer rounded bg-neutral-800/50 p-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
-                        >
-                          {asset.description}
-                        </div>
-                      )}
-
-                      {/* Reference Image */}
-                      {asset.reference_image_url ? (
-                        <div>
-                          <img
-                            src={asset.reference_image_url}
-                            alt={asset.name}
-                            className="w-full h-40 object-cover rounded mb-3 border border-neutral-700"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openHistoryModal(asset.id)}
-                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
-                            >
-                              📜 History
-                            </button>
-                            <button
-                              onClick={() => handleOpenRegenerate(asset)}
-                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
-                            >
-                              🔄 Regenerate
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-40 bg-neutral-800 rounded mb-3 border border-neutral-700 flex items-center justify-center">
-                          <span className="text-neutral-500 text-sm">Pending generation</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </section>
           )}
 
           {/* Locations */}
-          {assets.filter(a => a.type === "location").length > 0 && (
+          {assets.filter((a) => a.type === "location").length > 0 && (
             <section>
-              <h2 className="mb-4 text-lg font-semibold text-amber-400">Locations</h2>
+              <h2 className="mb-4 text-lg font-semibold text-amber-400">
+                Locations
+              </h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {assets.filter(a => a.type === "location").map(asset => {
-                  const isGenerating = generatingIds.has(asset.id);
+                {assets
+                  .filter((a) => a.type === "location")
+                  .map((asset) => {
+                    const isGenerating = generatingIds.has(asset.id);
 
-                  return (
-                    <div key={asset.id} className="rounded-lg bg-neutral-900 border border-neutral-800 p-5">
-                      <h3 className="mb-1 font-semibold text-white">{asset.name}</h3>
-                      <span className="text-xs text-neutral-500">Location</span>
+                    return (
+                      <div
+                        key={asset.id}
+                        className="rounded-lg bg-neutral-900 border border-neutral-800 p-5"
+                      >
+                        <h3 className="mb-1 font-semibold text-white">
+                          {asset.name}
+                        </h3>
+                        <span className="text-xs text-neutral-500">
+                          Location
+                        </span>
 
-                      {editingId === asset.id ? (
-                        <div className="mt-3">
-                          <textarea
-                            value={editingDesc}
-                            onChange={(e) => setEditingDesc(e.target.value)}
-                            className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-600"
-                            rows={3}
-                          />
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              onClick={() => saveEdit(asset.id)}
-                              className="flex-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-600"
-                            >
-                              Cancel
-                            </button>
+                        {editingId === asset.id ? (
+                          <div className="mt-3">
+                            <textarea
+                              value={editingDesc}
+                              onChange={(e) => setEditingDesc(e.target.value)}
+                              className="w-full rounded bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-600"
+                              rows={3}
+                            />
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                onClick={() => saveEdit(asset.id)}
+                                className="flex-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => startEdit(asset)}
-                          className="mt-3 cursor-pointer rounded bg-neutral-800/50 p-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
-                        >
-                          {asset.description}
-                        </div>
-                      )}
-
-                      {asset.reference_image_url ? (
-                        <div>
-                          <img
-                            src={asset.reference_image_url}
-                            alt={asset.name}
-                            className="w-full h-40 object-cover rounded my-3 border border-neutral-700"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openHistoryModal(asset.id)}
-                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
-                            >
-                              📜 History
-                            </button>
-                            <button
-                              onClick={() => handleOpenRegenerate(asset)}
-                              className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
-                            >
-                              🔄 Regenerate
-                            </button>
+                        ) : (
+                          <div
+                            onClick={() => startEdit(asset)}
+                            className="mt-3 cursor-pointer rounded bg-neutral-800/50 p-2 text-sm text-neutral-300 hover:bg-neutral-800 transition"
+                          >
+                            {asset.description}
                           </div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-40 bg-neutral-800 rounded my-3 border border-neutral-700 flex items-center justify-center">
-                          <span className="text-neutral-500 text-sm">Pending generation</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+
+                        {asset.reference_image_url ? (
+                          <div>
+                            <img
+                              src={asset.reference_image_url}
+                              alt={asset.name}
+                              className="w-full h-40 object-cover rounded my-3 border border-neutral-700"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openHistoryModal(asset.id)}
+                                className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                              >
+                                📜 History
+                              </button>
+                              <button
+                                onClick={() => handleOpenRegenerate(asset)}
+                                className="flex-1 px-3 py-2 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded border border-neutral-700 transition"
+                              >
+                                🔄 Regenerate
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-40 bg-neutral-800 rounded my-3 border border-neutral-700 flex items-center justify-center">
+                            <span className="text-neutral-500 text-sm">
+                              Pending generation
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </section>
           )}
@@ -641,8 +740,12 @@ export default function Step2ReviewAssets() {
         {allAssets > 0 && (
           <div className="mt-8 rounded-lg bg-neutral-900 p-4 border border-neutral-800">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-white">Reference Images Generated</span>
-              <span className={`text-sm font-mono ${allImagesGenerated ? "text-green-400" : "text-neutral-400"}`}>
+              <span className="text-sm font-medium text-white">
+                Reference Images Generated
+              </span>
+              <span
+                className={`text-sm font-mono ${allImagesGenerated ? "text-green-400" : "text-neutral-400"}`}
+              >
                 {assetsWithImages} / {allAssets}
               </span>
             </div>
@@ -666,7 +769,11 @@ export default function Step2ReviewAssets() {
                 : "bg-neutral-800 text-neutral-500 cursor-not-allowed"
             }`}
           >
-            {loading ? "Processing..." : !allImagesGenerated ? `Generate all reference images (${assetsWithImages}/${allAssets})` : "✓ Proceed to Beats"}
+            {loading
+              ? "Processing..."
+              : !allImagesGenerated
+                ? `Generate all reference images (${assetsWithImages}/${allAssets})`
+                : "✓ Proceed to Beats"}
           </button>
         </div>
       </div>

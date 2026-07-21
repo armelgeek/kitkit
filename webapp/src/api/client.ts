@@ -64,11 +64,11 @@ export interface Job {
   updated_at: number;
 }
 
-// WebSocket URL for the realtime job feed (/api/studio/ws), same-origin in prod,
+// WebSocket URL for the realtime job feed (/api/studio/jobs/ws), same-origin in prod,
 // proxied by Vite in dev.
 export function studioWsUrl(): string {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${location.host}/api/studio/ws`;
+  return `${proto}//${location.host}/api/studio/jobs/ws`;
 }
 
 export interface FlowProject {
@@ -605,19 +605,78 @@ export async function generateScreenplay(
   return { screenplay: data.stdout || data.response || "" };
 }
 
+function convertSlugsToNames(
+  beats: any[],
+  charMap: Map<string, string>,
+  locMap: Map<string, string>,
+  propMap: Map<string, string>
+): any[] {
+  return beats.map(b => {
+    if (!b.ref_entities) return b;
+    return {
+      ...b,
+      ref_entities: {
+        characters: (b.ref_entities.characters || []).map((slug: string) => charMap.get(slug) || slug),
+        locations: (b.ref_entities.locations || []).map((slug: string) => locMap.get(slug) || slug),
+        props: (b.ref_entities.props || []).map((slug: string) => propMap.get(slug) || slug),
+      },
+    };
+  });
+}
+
 export async function generateBeats(
   screenplay: string,
   scenes: { heading: string; body: string }[],
   model: string,
   timeout: number = 60,
-  language: string = "English"
+  language: string = "English",
+  entities?: { characters: Array<{name: string; description: string; slug?: string}>; locations: Array<{name: string; description: string; slug?: string}>; props: Array<{name: string; description: string; slug?: string}> }
 ): Promise<{ beats: any[] }> {
-  // Build prompt to generate beats from screenplay
+  // Build entity context with slugs
+  let entityContext = "";
+  const charMap = new Map<string, string>(); // slug -> name
+  const locMap = new Map<string, string>();
+  const propMap = new Map<string, string>();
+
+  if (entities) {
+    if (entities.characters.length > 0) {
+      entityContext += `AVAILABLE CHARACTERS (use identifier):\n`;
+      entities.characters.forEach(c => {
+        const id = c.slug || c.name;
+        charMap.set(id, c.name); // id -> full name mapping
+        charMap.set(c.name, c.name); // also map name -> name for fallback
+        entityContext += `- ${id}\n`;
+      });
+      entityContext += "\n";
+    }
+    if (entities.locations.length > 0) {
+      entityContext += `AVAILABLE LOCATIONS (use identifier):\n`;
+      entities.locations.forEach(l => {
+        const id = l.slug || l.name;
+        locMap.set(id, l.name);
+        locMap.set(l.name, l.name);
+        entityContext += `- ${id}\n`;
+      });
+      entityContext += "\n";
+    }
+    if (entities.props.length > 0) {
+      entityContext += `AVAILABLE PROPS (use identifier):\n`;
+      entities.props.forEach(p => {
+        const id = p.slug || p.name;
+        propMap.set(id, p.name);
+        propMap.set(p.name, p.name);
+        entityContext += `- ${id}\n`;
+      });
+      entityContext += "\n";
+    }
+  }
+
   const scenesList = scenes.map(s => `${s.heading}\n${s.body}`).join("\n\n");
   const prompt = `You are a film director. Break this screenplay into visual BEATS (shot plan segments). Each beat should be ~8 seconds of screen time.
 
 The screenplay is written in ${language}. Keep all descriptions and prompts in ${language}.
 
+${entityContext}
 SCREENPLAY:
 ${screenplay}
 
@@ -626,9 +685,18 @@ For each beat, return:
 - description: visual shot description in ${language} (shot size, angle, action)
 - visual_prompt: full image generation prompt (can mix languages but emphasize ${language})
 - motion_prompt: camera movement and action during the clip in ${language}
-- ref_entity_names: any characters/locations mentioned
+- ref_entities: {characters: [identifiers from AVAILABLE CHARACTERS], locations: [identifiers from AVAILABLE LOCATIONS], props: [identifiers from AVAILABLE PROPS]} - Use ONLY exact identifiers as listed. Match ALL entities that appear in each beat.
 
-Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"...","motion_prompt":"...","ref_entity_names":[]}]`;
+CRITICAL RULES:
+1. For EVERY character mentioned in the screenplay, add their identifier to characters array
+2. For EVERY location in the screenplay, add its identifier to locations array
+3. For EVERY prop mentioned, add its identifier to props array
+4. Use ONLY exact identifiers as they appear in AVAILABLE lists
+5. No abbreviations, no variations, no invented entities
+
+Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"...","motion_prompt":"...","ref_entities":{"characters":[],"locations":[],"props":[]}}]`;
+
+  console.log("🎬 generateBeats prompt:", prompt);
 
   const response = await fetch(`/api/agent/run`, {
     method: "POST",
@@ -658,10 +726,15 @@ Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"..."
       throw new Error("Empty response from AI");
     }
 
+    console.log("📄 Raw AI response:", stdout.substring(0, 500));
+
     // Method 1: Try direct JSON parse
     try {
       const beats = JSON.parse(stdout);
-      if (Array.isArray(beats)) return { beats };
+      if (Array.isArray(beats)) {
+        console.log("✅ Parsed beats from AI - Beat 1 ref_entities:", beats[0]?.ref_entities);
+        return { beats: convertSlugsToNames(beats, charMap, locMap, propMap) };
+      }
     } catch { /* not direct JSON */ }
 
     // Method 2: Extract JSON array from text (handles markdown code fences)
@@ -689,8 +762,19 @@ Return ONLY JSON array: [{"text":"...","description":"...","visual_prompt":"..."
         trimmed = trimmed.substring(0, lastValidEnd + 1);
         try {
           const beats = JSON.parse(trimmed);
-          if (Array.isArray(beats)) return { beats };
-        } catch { /* continue to next method */ }
+          if (Array.isArray(beats)) return { beats: convertSlugsToNames(beats, charMap, locMap, propMap) };
+        } catch (parseErr) {
+          // Method 3: Try to fix common JSON issues
+          console.warn("JSON parse failed, attempting repair:", parseErr);
+          const fixedJson = trimmed
+            .replace(/,\s*}/g, "}") // Remove trailing commas
+            .replace(/,\s*]/g, "]")
+            .replace(/:\s*,/g, ': ""'); // Empty value before comma
+          try {
+            const beats = JSON.parse(fixedJson);
+            if (Array.isArray(beats)) return { beats: convertSlugsToNames(beats, charMap, locMap, propMap) };
+          } catch { /* continue to next method */ }
+        }
       }
     }
 

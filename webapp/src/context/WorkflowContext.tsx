@@ -1,10 +1,18 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import type { WorkflowState, WorkflowActions, WorkflowStep, Beat, Scene } from "../types/workflow";
+import type {
+  WorkflowState,
+  WorkflowActions,
+  WorkflowStep,
+  Beat,
+  Scene,
+} from "../types/workflow";
 import * as apiClient from "../api/client";
 import type { Project } from "../api/client";
 
 // Extract character names from screenplay (FOUNTAIN format dialogue)
-function extractCharacters(screenplay: string): Array<{ name: string; description: string }> {
+function extractCharacters(
+  screenplay: string,
+): Array<{ name: string; description: string }> {
   const chars = new Map<string, boolean>();
   const lines = screenplay.split("\n");
 
@@ -17,8 +25,8 @@ function extractCharacters(screenplay: string): Array<{ name: string; descriptio
   }
 
   return Array.from(chars.keys())
-    .filter(name => name.length > 1)
-    .map(name => ({
+    .filter((name) => name.length > 1)
+    .map((name) => ({
       name: name.trim(),
       description: `Character: ${name}`,
     }));
@@ -27,12 +35,18 @@ function extractCharacters(screenplay: string): Array<{ name: string; descriptio
 // Generate style prefix for prompts (like material.scenePrefix)
 function getStylePrefix(style: string): string {
   const prefixes: Record<string, string> = {
-    "realistic": "Photorealistic, professional cinematography, studio lighting, high detail, sharp focus.",
-    "anime": "Anime style, vibrant colors, expressive features, dramatic lighting, detailed backgrounds.",
-    "3d pixar": "3D CGI Pixar style, smooth shading, warm color palette, cinematic lighting, detailed textures.",
-    "stop motion": "Stop-motion style, tactile textures, practical lighting, handcrafted aesthetic, rich colors.",
-    "minecraft": "Minecraft voxel style, blocky geometry, bright solid colors, low-poly aesthetic.",
-    "oil painting": "Oil painting style, thick brushstrokes, artistic composition, soft lighting, muted tones.",
+    realistic:
+      "Photorealistic, professional cinematography, studio lighting, high detail, sharp focus.",
+    anime:
+      "Anime style, vibrant colors, expressive features, dramatic lighting, detailed backgrounds.",
+    "3d pixar":
+      "3D CGI Pixar style, smooth shading, warm color palette, cinematic lighting, detailed textures.",
+    "stop motion":
+      "Stop-motion style, tactile textures, practical lighting, handcrafted aesthetic, rich colors.",
+    minecraft:
+      "Minecraft voxel style, blocky geometry, bright solid colors, low-poly aesthetic.",
+    "oil painting":
+      "Oil painting style, thick brushstrokes, artistic composition, soft lighting, muted tones.",
   };
 
   const normalized = style.toLowerCase();
@@ -46,17 +60,24 @@ function getStylePrefix(style: string): string {
 }
 
 // Extract location names from FOUNTAIN headings (INT./EXT. LOCATION - TIME)
-function extractLocations(screenplay: string): Array<{ name: string; description: string }> {
+function extractLocations(
+  screenplay: string,
+): Array<{ name: string; description: string }> {
   const locs = new Map<string, boolean>();
   const lines = screenplay.split("\n");
 
   for (const line of lines) {
     const trimmed = line.trim();
     // FOUNTAIN scene heading: INT./EXT. LOCATION - TIME
-    if (/^(INT\.|EXT\.|INTR\.|EXTR\.)/i.test(trimmed) && trimmed.includes("-")) {
+    if (
+      /^(INT\.|EXT\.|INTR\.|EXTR\.)/i.test(trimmed) &&
+      trimmed.includes("-")
+    ) {
       const parts = trimmed.split("-");
       if (parts.length > 0) {
-        const location = parts[0].replace(/^(INT\.|EXT\.|INTR\.|EXTR\.)/i, "").trim();
+        const location = parts[0]
+          .replace(/^(INT\.|EXT\.|INTR\.|EXTR\.)/i, "")
+          .trim();
         if (location.length > 1) {
           locs.set(location, true);
         }
@@ -64,14 +85,16 @@ function extractLocations(screenplay: string): Array<{ name: string; description
     }
   }
 
-  return Array.from(locs.keys()).map(name => ({
+  return Array.from(locs.keys()).map((name) => ({
     name: name.trim(),
     description: `Location: ${name}`,
   }));
 }
 
 // Extract props from screenplay (simple heuristic: words in parentheses/action descriptions)
-function extractProps(screenplay: string): Array<{ name: string; description: string }> {
+function extractProps(
+  screenplay: string,
+): Array<{ name: string; description: string }> {
   const props = new Map<string, boolean>();
   const propPattern = /\(([a-zA-Z\s\-]+)\)/g;
 
@@ -83,7 +106,7 @@ function extractProps(screenplay: string): Array<{ name: string; description: st
     }
   }
 
-  return Array.from(props.keys()).map(name => ({
+  return Array.from(props.keys()).map((name) => ({
     name: name.trim(),
     description: `Prop: ${name}`,
   }));
@@ -92,16 +115,16 @@ function extractProps(screenplay: string): Array<{ name: string; description: st
 // Fast character matching per beat (Option 1)
 function quickMatchCharactersByBeat(
   beats: any[],
-  characters: Array<{ name: string }>
+  characters: Array<{ name: string }>,
 ): Array<{ beat_index: number; character_names: string[] }> {
   return beats.map((beat, idx) => {
     const beatText = `${beat.description} ${beat.shotPrompts}`.toLowerCase();
-    const matched = characters.filter(char =>
-      beatText.includes(char.name.toLowerCase())
+    const matched = characters.filter((char) =>
+      beatText.includes(char.name.toLowerCase()),
     );
     return {
       beat_index: idx,
-      character_names: matched.map(c => c.name),
+      character_names: matched.map((c) => c.name),
     };
   });
 }
@@ -111,16 +134,18 @@ async function aiEnrichCharactersByBeat(
   unidentifiedBeats: any[],
   allBeats: any[],
   characters: Array<{ name: string; description: string }>,
-  model: string
+  model: string,
 ): Promise<Array<{ beat_index: number; character_names: string[] }>> {
   const beatDescriptions = unidentifiedBeats
     .map(
       (b) =>
-        `Beat ${b.beat_index}: ${b.description}\nVisual Prompt: ${b.shotPrompts}`
+        `Beat ${b.beat_index}: ${b.description}\nVisual Prompt: ${b.shotPrompts}`,
     )
     .join("\n\n");
 
-  const charList = characters.map((c) => `- ${c.name}: ${c.description}`).join("\n");
+  const charList = characters
+    .map((c) => `- ${c.name}: ${c.description}`)
+    .join("\n");
 
   const prompt = `For each beat, identify which characters appear based on the descriptions:
 
@@ -176,7 +201,10 @@ function parseScenes(screenplay: string): Scene[] {
   for (const line of lines) {
     const trimmed = line.trim();
     // FOUNTAIN scene heading: starts with INT. or EXT., ends with - TIME
-    if (/^(INT\.|EXT\.|INTR\.|EXTR\.)/i.test(trimmed) && trimmed.includes("-")) {
+    if (
+      /^(INT\.|EXT\.|INTR\.|EXTR\.)/i.test(trimmed) &&
+      trimmed.includes("-")
+    ) {
       // Save previous scene if exists
       if (currentHeading) {
         scenes.push({
@@ -246,6 +274,35 @@ const initialState: WorkflowState = {
   loadingMessage: "",
 };
 
+async function loadProjectEntities(projectId: string): Promise<{
+  characters: any[];
+  locations: any[];
+  props: any[];
+}> {
+  try {
+    const [charRes, locRes, propRes] = await Promise.all([
+      fetch(`/api/studio/projects/${projectId}/characters`),
+      fetch(`/api/studio/projects/${projectId}/locations`),
+      fetch(`/api/studio/projects/${projectId}/props`),
+    ]);
+
+    // API returns arrays directly, not wrapped in objects
+    const charData = charRes.ok ? (await charRes.json()) : [];
+    const locData = locRes.ok ? (await locRes.json()) : [];
+    const propData = propRes.ok ? (await propRes.json()) : [];
+
+    // Handle both array and object responses
+    const characters = Array.isArray(charData) ? charData : (charData.characters || []);
+    const locations = Array.isArray(locData) ? locData : (locData.locations || []);
+    const props = Array.isArray(propData) ? propData : (propData.props || []);
+
+    return { characters, locations, props };
+  } catch (err) {
+    console.warn("Failed to load project entities:", err);
+    return { characters: [], locations: [], props: [] };
+  }
+}
+
 function getInitialState(project?: Project): WorkflowState {
   if (!project) return initialState;
 
@@ -257,8 +314,17 @@ function getInitialState(project?: Project): WorkflowState {
     // Step 1 inputs (from project)
     idea: project.idea || "",
     style: project.style || "",
-    duration: project.target_duration ? Math.round(project.target_duration / 1000) : 120, // convert ms to seconds
-    model: project.video_model || project.image_model || "claude-3-5-sonnet-20241022",
+    duration: project.target_duration
+      ? Math.round(project.target_duration / 1000)
+      : 120, // convert ms to seconds
+    model: (() => {
+      const m = project.video_model || project.image_model;
+      // Validate model is a known Claude model
+      if (m && (m.includes("claude") || m.includes("opus") || m.includes("sonnet") || m.includes("haiku"))) {
+        return m;
+      }
+      return "claude-opus-4-8"; // fallback to valid model
+    })(),
     language: project.script_lang || "English",
     aspect_ratio: project.aspect_ratio || "VIDEO_ASPECT_RATIO_LANDSCAPE",
     customPromptHeader: project.prompt_header || "",
@@ -271,7 +337,7 @@ function getInitialState(project?: Project): WorkflowState {
     beats: [],
     editedBeatIds: new Set(),
 
-    // Step 3.5 data (Characters, Locations, Props)
+    // Step 3.5 data (Characters, Locations, Props) — will be loaded async
     characters: [],
     locations: [],
     props: [],
@@ -309,8 +375,13 @@ interface WorkflowProviderProps {
   initialProject?: Project;
 }
 
-export function WorkflowProvider({ children, initialProject }: WorkflowProviderProps) {
-  const [state, setState] = useState<WorkflowState>(() => getInitialState(initialProject));
+export function WorkflowProvider({
+  children,
+  initialProject,
+}: WorkflowProviderProps) {
+  const [state, setState] = useState<WorkflowState>(() =>
+    getInitialState(initialProject),
+  );
   const stateRef = React.useRef(state);
 
   // Keep ref in sync with state
@@ -318,26 +389,42 @@ export function WorkflowProvider({ children, initialProject }: WorkflowProviderP
     stateRef.current = state;
   }, [state]);
 
-  // Auto-trigger approveScreenplay when projectId is set (ponytail: skip if beats exist = already done)
+  // Load entities (characters, locations, props) when project is loaded
   React.useEffect(() => {
-    if (state.projectId && state.screenplayRaw && !state.loading && state.currentStep === 2 && state.beats.length === 0) {
-      console.log("Provider: Auto-triggering approveScreenplay, projectId:", state.projectId);
-      // Schedule for next tick so state is fully synced
-      setTimeout(() => {
-        actions.approveScreenplay();
-      }, 0);
+    if (state.projectId && state.characters.length === 0) {
+      console.log("🔄 Loading entities for projectId:", state.projectId);
+      loadProjectEntities(state.projectId).then((entities) => {
+        console.log("✅ Loaded entities:", entities);
+        setState((s) => ({
+          ...s,
+          characters: entities.characters,
+          locations: entities.locations,
+          props: entities.props,
+        }));
+      });
     }
-  }, [state.projectId, state.screenplayRaw, state.beats.length]);
+  }, [state.projectId]);
 
-  // Auto-trigger asset reference generation (ponytail: skip if entities exist = already done)
+  // Load beats when project is loaded
   React.useEffect(() => {
-    if (state.currentStep === 2.6 && (state.characters.length > 0 || state.locations.length > 0 || state.props.length > 0) && !state.loading && state.entities.length === 0) {
-      console.log("Provider: Auto-triggering generateAllAssetReferences");
-      setTimeout(() => {
-        actions.generateAllAssetReferences();
-      }, 0);
+    if (state.projectId && state.beats.length === 0) {
+      console.log("🔄 Loading beats for projectId:", state.projectId);
+      fetch(`/api/studio/projects/${state.projectId}/beats`)
+        .then((r) => r.json())
+        .then((data) => {
+          const beats = data.beats || [];
+          if (beats.length > 0) {
+            console.log("✅ Loaded beats:", beats.length);
+            setState((s) => ({
+              ...s,
+              beats,
+            }));
+          }
+        })
+        .catch((err) => console.warn("Failed to load beats:", err));
     }
-  }, [state.currentStep, state.characters.length, state.locations.length, state.props.length, state.entities.length]);
+  }, [state.projectId]);
+
 
   const actions: WorkflowActions = {
     setIdea: (idea: string) => {
@@ -401,16 +488,28 @@ export function WorkflowProvider({ children, initialProject }: WorkflowProviderP
             }),
           });
 
-          console.log("generateScreenplay: project response status:", projectResponse.status);
+          console.log(
+            "generateScreenplay: project response status:",
+            projectResponse.status,
+          );
 
           if (projectResponse.ok) {
             const projectData = await projectResponse.json();
             projectId = projectData.id;
             flowProjectId = projectData.flow_project_id;
-            console.log("generateScreenplay: Created project in DB:", projectId, "Flow ID:", flowProjectId);
+            console.log(
+              "generateScreenplay: Created project in DB:",
+              projectId,
+              "Flow ID:",
+              flowProjectId,
+            );
           } else {
             const errorText = await projectResponse.text();
-            console.warn("generateScreenplay: Failed to create project:", projectResponse.statusText, errorText);
+            console.warn(
+              "generateScreenplay: Failed to create project:",
+              projectResponse.statusText,
+              errorText,
+            );
           }
         } catch (e) {
           console.error("generateScreenplay: Error creating project:", e);
@@ -440,7 +539,11 @@ Follow FOUNTAIN format: scene headings (INT./EXT. LOCATION - TIME), action, dial
 
 Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
 
-        const result = await apiClient.generateScreenplay(prompt, currentState.model, 120);
+        const result = await apiClient.generateScreenplay(
+          prompt,
+          currentState.model,
+          120,
+        );
         const screenplay = result.screenplay;
         const parsedScenes = parseScenes(screenplay);
 
@@ -451,9 +554,17 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
           body: JSON.stringify({ script: screenplay }),
         });
 
-        console.log("generateScreenplay: saving to state, projectId:", projectId, "flowProjectId:", flowProjectId);
+        console.log(
+          "generateScreenplay: saving to state, projectId:",
+          projectId,
+          "flowProjectId:",
+          flowProjectId,
+        );
         setState((s) => {
-          console.log("setState in generateScreenplay, setting projectId to:", projectId);
+          console.log(
+            "setState in generateScreenplay, setting projectId to:",
+            projectId,
+          );
           return {
             ...s,
             projectId,
@@ -467,7 +578,9 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
         console.log("generateScreenplay: state updated");
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : "Unknown error generating screenplay";
+          err instanceof Error
+            ? err.message
+            : "Unknown error generating screenplay";
         setState((s) => ({
           ...s,
           loading: false,
@@ -486,7 +599,10 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
     approveScreenplay: async () => {
       const currentState = stateRef.current;
       console.log("approveScreenplay: started");
-      console.log("approveScreenplay: current state projectId:", currentState.projectId);
+      console.log(
+        "approveScreenplay: current state projectId:",
+        currentState.projectId,
+      );
 
       if (!currentState.projectId) {
         console.log("approveScreenplay: ERROR - no projectId!");
@@ -505,11 +621,14 @@ Output ONLY the screenplay in FOUNTAIN format, no introduction or explanation.`;
       });
 
       try {
-        console.log("approveScreenplay: extracting assets from screenplay via AI");
+        console.log(
+          "approveScreenplay: extracting assets from screenplay via AI",
+        );
 
         setState((s) => ({
           ...s,
-          loadingMessage: "Analyzing screenplay to extract characters, locations, and props...",
+          loadingMessage:
+            "Analyzing screenplay to extract characters, locations, and props...",
         }));
 
         // Use AI to extract and describe assets with visual style consideration
@@ -558,10 +677,14 @@ ${currentState.screenplayRaw}`;
         const extractedLocs = extractedJson.locations || [];
         const extractedProps = extractedJson.props || [];
 
-        console.log("approveScreenplay: AI extracted", extractedChars.length, "characters");
+        console.log(
+          "approveScreenplay: AI extracted",
+          extractedChars.length,
+          "characters",
+        );
 
         // Save to DB
-        const charPromises = extractedChars.map(char =>
+        const charPromises = extractedChars.map((char) =>
           fetch(`/api/studio/projects/${currentState.projectId}/characters`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -570,10 +693,10 @@ ${currentState.screenplayRaw}`;
               name: char.name,
               description: char.description,
             }),
-          }).then(r => r.json())
+          }).then((r) => r.json()),
         );
 
-        const locPromises = extractedLocs.map(loc =>
+        const locPromises = extractedLocs.map((loc) =>
           fetch(`/api/studio/projects/${currentState.projectId}/locations`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -582,10 +705,10 @@ ${currentState.screenplayRaw}`;
               name: loc.name,
               description: loc.description,
             }),
-          }).then(r => r.json())
+          }).then((r) => r.json()),
         );
 
-        const propPromises = extractedProps.map(prop =>
+        const propPromises = extractedProps.map((prop) =>
           fetch(`/api/studio/projects/${currentState.projectId}/props`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -594,7 +717,7 @@ ${currentState.screenplayRaw}`;
               name: prop.name,
               description: prop.description,
             }),
-          }).then(r => r.json())
+          }).then((r) => r.json()),
         );
 
         const savedChars = await Promise.all(charPromises);
@@ -608,7 +731,7 @@ ${currentState.screenplayRaw}`;
           locations: savedLocs,
           props: savedProps,
           loading: false,
-          currentStep: 2.6,  // Go to Review & Manage Assets step
+          currentStep: 2.6, // Go to Review & Manage Assets step
         }));
         console.log("approveScreenplay: state set, should be at 2.6 now");
       } catch (error: any) {
@@ -633,7 +756,7 @@ ${currentState.screenplayRaw}`;
     updateBeat: (beatId: string, updates: Partial<Beat>) => {
       setState((s) => {
         const updatedBeats = s.beats.map((b) =>
-          b.id === beatId ? { ...b, ...updates } : b
+          b.id === beatId ? { ...b, ...updates } : b,
         );
         const beat = updatedBeats.find((b) => b.id === beatId);
 
@@ -682,17 +805,20 @@ ${currentState.screenplayRaw}`;
             mediaId = char.reference_image_url;
           }
 
-          const res = await fetch(`/api/studio/projects/${currentState.projectId}/characters`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: char.name,
-              description: char.description,
-              image_prompt: char.image_prompt,
-              reference_image_url: char.reference_image_url,
-              media_id: mediaId, // Store media_id for Flow reference
-            }),
-          });
+          const res = await fetch(
+            `/api/studio/projects/${currentState.projectId}/characters`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: char.name,
+                description: char.description,
+                image_prompt: char.image_prompt,
+                reference_image_url: char.reference_image_url,
+                media_id: mediaId, // Store media_id for Flow reference
+              }),
+            },
+          );
           if (res.ok) {
             createdChars.push(await res.json());
           }
@@ -718,17 +844,20 @@ ${currentState.screenplayRaw}`;
             mediaId = loc.reference_image_url;
           }
 
-          const res = await fetch(`/api/studio/projects/${currentState.projectId}/locations`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: loc.name,
-              description: loc.description,
-              image_prompt: loc.image_prompt,
-              reference_image_url: loc.reference_image_url,
-              media_id: mediaId,
-            }),
-          });
+          const res = await fetch(
+            `/api/studio/projects/${currentState.projectId}/locations`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: loc.name,
+                description: loc.description,
+                image_prompt: loc.image_prompt,
+                reference_image_url: loc.reference_image_url,
+                media_id: mediaId,
+              }),
+            },
+          );
           if (res.ok) {
             createdLocs.push(await res.json());
           }
@@ -754,17 +883,20 @@ ${currentState.screenplayRaw}`;
             mediaId = prop.reference_image_url;
           }
 
-          const res = await fetch(`/api/studio/projects/${currentState.projectId}/props`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: prop.name,
-              description: prop.description,
-              image_prompt: prop.image_prompt,
-              reference_image_url: prop.reference_image_url,
-              media_id: mediaId,
-            }),
-          });
+          const res = await fetch(
+            `/api/studio/projects/${currentState.projectId}/props`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: prop.name,
+                description: prop.description,
+                image_prompt: prop.image_prompt,
+                reference_image_url: prop.reference_image_url,
+                media_id: mediaId,
+              }),
+            },
+          );
           if (res.ok) {
             createdProps.push(await res.json());
           }
@@ -784,11 +916,20 @@ ${currentState.screenplayRaw}`;
       setState({
         ...currentState,
         loading: true,
-        loadingMessage: "Extracting entities and generating asset references...",
+        loadingMessage:
+          "Extracting entities and generating asset references...",
         error: null,
       });
 
       try {
+        // Normalize name to slug (match backend logic)
+        const normalizeToSlug = (name: string): string => {
+          return name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        };
+
         // Extract unique entities from beats
         const entityMap = new Map<string, any>();
         const characterDescriptions: Record<string, string> = {};
@@ -800,6 +941,7 @@ ${currentState.screenplayRaw}`;
             if (!entityMap.has(entity.name)) {
               entityMap.set(entity.name, {
                 name: entity.name,
+                slug: normalizeToSlug(entity.name),
                 type: entity.type as "character" | "location" | "prop",
                 description: entity.description,
               });
@@ -845,15 +987,24 @@ Studio lighting, isolated on white background, professional product reference sh
           return {
             id: `entity-${idx}`,
             name: e.name,
+            slug: e.slug,
             type: e.type,
             description: e.description,
             ref_prompt,
           };
         });
 
+        // Separate entities by type and update state
+        const characters = entities.filter(e => e.type === "character");
+        const locations = entities.filter(e => e.type === "location");
+        const props = entities.filter(e => e.type === "prop");
+
         setState((s) => ({
           ...s,
           entities,
+          characters, // Update with extracted entities (now with slugs)
+          locations,
+          props,
           loading: false,
           currentStep: 4,
         }));
@@ -876,32 +1027,46 @@ Studio lighting, isolated on white background, professional product reference sh
         return;
       }
 
-      setState(s => ({ ...s, loading: true, loadingMessage: "Generating reference images..." }));
+      setState((s) => ({
+        ...s,
+        loading: true,
+        loadingMessage: "Generating reference images...",
+      }));
 
       try {
         // Call backend endpoint to generate + save all asset references
-        const response = await fetch(`/api/studio/projects/${projectId}/generate-asset-references`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
+        const response = await fetch(
+          `/api/studio/projects/${projectId}/generate-asset-references`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          },
+        );
 
         if (!response.ok) {
           throw new Error(`Backend error: ${response.status}`);
         }
 
         const result = await response.json();
-        console.log(`✅ Generated ${result.generated} reference images:`, result.assets);
+        console.log(
+          `✅ Generated ${result.generated} reference images:`,
+          result.assets,
+        );
 
-        setState(s => ({ ...s, loading: false }));
+        setState((s) => ({ ...s, loading: false }));
       } catch (err) {
         console.error("Asset reference generation failed:", err);
-        setState(s => ({ ...s, loading: false, error: `Failed to generate reference images: ${err}` }));
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: `Failed to generate reference images: ${err}`,
+        }));
       }
     },
 
     generateBeats: async () => {
       const currentState = state;
-
+      console.log("current state", currentState);
       setState({
         ...currentState,
         loading: true,
@@ -910,21 +1075,10 @@ Studio lighting, isolated on white background, professional product reference sh
       });
 
       try {
-        console.log("generateBeats: starting with style and asset context");
-
-        // Build asset context for beats generation
-        const assetContext = `
-VISUAL STYLE: ${currentState.style}
-
-KEY CHARACTERS:
-${currentState.characters.map(c => `- ${c.name}: ${c.description}`).join("\n")}
-
-KEY LOCATIONS:
-${currentState.locations.map(l => `- ${l.name}: ${l.description}`).join("\n")}
-
-KEY PROPS:
-${currentState.props.map(p => `- ${p.name}: ${p.description}`).join("\n")}
-`;
+        console.log("🎯 generateBeats action started");
+        console.log("📋 Characters:", currentState.characters);
+        console.log("📍 Locations:", currentState.locations);
+        console.log("🔧 Props:", currentState.props);
 
         const result = await apiClient.generateBeats(
           currentState.screenplayRaw,
@@ -932,13 +1086,42 @@ ${currentState.props.map(p => `- ${p.name}: ${p.description}`).join("\n")}
           currentState.model,
           120,
           currentState.language,
-          assetContext  // Pass asset context to beat generation
+          {
+            characters: currentState.characters,
+            locations: currentState.locations,
+            props: currentState.props,
+          },
         );
 
+        // Validate entities against available list (filter hallucinations)
+        // Note: ref_entities now contain names (converted from slugs by generateBeats)
+        const validCharacterNames = new Set(currentState.characters.map((c) => c.name));
+        const validLocationNames = new Set(currentState.locations.map((l) => l.name));
+        const validPropNames = new Set(currentState.props.map((p) => p.name));
+
+        const cleanedBeats = result.beats.map((b: any) => {
+          if (!b.ref_entities) return b;
+          return {
+            ...b,
+            ref_entities: {
+              characters: (b.ref_entities.characters || []).filter((name: string) =>
+                validCharacterNames.has(name),
+              ),
+              locations: (b.ref_entities.locations || []).filter((name: string) =>
+                validLocationNames.has(name),
+              ),
+              props: (b.ref_entities.props || []).filter((name: string) =>
+                validPropNames.has(name),
+              ),
+            },
+          };
+        });
+
         // Convert API beats to Beat type with full narrative context
-        const beats = result.beats.map((b: any, idx: number) => {
+        const beats = cleanedBeats.map((b: any, idx: number) => {
           const prevBeat = idx > 0 ? result.beats[idx - 1] : null;
-          const nextBeat = idx < result.beats.length - 1 ? result.beats[idx + 1] : null;
+          const nextBeat =
+            idx < result.beats.length - 1 ? result.beats[idx + 1] : null;
 
           // Add narrative continuity context
           let continuityNotes = "";
@@ -949,25 +1132,51 @@ ${currentState.props.map(p => `- ${p.name}: ${p.description}`).join("\n")}
             continuityNotes += `Next: ${(nextBeat.description || "").substring(0, 80)}...`;
           }
 
+          // Extract typed entities from ref_entities structure
+          const refEntities = b.ref_entities || {
+            characters: [],
+            locations: [],
+            props: [],
+          };
+          console.log(`Beat ${idx + 1} ref_entities:`, refEntities);
+          const allRefNames = [
+            ...refEntities.characters,
+            ...refEntities.locations,
+            ...refEntities.props,
+          ];
+
           return {
             id: `beat-${Math.random().toString(36).substring(7)}`,
-            sceneHeading: b.description?.split('\n')[0] || `Scene ${idx + 1}`,
+            sceneHeading: b.description?.split("\n")[0] || `Scene ${idx + 1}`,
             description: b.description || "",
-            entities: (b.ref_entity_names || []).map((name: string) => ({
-              name,
-              type: "unknown",
-              description: ""
-            })),
+            entities: allRefNames.map((name: string) => {
+              let type = "unknown";
+              if (refEntities.characters.includes(name)) type = "character";
+              else if (refEntities.locations.includes(name)) type = "location";
+              else if (refEntities.props.includes(name)) type = "prop";
+
+              const fullEntity =
+                currentState.characters.find((c) => c.name === name) ||
+                currentState.locations.find((l) => l.name === name) ||
+                currentState.props.find((p) => p.name === name);
+
+              return {
+                name,
+                type,
+                description: fullEntity?.description || "",
+              };
+            }),
             shotPrompts: b.visual_prompt || b.shotPrompts || "",
             motionHints: b.motion_prompt || b.motionHints || "",
             voiceover: b.text || b.voiceover || "",
-            characterNames: [] as string[],
+            characterNames: refEntities.characters || ([] as string[]),
             continuityNotes: continuityNotes,
-            beatIndex: idx + 1,  // 1-based index
+            beatIndex: idx + 1, // 1-based index
             totalBeats: result.beats.length,
-            tone: b.tone || "neutral",  // Will be enriched by AI
-            characterArcs: {},  // Will be enriched by AI
-            transitionPrompt: idx < result.beats.length - 1 ? "" : "Resolution/closing",
+            tone: b.tone || "neutral", // Will be enriched by AI
+            characterArcs: {}, // Will be enriched by AI
+            transitionPrompt:
+              idx < result.beats.length - 1 ? "" : "Resolution/closing",
           };
         });
 
@@ -982,28 +1191,28 @@ ${currentState.props.map(p => `- ${p.name}: ${p.description}`).join("\n")}
           .join("\n\n");
 
         const enrichmentPrompt = `Analyze each beat and extract:
-1. TONE: emotional atmosphere (tense, mysterious, romantic, comedic, etc.)
-2. CHARACTER ARCS: how each character feels/evolves in THIS beat
+          1. TONE: emotional atmosphere (tense, mysterious, romantic, comedic, etc.)
+          2. CHARACTER ARCS: how each character feels/evolves in THIS beat
 
-Characters: ${currentState.characters.map(c => c.name).join(", ")}
+          Characters: ${currentState.characters.map((c) => c.name).join(", ")}
 
-BEATS:
-${beatsText}
+          BEATS:
+          ${beatsText}
 
-Return JSON:
-{
-  "beats": [
-    {
-      "index": 0,
-      "tone": "tense, mysterious",
-      "characterArcs": {
-        "CharacterName": "confused and searching",
-        "OtherChar": "calm but suspicious"
-      },
-      "transitionNote": "from confusion to discovery"
-    }
-  ]
-}`;
+          Return JSON:
+          {
+            "beats": [
+              {
+                "index": 0,
+                "tone": "tense, mysterious",
+                "characterArcs": {
+                  "CharacterName": "confused and searching",
+                  "OtherChar": "calm but suspicious"
+                },
+                "transitionNote": "from confusion to discovery"
+              }
+            ]
+          }`;
 
         try {
           const enrichResponse = await fetch(`/api/agent/run`, {
@@ -1045,26 +1254,38 @@ Return JSON:
         }
 
         // Fast character matching
-        const quickMatches = quickMatchCharactersByBeat(beats, currentState.characters);
-        const unidentifiedBeats = quickMatches.filter(m => m.character_names.length === 0);
+        const quickMatches = quickMatchCharactersByBeat(
+          beats,
+          currentState.characters,
+        );
+        const unidentifiedBeats = quickMatches.filter(
+          (m) => m.character_names.length === 0,
+        );
 
         // AI enrichment for unidentified beats
         let allMatches = [...quickMatches];
-        if (unidentifiedBeats.length > 0 && currentState.characters.length > 0) {
+        if (
+          unidentifiedBeats.length > 0 &&
+          currentState.characters.length > 0
+        ) {
           setState((s) => ({
             ...s,
             loadingMessage: `Analyzing ${unidentifiedBeats.length} beats for character identification...`,
           }));
 
           const enriched = await aiEnrichCharactersByBeat(
-            beats.filter((b, idx) => unidentifiedBeats.some(u => u.beat_index === idx)),
+            beats.filter((b, idx) =>
+              unidentifiedBeats.some((u) => u.beat_index === idx),
+            ),
             beats,
             currentState.characters,
-            currentState.model
+            currentState.model,
           );
 
-          allMatches = quickMatches.map(m => {
-            const enrichedResult = enriched.find((e: any) => e.beat_index === m.beat_index);
+          allMatches = quickMatches.map((m) => {
+            const enrichedResult = enriched.find(
+              (e: any) => e.beat_index === m.beat_index,
+            );
             return enrichedResult || m;
           });
         }
@@ -1082,6 +1303,20 @@ Return JSON:
           loading: false,
           currentStep: 3,
         }));
+
+        // Save beats to DB
+        if (currentState.projectId) {
+          try {
+            await fetch(`/api/studio/projects/${currentState.projectId}/beats`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ beats: beatsWithCharacters }),
+            });
+            console.log("✅ Beats saved to DB");
+          } catch (err) {
+            console.warn("Failed to save beats to DB:", err);
+          }
+        }
       } catch (error: any) {
         console.error("generateBeats error:", error);
         setState((s) => ({
@@ -1098,127 +1333,175 @@ Return JSON:
       setState({
         ...currentState,
         loading: true,
-        loadingMessage: "Refining visual prompts with character/location consistency and style...",
+        loadingMessage: "Generating storyboard images...",
         error: null,
       });
 
       try {
-        // Build complete reference context with style + media_ids
-        const referenceContext = {
-          style: currentState.style,
-          characters: currentState.characters.map(c => ({
-            name: c.name,
-            description: c.description,
-            reference_url: c.reference_image_url,
-            media_id: (c as any).media_id,  // Pass media_id for Flow
-          })),
-          locations: currentState.locations.map(l => ({
-            name: l.name,
-            description: l.description,
-            reference_url: l.reference_image_url,
-            media_id: (l as any).media_id,
-          })),
-          props: currentState.props.map(p => ({
-            name: p.name,
-            description: p.description,
-            reference_url: p.reference_image_url,
-            media_id: (p as any).media_id,
-          })),
-        };
+        // Connect to WebSocket
+        const ws = new WebSocket(`ws://${window.location.host}/api/studio/jobs/ws`);
+        let jobCompleted = false;
+        let jobId: string | null = null;
 
-        // Build style prefix (like material.scenePrefix)
-        const stylePrefix = getStylePrefix(currentState.style);
-
-        // Refine beat prompts with style + assets + tone + character arcs + continuity
-        const refinedBeats = currentState.beats.map((beat, idx) => {
-          const usedAssets = [
-            ...(beat.characterNames || []),
-            ...currentState.locations.filter(l => beat.description?.includes(l.name)).map(l => l.name),
-            ...currentState.props.filter(p => beat.description?.includes(p.name)).map(p => p.name),
-          ];
-
-          // Build complete narrative context
-          let narrativeContext = "";
-
-          // Beat position and tone
-          if (beat.beatIndex && beat.totalBeats) {
-            narrativeContext += `\n[Beat ${beat.beatIndex}/${beat.totalBeats}]`;
-          }
-          if (beat.tone) {
-            narrativeContext += `\n[TONE: ${beat.tone}]`;
-          }
-
-          // Character emotional arcs
-          if (beat.characterArcs && Object.keys(beat.characterArcs).length > 0) {
-            narrativeContext += "\n[CHARACTER STATES:";
-            Object.entries(beat.characterArcs).forEach(([char, arc]) => {
-              narrativeContext += `\n  ${char}: ${arc}`;
-            });
-            narrativeContext += "\n]";
-          }
-
-          // Transition notes
-          if (beat.transitionPrompt) {
-            narrativeContext += `\n[TRANSITION: ${beat.transitionPrompt}]`;
-          }
-
-          // Narrative continuity from adjacent beats
-          if (beat.continuityNotes) {
-            narrativeContext += `\n[Context: ${beat.continuityNotes}]`;
-          }
-
-          // Opening/closing markers
-          if (idx === 0) {
-            narrativeContext += "\n[OPENING: Establish world, mood, and stakes]";
-          } else if (idx === currentState.beats.length - 1) {
-            narrativeContext += "\n[CLOSING: Provide resolution and emotional payoff]";
-          }
-
-          return {
-            ...beat,
-            shotPrompts: `${stylePrefix}\n${beat.shotPrompts}${usedAssets.length > 0 ? `\nAssets: ${usedAssets.join(", ")}` : ""}${narrativeContext}`,
+        await new Promise<void>((resolve) => {
+          ws.onopen = () => {
+            console.log("Connected to WebSocket for storyboard generation");
+            resolve();
           };
         });
 
-        const result = await apiClient.generateImages(
-          refinedBeats,
-          currentState.model,
-          currentState.flowProjectId,
-          referenceContext
+        // Launch job to generate images
+        const response = await fetch(
+          `/api/studio/projects/${currentState.projectId}/generate-storyboard-images`,
+          { method: "POST" }
         );
 
-        // Save generated images to shots in DB
-        try {
-          for (const img of result.images) {
-            const beat = currentState.beats.find((b) => b.id === img.beat_id);
-            if (beat?.shotId && img.image_url) {
-              // TODO: upload image to Flow and get media_id, then save to shot
-              // For now, just save the URL as placeholder
-              await fetch(`/api/studio/shots/${beat.shotId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  // image_media_id will be set after Flow upload
-                }),
-              }).catch((e) => console.warn("Failed to save image reference:", e));
-            }
-          }
-        } catch (saveError) {
-          console.warn("Failed to sync images to DB:", saveError);
+        if (!response.ok) {
+          throw new Error("Failed to start image generation");
         }
 
-        setState((s) => ({
-          ...s,
-          generatedImages: result.images,
-          generationJobId: result.jobId,
-          loading: false,
-          currentStep: 4.5 as any,
-        }));
+        const { job_id } = await response.json();
+        jobId = job_id;
+        console.log("Storyboard generation job started:", job_id);
+
+        ws.onmessage = async (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+
+            if (msg.type === "beat" && msg.beat) {
+              // Update beat with generated image
+              setState((s) => ({
+                ...s,
+                beats: s.beats.map((b) => (b.id === msg.beat.id ? msg.beat : b)),
+              }));
+            } else if (msg.type === "job" && jobId && msg.job.id === jobId) {
+              const job = msg.job;
+
+              // Update progress - keep loading true
+              setState((s) => ({
+                ...s,
+                loading: true,
+                loadingMessage: job.current || `Generating ${job.done}/${job.total} images...`,
+              }));
+
+              // When complete, proceed to Step 4 (Review Generated Images)
+              if (job.status === "done") {
+                jobCompleted = true;
+                ws.close();
+                setState((s) => ({
+                  ...s,
+                  loading: false,
+                  currentStep: 4,
+                }));
+              }
+            }
+          } catch (err) {
+            console.error("Error parsing WebSocket message:", err);
+          }
+        };
+
+        ws.onerror = () => {
+          console.error("WebSocket error");
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error: "Connection error during image generation",
+          }));
+        };
       } catch (error: any) {
         setState((s) => ({
           ...s,
           loading: false,
           error: error.message || "Failed to generate images",
+        }));
+      }
+    },
+
+    generateNarration: async () => {
+      const currentState = state;
+
+      setState({
+        ...currentState,
+        loading: true,
+        loadingMessage: "Generating beat narration...",
+        error: null,
+      });
+
+      try {
+        // Connect to WebSocket
+        const ws = new WebSocket(`ws://${window.location.host}/api/jobs/ws`);
+        let jobCompleted = false;
+        let jobId: string | null = null;
+
+        await new Promise<void>((resolve) => {
+          ws.onopen = () => {
+            console.log("Connected to WebSocket for narration generation");
+            resolve();
+          };
+        });
+
+        // Launch job to generate narration
+        const response = await fetch(
+          `/api/studio/projects/${currentState.projectId}/generate-beat-narration`,
+          { method: "POST" }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to start narration generation");
+        }
+
+        const { job_id } = await response.json();
+        jobId = job_id;
+        console.log("Narration generation job started:", job_id);
+
+        ws.onmessage = async (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+
+            if (msg.type === "beat" && msg.beat) {
+              // Update beat with generated narration
+              setState((s) => ({
+                ...s,
+                beats: s.beats.map((b) => (b.id === msg.beat.id ? msg.beat : b)),
+              }));
+            } else if (msg.type === "job" && jobId && msg.job.id === jobId) {
+              const job = msg.job;
+
+              // Update progress
+              setState((s) => ({
+                ...s,
+                loading: true,
+                loadingMessage: job.current || `Generating ${job.done}/${job.total} narrations...`,
+              }));
+
+              // When complete, stay on Step 4.6
+              if (job.status === "done") {
+                jobCompleted = true;
+                ws.close();
+                setState((s) => ({
+                  ...s,
+                  loading: false,
+                }));
+              }
+            }
+          } catch (err) {
+            console.error("Error parsing WebSocket message:", err);
+          }
+        };
+
+        ws.onerror = () => {
+          console.error("WebSocket error");
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error: "Connection error during narration generation",
+          }));
+        };
+      } catch (error: any) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: error.message || "Failed to generate narration",
         }));
       }
     },

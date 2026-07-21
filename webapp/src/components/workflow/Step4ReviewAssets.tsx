@@ -3,16 +3,16 @@ import { useWorkflow } from "../../context/WorkflowContext";
 
 export default function Step4ReviewAssets() {
   const { state, actions } = useWorkflow();
-  const { entities, loading, error } = state;
+  const { characters, locations, props, loading, error } = state;
 
   const handleGenerate = async () => {
     await actions.approveStoryboard();
   };
 
   const groupedEntities = {
-    character: entities.filter(e => e.type === "character"),
-    location: entities.filter(e => e.type === "location"),
-    prop: entities.filter(e => e.type === "prop"),
+    character: characters,
+    location: locations,
+    prop: props,
   };
 
   return (
@@ -25,9 +25,9 @@ export default function Step4ReviewAssets() {
       )}
 
       <div className="max-w-4xl mx-auto">
-        <h1 className="mb-2 text-2xl font-bold text-white">Generate Asset References</h1>
+        <h1 className="mb-2 text-2xl font-bold text-white">Review Extracted Assets</h1>
         <p className="mb-6 text-neutral-400">
-          Before generating images, we'll create reference sheets for characters, locations, and props to keep your visuals consistent.
+          Asset reference sheets have been generated for consistency. Review your characters, locations, and props before generating images.
         </p>
 
         {/* Characters Section */}
@@ -101,9 +101,9 @@ export default function Step4ReviewAssets() {
           </button>
           <button
             onClick={handleGenerate}
-            disabled={loading || entities.length === 0}
+            disabled={loading || (characters.length === 0 && locations.length === 0 && props.length === 0)}
             className={`rounded-lg px-6 py-3 font-medium transition ${
-              loading || entities.length === 0
+              loading || (characters.length === 0 && locations.length === 0 && props.length === 0)
                 ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
             }`}

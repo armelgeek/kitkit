@@ -129,6 +129,18 @@ async def create_project(body: CreateProjectRequest):
 @router.post("/generate-image")
 async def generate_image(body: GenerateImageRequest):
     """Generate an image directly (bypasses the queue)."""
+    from agent.config import USE_MOCK_FLOW
+
+    # Use mock Flow API if configured
+    if USE_MOCK_FLOW:
+        import uuid
+        mock_media_id = str(uuid.uuid4())
+        return {
+            "web": f"https://via.placeholder.com/1024x576?text=Mock+Image",
+            "media_id": mock_media_id,
+            "status": "success"
+        }
+
     client = get_flow_client()
     if not client.connected:
         raise HTTPException(503, "Extension not connected")

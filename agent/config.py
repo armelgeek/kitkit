@@ -93,7 +93,7 @@ AI_AGENTS = {
     },
     "claude": {
         # Set use_api=true to call Claude API directly instead of CLI
-        "use_api": os.environ.get("AGENT_CLAUDE_USE_API", "1") == "1",
+        "use_api": os.environ.get("AGENT_CLAUDE_USE_API", "0") == "1",
         "model": os.environ.get("AGENT_CLAUDE_MODEL", "claude-opus-4-8"),
         # Only used if use_api=false
         "bin": os.environ.get("AGENT_CLAUDE_BIN", "claude"),

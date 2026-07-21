@@ -7,8 +7,8 @@ const STEPS = [
   { number: 2, label: "Review Screenplay" },
   { number: 2.6, label: "Review Assets" },
   { number: 3, label: "Generate Storyboard" },
-  { number: 4, label: "Review Images" },
-  { number: 4.5, label: "Final Review" },
+  { number: 4, label: "Review Generated Images" },
+  { number: 4.6, label: "Generate Narration" },
   { number: 5, label: "Done" },
 ];
 
@@ -24,10 +24,12 @@ export default function Sidebar() {
       actions.goToStep(2);
     } else if (currentStep === 3) {
       actions.goToStep(2.6);
-    } else if (currentStep === 4.5) {
+    } else if (currentStep === 4) {
+      actions.goToStep(3);
+    } else if (currentStep === 4.6) {
       actions.goToStep(4);
     } else if (currentStep === 5) {
-      actions.goToStep(4.5);
+      actions.goToStep(4.6);
     } else {
       actions.goToStep((currentStep - 1) as WorkflowStep);
     }
@@ -38,9 +40,11 @@ export default function Sidebar() {
       actions.goToStep(2.6);
     } else if (currentStep === 2.6) {
       actions.goToStep(3);
+    } else if (currentStep === 3) {
+      actions.goToStep(4);
     } else if (currentStep === 4) {
-      actions.goToStep(4.5);
-    } else if (currentStep === 4.5) {
+      actions.goToStep(4.6);
+    } else if (currentStep === 4.6) {
       actions.goToStep(5);
     } else {
       actions.goToStep((currentStep + 1) as WorkflowStep);

@@ -1,4 +1,4 @@
-export type WorkflowStep = 1 | 2 | 2.6 | 3 | 4 | 4.5 | 5;
+export type WorkflowStep = 1 | 2 | 2.6 | 3 | 4 | 4.6 | 5;
 
 export interface Entity {
   id: string;
@@ -124,6 +124,7 @@ export interface WorkflowActions {
   createProps: (props: Array<any>) => Promise<void>;
   extractAndGenerateAssets: () => Promise<void>;
   approveStoryboard: () => Promise<void>;
+  generateNarration: () => Promise<void>;
   proceedToVideo: () => void;
   goToStep: (step: WorkflowStep) => void;
   pollVideoStatus: () => Promise<void>;

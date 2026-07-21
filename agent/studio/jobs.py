@@ -80,6 +80,17 @@ class JobManager:
         for ws in dead:
             self._subs.discard(ws)
 
+    async def _broadcast_custom(self, payload: dict) -> None:
+        """Broadcast custom payload to all subscribers."""
+        dead = []
+        for ws in list(self._subs):
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self._subs.discard(ws)
+
     # ── Query / control ─────────────────────────────────────
     def active(self, project_id: Optional[str] = None) -> list[dict]:
         return [j.to_dict() for j in self._jobs.values()
